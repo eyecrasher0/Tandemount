@@ -111,11 +111,18 @@ final class NativeAccess {
         }
         legacySeatType = numericType;
         Method pos = null;
-        for (String name : new String[] {"setPos", "setPosition", "a_"}) {
-            try { pos = entityClass.getMethod(name, double.class, double.class, double.class); break; }
+        for (String name : new String[] {"setPos", "setPosition", "a_", "e"}) {
+            try {
+                Method candidate = entityClass.getMethod(name, double.class, double.class, double.class);
+                int modifiers = candidate.getModifiers();
+                // Spigot-mapped 1.19.4/1.20.1/1.20.2 expose this exact
+                // setPosRaw(DDD,true) delegate as e(DDD), including Folia.
+                if (candidate.getReturnType() == void.class && !Modifier.isStatic(modifiers)
+                        && !Modifier.isFinal(modifiers)) { pos = candidate; break; }
+            }
             catch (NoSuchMethodException absent) { /* Try the next official mapping family. */ }
         }
-        if (pos == null || Modifier.isFinal(pos.getModifiers())) throw new NoSuchMethodException("Overrideable native entity position method");
+        if (pos == null) throw new NoSuchMethodException("Overrideable native entity position method");
         position = pos;
         Constructor<?> parentConstructor = null;
         for (Constructor<?> c : seatBase.getDeclaredConstructors()) {

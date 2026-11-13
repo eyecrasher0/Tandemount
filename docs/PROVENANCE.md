@@ -165,3 +165,57 @@ listed above. Exact source hashes, compiler commands, and artifact hashes are
 retained in the ignored `.agents/plugin-portability-*/compile.json` records.
 Compilation and API-bytecode inspection do not establish native or visual
 compatibility; final native runs remain the coordinator's responsibility.
+
+### Older Folia fixture API boundary audit
+
+A read-only class-file audit covered all 13 available exact Folia releases in
+`platforms.json`, using each official distribution's patched native server JAR
+and bundled Folia API. Every native `teleportAsync` overload retains the same
+eight-argument shape and flag values: load chunk `1`, teleport passengers `2`,
+and unmount `4`. The 1.19.4, 1.20.1, 1.20.2, and 1.20.4 native mappings name
+the vector `Vec3D` and the world `WorldServer`; 1.20.6 and later use `Vec3`
+and `ServerLevel`. The fixture derives its vector constructor from the matched
+native method signature instead of loading one mapping family by name.
+
+The APIs from 1.19.4 through 1.20.6 have no five-argument
+`getChunkAtAsync(int, int, boolean, boolean, Consumer)` callback. They expose
+the four-argument `CompletableFuture` overload instead. The fixture installs a
+persistent setup ticket before requesting that older future. Newer callback
+APIs install the same ticket inside the callback before the upstream temporary
+load ticket retires. Both paths wait for native full loaded status using delayed
+owner-region tasks before editing the disposable landing. This loading and
+retention behavior belongs solely to the fixture.
+
+| Official Folia distribution | Patched native SDK SHA-256 | Bundled API SHA-256 |
+| --- | --- | --- |
+| [1.19.4 build 39](https://fill-data.papermc.io/v1/objects/e6729be678110cf76b5feebaf4da09f447aacad907350f156bf163b561a9d979/folia-1.19.4-39.jar) | `50911aa47418079eca6ca511d8b009f0bb40b75838c2de691a1bb6c53eb7b9d1` | `5bcbf2a00f2ba99e883e2e1957f94026abfce6d35fe281e448405bba9c8876af` |
+| [1.20.1 build 17](https://fill-data.papermc.io/v1/objects/c533d8886c60e1db17ebcf841b862731ab0a18d72377f37189930c3324eb7759/folia-1.20.1-17.jar) | `f3d199fad62394f13c3dd1515d60603c8e8179d7866968c6b0041970aecef1c0` | `85e5e348ee459f42f80e0afc310758fa121d65652d7345127851b4684cbd92f3` |
+| [1.20.2 build 20](https://fill-data.papermc.io/v1/objects/d01746e0176b6ef1ae0bef65bc3fa44e2f2063eaa8ab78f9e941345268d4c9e5/folia-1.20.2-20.jar) | `eac63cb9ec83ad3f96404875292d94360474a60932902dd59ed22cb7ab0af326` | `139d3e13303a069af2b1d2217b70e5e0fe234860dae0def97a0387f2456bf0a6` |
+| [1.20.4 build 31](https://fill-data.papermc.io/v1/objects/b0d55be3ba19cb6e040f0e7fba400e5224a271fbc7db73a9683aef7468425af9/folia-1.20.4-31.jar) | `d815899692043f4400239e53be1edd25011d0107bc7478560655963c5d119739` | `a46c445784ae97f82609311a040f4e6fb65ff2b14ea7ebf1804bdcda90393d82` |
+| [1.20.6 build 6](https://fill-data.papermc.io/v1/objects/a30625d8824b03aae64898b001b46bdc4424b0e5caee1a370af7b444d8ec361a/folia-1.20.6-6.jar) | `9e5ba28c5dd8c67412fe818ca0be06d18b8632ac2b73cafccef24a07d4b69ca0` | `ca8805fb68a96c85e76be4e7af3e84798167bb701c61cbf06a6ac777a7679721` |
+| [1.21.4 build 6](https://fill-data.papermc.io/v1/objects/dcf2333211c1468c8eddc482bc8549600818cc661a709124a79c752f8fa2ac3a/folia-1.21.4-6.jar) | `87948b9124763a55bd5a7cb883c0de848baa5e2c1bb3f1d6c56c4f82218dc871` | `db062c45a5a251c601c0fbe94e0178daced95ebbd061f1f1978ccc173ef98b76` |
+| [1.21.5 build 12](https://fill-data.papermc.io/v1/objects/ebeb8f2f9e97fd972c89ebc276bc547c6194c6542d3a1884e3cfef7228f69cdb/folia-1.21.5-12.jar) | `be8629144890be072dd301a71af206280fb1a1e42f9601af95313212878d586c` | `c8affa78207322e4c3d1f68a1f38be963c0ef29f93d432d4cdf84550ab97da71` |
+| [1.21.6 build 6](https://fill-data.papermc.io/v1/objects/917a8abaa542c1d0ef0e969693e227a7bfe1c42e671aaa806309e00a64efc234/folia-1.21.6-6.jar) | `74a595c77ba27d77826a3f8a1fd3ccc57e8576e699dee166ccb6559d9c80dbc5` | `bc4446bf329e6c86aef4f34274bfadfe7be51634ac74cdd95ab2318496b822c7` |
+| [1.21.8 build 6](https://fill-data.papermc.io/v1/objects/233843cfd5001b6f658fcab549178d694cc37f0277d004ea295de0a94c57278f/folia-1.21.8-6.jar) | `484bc5c060bd4e8ab022bd5b6ece04df0c253892ec9aab21715ca75148c05b71` | `d740e00e8725ba3262ed7539e8ba77d6d497403d1f8e4e9860b25976e59afd88` |
+| [1.21.11 build 14](https://fill-data.papermc.io/v1/objects/f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39/folia-1.21.11-14.jar) | `6bfd94ffd8649cf416d247e849214667ac91759699a4c3536eef2307277c4e33` | `b0f47989fc11e62a25d3cceb1f6c647e701e6224e17fbecfa10267ec4a9194a7` |
+| [26.1.2 build 8](https://fill-data.papermc.io/v1/objects/607afd1c3320008e1ffd2eaee6780ace4419d5f8c527b75e79f259be79ebf57b/folia-26.1.2-8.jar) | `1c6040315d5b608916ca6811f3a93c72ac950d0ca14cc2dd64aaa85fb27b124d` | `f10a91acaf5e3aa3f2aa27f8f23b932281ff71fce13ee6c9c1b53999ebe93e60` |
+| [26.2 build 7](https://fill-data.papermc.io/v1/objects/128a634192261cd38bb4a5dc54075018a0f896fd6c6f529e37dca6e99e32b3b3/folia-26.2-7.jar) | `a43ba2b1d4e829ab30bb9198660542d58fd054e592dc608f852130cfe1726875` | `b91778aa8a60aa04082e520431e0dff15ebebbe562b5eedaf386d2e980fbdd8b` |
+| [26.3 build 6](https://fill-data.papermc.io/v1/objects/3d0a694905ddd9ec956af52259d555274ab8d3191871296d7094c290b686920d/folia-26.3-6.jar) | `4268a906fe28842ee8566a908c8486e656f6baf9d5947f512791c2a635cd3df6` | `03e1fef6cdd29a75880d58e0922a3272b95afd8cd9e35f681988310356504dfa` |
+
+Focused main-and-fixture source compilation passed against the exact bundled
+Folia 1.19.4 and 1.20.6 APIs and their bundled upstream dependencies, separately
+from the normal Paper 1.12.2 build. The ignored API-audit record retains native
+class-file descriptors, constants, distribution metadata, and exact artifact
+hashes. The compilation records remain distinct from native execution reports;
+this audit alone does not claim compatibility for any Folia release.
+
+The Folia 1.19.4 boundary run then exposed an additional runtime mapping gap:
+the native entity position setter is `Entity.e(double, double, double)`. Exact
+server bytecode shows that this public, nonfinal void method delegates to
+`setPosRaw(double, double, double, true)`. The same method is invoked by
+`CraftEntity`'s location setter and the native `EntityFallingBlock`
+constructor. The inspected 1.20.1 and 1.20.2 SDKs use the same `e` alias;
+1.20.4 uses `a_`, and 1.20.6 uses `setPos`. The adapter accepts these verified
+mapping names only with the exact three-double, void, nonstatic, nonfinal
+signature required by its generated native subclass. The existing falling-block
+tick and passenger movement entry points already match the 1.19.4 SDK.

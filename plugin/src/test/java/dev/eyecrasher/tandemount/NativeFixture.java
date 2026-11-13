@@ -162,7 +162,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private void prepareChunk(final World world, final int x, final int z, final Runnable prepare) throws ReflectiveOperationException {
         if (folia()) {
-            Probe.call(world, "getChunkAtAsync", x, z, true, false, new java.util.function.Consumer<Object>() {
+            final java.util.function.Consumer<Object> loaded = new java.util.function.Consumer<Object>() {
                 public void accept(Object chunk) {
                     if (chunk == null) { failed("prepare-chunk-async", new IllegalStateException("Async fixture chunk generation failed")); return; }
                     try {
@@ -175,7 +175,21 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         }}));
                     } catch (Throwable problem) { failed("prepare-chunk-region", problem); }
                 }
-            });
+            };
+            try { Probe.call(world, "getChunkAtAsync", x, z, true, false, loaded); }
+            catch (NoSuchMethodException olderFolia) {
+                // Folia 1.19.4 through 1.20.6 expose only the future overload.
+                // Install our persistent setup ticket before requesting it,
+                // so completion can safely hand work to a later region task.
+                retainPreparedChunk(world, x, z);
+                Object future = Probe.call(world, "getChunkAtAsync", x, z, true, false);
+                ((java.util.concurrent.CompletableFuture<?>)future).whenComplete(new java.util.function.BiConsumer<Object, Throwable>() {
+                    public void accept(Object chunk, Throwable failure) {
+                        if (failure != null) failed("prepare-chunk-async", failure);
+                        else loaded.accept(chunk);
+                    }
+                });
+            }
         } else {
             // Explicit generation belongs to disposable test setup. Runtime
             // transfers below continue to reject unloaded destinations.
@@ -539,16 +553,17 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         }
         try {
             Object handle = Probe.handle(player), world = Probe.handle(destination.getWorld());
-            Class<?> vector = Class.forName("net.minecraft.world.phys.Vec3");
-            Object at = vector.getConstructor(double.class, double.class, double.class)
-                    .newInstance(destination.getX(), destination.getY(), destination.getZ());
-            Object zero = vector.getConstructor(double.class, double.class, double.class).newInstance(0.0, 0.0, 0.0);
             for (Method method : handle.getClass().getMethods()) {
                 Class<?>[] args = method.getParameterTypes();
                 if (method.getName().equals("teleportAsync") && args.length == 8 && args[0].isInstance(world)
-                        && args[1] == vector && args[2] == Float.class && args[3] == Float.class && args[4] == vector
+                        && args[1] == args[4] && args[2] == Float.class && args[3] == Float.class
                         && args[5] == PlayerTeleportEvent.TeleportCause.class && args[6] == long.class
                         && args[7] == java.util.function.Consumer.class) {
+                    // The exact upstream signature supplies Vec3D on the old
+                    // Spigot mappings and Vec3 on the newer Mojang mappings.
+                    Constructor<?> vector = args[1].getConstructor(double.class, double.class, double.class);
+                    Object at = vector.newInstance(destination.getX(), destination.getY(), destination.getZ());
+                    Object zero = vector.newInstance(0.0, 0.0, 0.0);
                     long unmount = method.getDeclaringClass().getField("TELEPORT_FLAG_UNMOUNT").getLong(null);
                     long load = method.getDeclaringClass().getField("TELEPORT_FLAG_LOAD_CHUNK").getLong(null);
                     if ((unmount & load) != 0) throw new IllegalStateException("Native transfer flags unexpectedly request chunk loading");
