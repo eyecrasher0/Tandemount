@@ -166,7 +166,7 @@ def main():
     test_sha = hashlib.sha256((ROOT / "tools/legacy-native-test.py").read_bytes()
                               + (ROOT / "mods/legacy/native-test/NativeChecks.java").read_bytes()).hexdigest()
     args.evidence.mkdir(parents=True, exist_ok=True)
-    artifacts, errors = {}, []
+    artifacts, reports, errors = {}, [], []
     output_root = ROOT / "build/release/binaries"
     output_root.mkdir(parents=True, exist_ok=True)
     for target in matrix["targets"]:
@@ -203,6 +203,9 @@ def main():
                 (args.evidence / (key + ".json")).write_text(json.dumps(report, indent=2) + "\n")
                 if report["result"] != "pass":
                     raise ValueError("Native checks incomplete: " + repr(report["incomplete_checks"]))
+                # Publish portable evidence without workstation paths, test
+                # identities, worlds, or raw game/loader binaries.
+                reports.append({key: value for key, value in report.items() if key != "raw_report"})
                 destination = output_root / artifact.name
                 if destination.exists() and digest(destination) != report["artifact_sha256"]:
                     raise ValueError("Conflicting staged artifact: " + destination.name)
@@ -226,6 +229,14 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(manifest, indent=2) + "\n")
     args.output.with_name("audit.json").write_text(json.dumps(result, indent=2) + "\n")
+    verification = {"schema": 1, "name": "Tandemount", "source_commit": source_commit,
+                    "result": result["result"], "visual_verification": "not-performed",
+                    "artifacts": [{key: value for key, value in artifact.items()
+                                   if key in {"id", "sha256", "java_min", "targets"}}
+                                  for artifact in manifest["artifacts"]],
+                    "native_reports": sorted(reports, key=lambda r: (r["minecraft"], r["platform"])),
+                    "audit": result}
+    args.output.with_name("verification.json").write_text(json.dumps(verification, indent=2) + "\n")
     print(json.dumps(result, indent=2))
     return int(result["result"] != "pass")
 

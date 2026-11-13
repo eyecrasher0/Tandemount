@@ -30,6 +30,13 @@ The audit verifies the artifact and metadata contracts, evidence hashes and
 coverage. The native runners supply behavioral evidence; the audit does not
 replace those runners or a review of their tests.
 
+The collector also emits `verification.json`, a portable public report with
+exact artifact hashes, native check names and outcomes, server identities,
+capability exceptions, and raw-report hashes. It excludes workstation paths,
+test player data, worlds, and downloaded game binaries. The publication plan
+stages this report with the source archive and checksums so the large local SDK
+cache can be removed after uploads have been verified.
+
 An unavailable cancellable dismount API is disclosed as `not-applicable`, with
 a reason, only for Forge 1.7.10 and Fabric Loader-only installations. Ordinary
 dismount still requires native evidence. No lifecycle check can use this
