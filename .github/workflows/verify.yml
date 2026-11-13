@@ -144,7 +144,7 @@ jobs:
               if platform != 'fabric':
                   arguments += ['--platforms',platform]
               subprocess.run(arguments,check=True)
-              subprocess.run(['python3','tools/modern-native.py','--minecraft',mc,'--platform',platform,'--network-test','--accept-eula','--timeout','240'],check=True)
+              subprocess.run(['python3','tools/modern-native.py','--minecraft',mc,'--platform',platform,'--network-test','--restart-test','--accept-eula','--timeout','240'],check=True)
           PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
