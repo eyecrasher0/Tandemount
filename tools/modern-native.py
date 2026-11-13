@@ -89,7 +89,8 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
                 process.wait()
             code = "timeout"
     fixture = run_dir / "tandemount-native-result.json"
-    result = {"minecraft": version, "platform": platform, "artifact": str(artifact.relative_to(ROOT)), "sha256": artifact_hash, "run_directory": str(run_dir), "java": target["java"], "seconds": round(time.monotonic()-started, 2), "exit_code": code, "bootstrap": "unverified", "native_fixture": False, "connected_clients": False, "visual": "not-run"}
+    result = {"minecraft": version, "platform": platform, "artifact": str(artifact.relative_to(ROOT)), "sha256": artifact_hash, "run_directory": str(run_dir), "java": target["java"], "seconds": round(time.monotonic()-started, 2), "exit_code": code, "bootstrap": "unverified", "native_fixture": False, "connected_clients": False, "visual": "not-run",
+              "server": metadata, "distribution_sha256": hashlib.sha256((distribution / "distribution.json").read_bytes()).hexdigest()}
     if fixture.exists():
         result.update(json.loads(fixture.read_text()))
         result["bootstrap"] = "passed"
@@ -130,7 +131,11 @@ def main():
     parser.add_argument("--restart-test", action="store_true", help="Reopen the saved disposable world and check for seat artifacts")
     args = parser.parse_args()
     result = run(args.minecraft, args.platform, args.accept_eula, args.timeout, args.network_test, args.restart_test)
-    raise SystemExit(0 if result.get("native_fixture") and (not args.network_test or result.get("connected_clients")) and (not args.restart_test or result.get("restart_passed")) else 1)
+    passed = (result.get("native_fixture") is True and result.get("exit_code") == 0
+              and result.get("bootstrap") == "passed" and not result.get("error")
+              and (not args.network_test or result.get("connected_clients") is True)
+              and (not args.restart_test or result.get("restart_passed") is True))
+    raise SystemExit(0 if passed else 1)
 
 
 if __name__ == "__main__":

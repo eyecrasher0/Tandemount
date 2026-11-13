@@ -107,6 +107,25 @@ class ReleaseAuditTest(unittest.TestCase):
         self.save_report()
         self.assert_failed("driver-control")
 
+    def test_absent_legacy_dismount_event_is_disclosed_separately(self):
+        self.report["checks"]["cancelled-dismount"] = "not-applicable"
+        self.report["not_applicable"] = {"cancelled-dismount": "Forge 1.7.10 has no EntityMountEvent"}
+        self.save_report()
+        result = self.run_audit()
+        self.assertEqual(result["result"], "pass", result)
+        self.assertEqual(result["not_applicable"][0]["check"], "cancelled-dismount")
+
+    def test_unexplained_missing_cancellation_event_is_rejected(self):
+        self.report["checks"]["cancelled-dismount"] = "not-applicable"
+        self.save_report()
+        self.assert_failed("cancelled-dismount")
+
+    def test_unrelated_native_check_cannot_be_exempted(self):
+        self.report["checks"]["world-change"] = "not-applicable"
+        self.report["not_applicable"] = {"world-change": "Fixture did not exercise this behavior"}
+        self.save_report()
+        self.assert_failed("world-change")
+
     def test_missing_available_target_is_rejected(self):
         self.matrix["targets"][1]["platforms"]["forge"]["available"] = True
         self.assert_failed("do not cover all requested available targets")

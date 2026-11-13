@@ -17,5 +17,9 @@ driver, using the normal dismount action to leave, and adjusting seat position
 through `/tandemount` as an administrator. Vanilla clients should be sufficient.
 The [behavioral specification](docs/BEHAVIOR.md) defines the acceptance criteria.
 
-Build and installation instructions will be added alongside verified artifacts.
+See [installation and commands](docs/INSTALL.md),
+[modern mod builds](docs/MODERN_BUILD.md), and
+[legacy Forge builds](docs/LEGACY.md). Plugin builds use
+`python3 tools/plugin-build.py --all` against a real Bukkit/Paper API; use
+`--api /path/to/api.jar` when the SDK cache is not prepared.
 Please do not install development fixtures on a live server.

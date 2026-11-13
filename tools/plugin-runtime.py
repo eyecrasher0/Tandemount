@@ -251,10 +251,13 @@ def packet_checks(clients, graph, minecraft):
                     for _ in range(length):
                         passenger, offset = read_vi(body, offset); passengers.append(passenger)
                     mounts.append((vehicle, passengers))
-                if oldest and packet_id == attach_id and len(body) >= 9 and body[0] == 0:
-                    passenger, vehicle = struct.unpack('>ii', body[1:9]); mounts.append((vehicle, [passenger]))
+                if oldest and packet_id == attach_id and len(body) >= 9 and body[8] == 0:
+                    passenger, vehicle = struct.unpack('>ii', body[:8]); mounts.append((vehicle, [passenger]))
                 if packet_id in position_ids:
-                    entity, offset = read_vi(body)
+                    if oldest:
+                        entity, offset = struct.unpack_from('>i', body)[0], 4
+                    else:
+                        entity, offset = read_vi(body)
                     if entity == graph['seat']:
                         if oldest: pose = tuple(v / 32.0 for v in struct.unpack('>iii', body[offset:offset + 12]))
                         else: pose = struct.unpack('>ddd', body[offset:offset + 24])

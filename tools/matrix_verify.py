@@ -99,7 +99,9 @@ def main():
         if args.resume and record_path.is_file() and artifact.is_file():
             previous = json.loads(record_path.read_text())
             if (previous.get("result") == "pass" and previous.get("source_fingerprint") == target_fingerprint
-                    and previous.get("artifact_sha256") == sha(artifact)):
+                    and previous.get("artifact_sha256") == sha(artifact)
+                    and native_path.is_file()
+                    and previous.get("native_report_sha256") == sha(native_path)):
                 return {**previous, "cached": True}
         result = {"minecraft": version, "platform": platform, "source_fingerprint": target_fingerprint,
                   "artifact": str(artifact.relative_to(ROOT)), "result": "fail"}

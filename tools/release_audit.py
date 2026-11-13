@@ -20,6 +20,20 @@ PLUGIN_PLATFORMS = frozenset({"paper", "spigot", "purpur", "folia"})
 MOD_PLATFORMS = frozenset({"fabric", "forge", "neoforge"})
 
 
+def unavailable_check(report, name):
+    """Allow only documented absence of a loader's cancellable dismount API.
+
+    Fabric Loader without Fabric API has no gameplay event bus. Forge 1.7.10
+    predates EntityMountEvent. Neither condition is a successful cancellation
+    test, so retain a distinct value and reason in the publication evidence.
+    """
+    pair = report.get("minecraft"), report.get("platform")
+    supported_exception = (name == "cancelled-dismount"
+                           and (pair == ("1.7.10", "forge") or pair[1] == "fabric"))
+    reason = report.get("not_applicable", {}).get(name)
+    return supported_exception and isinstance(reason, str) and bool(reason.strip())
+
+
 def digest(path, algorithm="sha256"):
     result = hashlib.new(algorithm)
     with Path(path).open("rb") as stream:
@@ -89,6 +103,7 @@ def artifact_targets(artifact):
 
 def audit(root, matrix, manifest, evidence_root):
     errors = []
+    not_applicable = []
     expected = {(t["minecraft"], p) for t in matrix["targets"]
                 for p, state in t["platforms"].items() if state["available"]}
     if len(matrix["targets"]) != 38:
@@ -154,13 +169,17 @@ def audit(root, matrix, manifest, evidence_root):
                     continue
                 checks = report.get("checks", {})
                 absent = REQUIRED_CHECKS - checks.keys()
-                failed = [key for key, value in checks.items() if value is not True]
+                failed = [key for key, value in checks.items() if value is not True
+                          and not (value == "not-applicable" and unavailable_check(report, key))]
                 if report.get("kind") != "native" or report.get("result") != "pass" or not report.get("server_version"):
                     errors.append(prefix + "Native server execution evidence incomplete: " + repr(pair))
                     continue
                 if absent or failed:
                     errors.append(prefix + f"Native checks incomplete for {pair}: missing={sorted(absent)}, failed={failed}")
                     continue
+                not_applicable.extend({"minecraft": pair[0], "platform": pair[1],
+                                       "check": key, "reason": report["not_applicable"][key]}
+                                      for key, value in checks.items() if value == "not-applicable")
                 native.add(pair)
             verified.update(native)
             if pairs - native:
@@ -174,6 +193,7 @@ def audit(root, matrix, manifest, evidence_root):
         "result": "pass" if not errors else "fail",
         "artifacts": len(artifacts), "expected_targets": len(expected),
         "declared_targets": len(declared), "native_verified_targets": len(verified),
+        "not_applicable": not_applicable,
         "errors": errors,
         "visual_evidence": "Separately recorded; native tests do not establish rendered appearance.",
     }
