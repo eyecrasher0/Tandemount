@@ -74,7 +74,8 @@ def download(item, destination):
 
 
 def java_for(major):
-    configured = os.environ.get(f"TANDEMOUNT_JAVA_{major}") or os.environ.get(f"JAVA{major}_HOME")
+    configured = (os.environ.get(f"TANDEMOUNT_JAVA_{major}") or os.environ.get(f"JAVA{major}_HOME")
+                  or os.environ.get(f"JAVA_HOME_{major}_X64") or os.environ.get(f"JAVA_HOME_{major}_ARM64"))
     local = ROOT / ".agents/toolchains.json"
     if not configured and local.is_file():
         configured = json.loads(local.read_text()).get(str(major))
