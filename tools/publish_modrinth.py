@@ -340,6 +340,10 @@ def main():
         request("PATCH", V2 + "/project/" + urllib.parse.quote(project_id, safe=""), token=token,
                 body=json.dumps({"requested_status": "unlisted"}).encode("utf-8"))
         final_project = request("GET", V2 + "/project/" + urllib.parse.quote(project_id, safe=""), token=token)
+        if final_project.get("requested_status") != "unlisted":
+            raise ValueError("Modrinth did not retain the requested unlisted project status")
+        if final_project.get("status") not in {"unlisted", "processing"}:
+            raise ValueError("Modrinth has not accepted the project for unlisted publication: " + str(final_project.get("status")))
         final_versions = list_versions(token, project_id)
         verified = {v.get("version_number"): v for v in final_versions}
         for entry in plan["entries"]:
@@ -351,7 +355,9 @@ def main():
         result = {**summary, "project_id": project_id, "project_status": final_project.get("status"),
                   "requested_status": final_project.get("requested_status"), "disclosure": disclosure_status,
                   "uploaded": uploaded, "already_present": skipped, "versions_set_unlisted": status_updates,
-                  "verified_versions": len(plan["entries"]), "result": "uploaded-and-hash-verified"}
+                  "verified_versions": len(plan["entries"]),
+                  "result": "submitted-for-unlisted-review" if final_project.get("status") == "processing"
+                  else "unlisted-and-hash-verified"}
         args.state.parent.mkdir(parents=True, exist_ok=True)
         args.state.write_text(json.dumps({"project_id": project_id, "slug": slug,
                                           "status": final_project.get("status"),
