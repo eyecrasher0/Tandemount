@@ -46,18 +46,28 @@ public final class NativeTests {
     private static Object player(Object server, Object level, int index) throws Exception {
         Class<?> profileClass = Class.forName("com.mojang.authlib.GameProfile");
         Object profile = profileClass.getConstructor(UUID.class, String.class).newInstance(UUID.nameUUIDFromBytes(("TandemountFixture" + index).getBytes(StandardCharsets.UTF_8)), "TandemTest" + index);
-        Object info = Names.has("client.default") ? Names.call("client.default", null) : null;
-        Object player = null;
-        for (Constructor<?> constructor : Names.type("ServerPlayer").getConstructors()) {
-            if (constructor.getParameterCount() == 4) {
-                Object fourth = info;
-                if (fourth == null && Names.TABLE.containsKey("c.ServerPlayerGameMode")) fourth = Names.type("ServerPlayerGameMode").getConstructor(Names.type("ServerLevel")).newInstance(level);
-                if (fourth != null) { player = constructor.newInstance(server, level, profile, fourth); break; }
-            } else if (constructor.getParameterCount() == 3) {
-                player = constructor.newInstance(server, level, profile); break;
-            }
+        // The generated descriptor is validated against the exact server JAR.
+        // Four arguments alone do not identify the constructor: 1.19–1.19.2
+        // take a nullable profile key, not the old game-mode or new client info.
+        String[] declaration = Names.TABLE.getProperty("constructor.player").split("#");
+        Class<?>[] types = Names.arguments(declaration[2]);
+        if (types.length < 3 || types.length > 4 || types[0] != Names.type("MinecraftServer")
+                || types[1] != Names.type("ServerLevel") || types[2] != profileClass) {
+            throw new IllegalStateException("Unsupported exact native fixture player constructor");
         }
-        if (player == null) throw new IllegalStateException("No supported native fixture player constructor");
+        Object[] args = new Object[types.length];
+        args[0] = server; args[1] = level; args[2] = profile;
+        if (types.length == 4) {
+            if (Names.TABLE.containsKey("c.ClientInformation") && types[3] == Names.type("ClientInformation")) {
+                args[3] = Names.call("client.default", null);
+            } else if (Names.TABLE.containsKey("c.ProfilePublicKey") && types[3] == Names.type("ProfilePublicKey")) {
+                args[3] = null; // Exact vanilla parameter is @Nullable for offline fixture players.
+            } else if (Names.TABLE.containsKey("c.ServerPlayerGameMode") && types[3] == Names.type("ServerPlayerGameMode")) {
+                args[3] = types[3].getConstructor(Names.type("ServerLevel")).newInstance(level);
+            } else throw new IllegalStateException("Unsupported exact native fixture player argument " + types[3].getName());
+        }
+        Constructor<?> constructor = Names.type("ServerPlayer").getConstructor(types);
+        Object player = constructor.newInstance(args);
         Object connection = Names.type("Connection").getConstructor(Names.type("PacketFlow")).newInstance(Names.field("PacketFlow.SERVERBOUND", null));
         Class<?> channelClass = Class.forName("io.netty.channel.embedded.EmbeddedChannel");
         Object channel = channelClass.getConstructor().newInstance();

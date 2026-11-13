@@ -203,3 +203,28 @@ fixture. This repair changes only the opt-in test listener and does not add a
 runtime hook or a cancellation exemption. New builds require fresh native
 interaction, mount and dismount cancellation checks before compatibility can
 be asserted.
+
+## Native fixture player constructors
+
+The 1.19 fixture-construction failure was investigated against exact official
+`ServerPlayer` declarations for all 35 requested modern game releases. Their
+public constructor signatures form four cases: 1.16.5 takes
+`ServerPlayerGameMode`; 1.17 through 1.18.2 and 1.19.3 through 1.20.1 take the
+three server/level/profile arguments alone; 1.19, 1.19.1 and 1.19.2 additionally
+take `ProfilePublicKey`; 1.20.2 through 26.3 take `ClientInformation` instead.
+Class-file parameter annotations mark the profile-key argument as
+`javax.annotation.Nullable` in each of the three relevant versions. The
+fixture passes null for that known optional key on its offline synthetic
+player. It does not create signing keys or alter authentication settings.
+
+Build tooling now generates a complete constructor descriptor only after
+matching a known exact signature against public declarations in that game's
+official server JAR. The fixture requests precisely that constructor and
+selects the fourth argument by its exact mapped type. It no longer infers the
+argument from constructor arity or attempts a game-mode fallback when another
+fourth argument is present. Unknown or ambiguous signatures fail the build.
+Game JAR, class hashes, constructor descriptors and profile-key parameter
+annotations are retained in the ignored
+`.agents/modern-portability/player-constructor-inputs.json`. This correction
+is confined to the opt-in native fixture and exact build mappings; successful
+compilation does not establish that the remaining native checks pass.

@@ -359,6 +359,7 @@ CLASSES = {
     "EntityType": "net.minecraft.world.entity.EntityType",
     "EntityTypes": "net.minecraft.world.entity.EntityTypes",
     "ClientInformation": "net.minecraft.server.level.ClientInformation",
+    "ProfilePublicKey": "net.minecraft.world.entity.player.ProfilePublicKey",
     "Connection": "net.minecraft.network.Connection",
     "PacketFlow": "net.minecraft.network.protocol.PacketFlow",
     "ServerGamePacketListenerImpl": "net.minecraft.server.network.ServerGamePacketListenerImpl",
@@ -536,6 +537,21 @@ def mapped_table(target, platform):
             if key == "hurt": table["m.seat.hurt"] = mapped_member(member)
         elif key not in ("hurt", "shouldSave"):
             raise ValueError("Exact vanilla hook unavailable: " + key + " " + version)
+    # Select only a complete, known constructor signature that is actually
+    # declared in this exact official server. Parameter count is insufficient:
+    # 1.19's nullable profile key shares arity with game mode and client info.
+    player_base = "net.minecraft.server.MinecraftServer,net.minecraft.server.level.ServerLevel,com.mojang.authlib.GameProfile"
+    player_signatures = [player_base] + [player_base + "," + extra for extra in (
+        CLASSES["ServerPlayerGameMode"], CLASSES["ProfilePublicKey"], CLASSES["ClientInformation"])]
+    player_constructors = []
+    for params in player_signatures:
+        member = methods.get((CLASSES["ServerPlayer"], "<init>", params))
+        if member and any(name == "<init>" and desc == member[2] and access & 1
+                          for name, desc, access in declared[member[0].replace(".", "/")][2]):
+            player_constructors.append(member)
+    if len(player_constructors) != 1:
+        raise ValueError("No unique supported exact fixture player constructor: " + version)
+    table["constructor.player"] = mapped_member(player_constructors[0])
     for (owner, name, params), member in methods.items():
         if owner == CLASSES["ServerEntity"] and name == "<init>" and "net.minecraft.world.entity.Entity" in params.split(","):
             table["h.tracker"] = mapped_member(member)
