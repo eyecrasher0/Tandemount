@@ -1,0 +1,16 @@
+{
+  "source": "https://hub.spigotmc.org/versions/{revision}.json",
+  "explanation": "Historical official BuildTools targets for named endpoints that now alias a different patch release. Every revision is checked against the pinned official BuildData info.json by resolve_platforms.py.",
+  "revisions": {
+    "1.20": "3774",
+    "1.20.3": "3954",
+    "1.20.5": "4106",
+    "1.21": "4219",
+    "1.21.2": "4347",
+    "1.21.7": "4521",
+    "1.21.9": "4539",
+    "1.21.11": "4581",
+    "26.1": "4609",
+    "26.1.1": "4616"
+  }
+}

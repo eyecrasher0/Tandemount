@@ -1,0 +1,2386 @@
+{
+  "schema": 1,
+  "checked_at": "2026-11-13T11:03:09.642872+00:00",
+  "scope": "Exact upstream availability; runtime support requires separate evidence.",
+  "sources": {
+    "minecraft": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+    "fabric": "https://meta.fabricmc.net/v2/versions/game",
+    "fabric_loader": "https://meta.fabricmc.net/v2/versions/loader",
+    "forge": "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml",
+    "neoforge": "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml",
+    "neoforge_legacy": "https://maven.neoforged.net/releases/net/neoforged/forge/maven-metadata.xml",
+    "paper": "https://fill.papermc.io/v3/projects/paper",
+    "folia": "https://fill.papermc.io/v3/projects/folia",
+    "purpur": "https://api.purpurmc.org/v2/purpur"
+  },
+  "targets": [
+    {
+      "minecraft": "1.7.10",
+      "java": 8,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "spigot": {
+          "available": false,
+          "reason": "No official exact-version BuildTools target found.",
+          "aliases_rejected": []
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.7.10-10.13.4.1614-1.7.10"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json",
+      "downloads": {
+        "server": {
+          "sha1": "952438ac4e01b4d115c5fc38f891710c4941df29",
+          "size": 9605030,
+          "url": "https://launcher.mojang.com/v1/objects/952438ac4e01b4d115c5fc38f891710c4941df29/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "1.8.9",
+      "java": 8,
+      "platforms": {
+        "paper": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "spigot": {
+          "available": false,
+          "reason": "No official exact-version BuildTools target found.",
+          "aliases_rejected": []
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.8.9-11.15.1.2318-1.8.9"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/d546f1707a3f2b7d034eece5ea2e311eda875787/1.8.9.json",
+      "downloads": {
+        "server": {
+          "sha1": "b58b2ceb36e01bcd8dbf49c8fb66c55a9f0676cd",
+          "size": 8320755,
+          "url": "https://launcher.mojang.com/v1/objects/b58b2ceb36e01bcd8dbf49c8fb66c55a9f0676cd/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "1.12.2",
+      "java": 8,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "1573k",
+          "minecraft": "1.12.2",
+          "refs": {
+            "BuildData": "be360cc298a06b5355ecd057f5b1feb894a73f0f",
+            "Bukkit": "558fdf5f54b0f527cd48903daf9368ac4b862876",
+            "CraftBukkit": "f4830a1687f37a4ee7c0bd08a30d925fbe0f9349",
+            "Spigot": "79a30d7d26b9078dbf6071cbbfa060673bf117b2"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.12.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#be360cc298a06b5355ecd057f5b1feb894a73f0f:info.json",
+          "java_class_versions": [
+            52,
+            54
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.12.2-14.23.5.2864"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/832d95b9f40699d4961394dcf6cf549e65f15dc5/1.12.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "886945bfb2b978778c3a0288fd7fab09d315b25f",
+          "size": 30222121,
+          "url": "https://piston-data.mojang.com/v1/objects/886945bfb2b978778c3a0288fd7fab09d315b25f/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "1.16.5",
+      "java": 8,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3096a",
+          "minecraft": "1.16.5",
+          "refs": {
+            "BuildData": "f0a5ed1aeff8156ba4afa504e190c838dd1af50c",
+            "Bukkit": "7e29f7654411f0a17ebbcc2c3f6a7dfe93bff39e",
+            "CraftBukkit": "af1a23291836523344a6ab0c233c37efc763ed86",
+            "Spigot": "9fb885e86def1d9d86e25233c9b5a4de45b7a09d"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.16.5.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#f0a5ed1aeff8156ba4afa504e190c838dd1af50c:info.json",
+          "java_class_versions": [
+            52,
+            60
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.16.5-36.2.42"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/fba9f7833e858a1257d810d21a3a9e3c967f9077/1.16.5.json",
+      "downloads": {
+        "server": {
+          "sha1": "1b557e7b033b583cd9f66746b7a9ab1ec1673ced",
+          "size": 37962360,
+          "url": "https://piston-data.mojang.com/v1/objects/1b557e7b033b583cd9f66746b7a9ab1ec1673ced/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "41285beda6d251d190f2bf33beadd4fee187df7a",
+          "size": 4400926,
+          "url": "https://piston-data.mojang.com/v1/objects/41285beda6d251d190f2bf33beadd4fee187df7a/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.17",
+      "java": 16,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3170",
+          "minecraft": "1.17",
+          "refs": {
+            "BuildData": "3cec511b16ffa31cb414997a14be313716882e12",
+            "Bukkit": "fc92ca8dd3b37dbc440de9d61575af17226cb8f0",
+            "CraftBukkit": "ec116f636d55eccae1d5bb0b716b1db3b245ccab",
+            "Spigot": "a483d2c9d916d4d05ad0923f2c9472e3bac64bc8"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.17.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#3cec511b16ffa31cb414997a14be313716882e12:info.json",
+          "java_class_versions": [
+            60,
+            60
+          ]
+        },
+        "forge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/0d9ace8a2ecfd1f4c782786f4b985a499240ff12/1.17.json",
+      "downloads": {
+        "server": {
+          "sha1": "0a269b5f2c5b93b1712d0f5dc43b6182b9ab254e",
+          "size": 43621201,
+          "url": "https://piston-data.mojang.com/v1/objects/0a269b5f2c5b93b1712d0f5dc43b6182b9ab254e/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "84d80036e14bc5c7894a4fad9dd9f367d3000334",
+          "size": 4948536,
+          "url": "https://piston-data.mojang.com/v1/objects/84d80036e14bc5c7894a4fad9dd9f367d3000334/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.17.1",
+      "java": 16,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3284a",
+          "minecraft": "1.17.1",
+          "refs": {
+            "BuildData": "a4785704979a469daa2b7f6826c84e7fe886bb03",
+            "Bukkit": "d32e3c764edd6a449ddd220720185d266c2193f9",
+            "CraftBukkit": "0ab8487122776d0929840279fc4dc5edd33db072",
+            "Spigot": "38929296b008a62a7a8532c46550aa493e2246a8"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.17.1.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#a4785704979a469daa2b7f6826c84e7fe886bb03:info.json",
+          "java_class_versions": [
+            60,
+            61
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.17.1-37.1.1"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/e0e7ab5ed6f55bbd874ef95be3c9356d67e64b57/1.17.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "a16d67e5807f57fc4e550299cf20226194497dc2",
+          "size": 43626592,
+          "url": "https://piston-data.mojang.com/v1/objects/a16d67e5807f57fc4e550299cf20226194497dc2/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "f6cae1c5c1255f68ba4834b16a0da6a09621fe13",
+          "size": 4953452,
+          "url": "https://piston-data.mojang.com/v1/objects/f6cae1c5c1255f68ba4834b16a0da6a09621fe13/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.18",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3359",
+          "minecraft": "1.18",
+          "refs": {
+            "BuildData": "059e48d0b4666138c4a8330ee38310d74824a848",
+            "Bukkit": "ffd8b28939b4ec84855f8a10c93463ec113def13",
+            "CraftBukkit": "4f5d59a4d6e781168e3d78183443a068d4b01705",
+            "Spigot": "dbf493829eb4bf37ff6492e725058424138cc651"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.18.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#059e48d0b4666138c4a8330ee38310d74824a848:info.json",
+          "java_class_versions": [
+            61,
+            61
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.18-38.0.17"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/7367ea8b7cad7c7830192441bb2846be0d2ceeac/1.18.json",
+      "downloads": {
+        "server": {
+          "sha1": "3cf24a8694aca6267883b17d934efacc5e44440d",
+          "size": 46323386,
+          "url": "https://piston-data.mojang.com/v1/objects/3cf24a8694aca6267883b17d934efacc5e44440d/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "a8fe854e35a69df7289d3f03fc0821f6363f2238",
+          "size": 5115917,
+          "url": "https://piston-data.mojang.com/v1/objects/a8fe854e35a69df7289d3f03fc0821f6363f2238/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.18.1",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3443",
+          "minecraft": "1.18.1",
+          "refs": {
+            "BuildData": "f31eb04b918592f66c6edd17c9b5998383581ae5",
+            "Bukkit": "0edc0e044dc242307f584e6e89b0644756a03b36",
+            "CraftBukkit": "2c1e49984ef3f75f631c95ce0547031c887c30f8",
+            "Spigot": "699290cdcc3d7721a3031b395d8693a9a11d8f6d"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.18.1.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#f31eb04b918592f66c6edd17c9b5998383581ae5:info.json",
+          "java_class_versions": [
+            61,
+            61
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.18.1-39.1.2"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/7ff864e988a2c29907154d5f9701e87e5d5e554a/1.18.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "125e5adf40c659fd3bce3e66e67a16bb49ecc1b9",
+          "size": 46324407,
+          "url": "https://piston-data.mojang.com/v1/objects/125e5adf40c659fd3bce3e66e67a16bb49ecc1b9/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "9717df2acd926bd4a9a7b2ce5f981bb7e4f7f04a",
+          "size": 5115621,
+          "url": "https://piston-data.mojang.com/v1/objects/9717df2acd926bd4a9a7b2ce5f981bb7e4f7f04a/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.18.2",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3498",
+          "minecraft": "1.18.2",
+          "refs": {
+            "BuildData": "641cb0c939c7c2a3c4b42f2fd7bca7c8b34254ae",
+            "Bukkit": "6a039faf7488beba29527a112404cbab84d0cbd3",
+            "CraftBukkit": "10ba1beb64286206f4edc8d4b44c6472639d044e",
+            "Spigot": "b0819150028ec7233960ec622a4b1ba57f102047"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.18.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#641cb0c939c7c2a3c4b42f2fd7bca7c8b34254ae:info.json",
+          "java_class_versions": [
+            61,
+            62
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.18.2-40.3.12"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/334b33fcba3c9be4b7514624c965256535bd7eba/1.18.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "c8f83c5655308435b3dcf03c06d9fe8740a77469",
+          "size": 46592587,
+          "url": "https://piston-data.mojang.com/v1/objects/c8f83c5655308435b3dcf03c06d9fe8740a77469/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "e562f588fea155d96291267465dc3323bfe1551b",
+          "size": 5212964,
+          "url": "https://piston-data.mojang.com/v1/objects/e562f588fea155d96291267465dc3323bfe1551b/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.19",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3553",
+          "minecraft": "1.19",
+          "refs": {
+            "BuildData": "e6ebde42e39100b18ca0265596b04f557b2b27cc",
+            "Bukkit": "23f557a0a005db45e17f16e58c8f0a583682be79",
+            "CraftBukkit": "ef094640942637ee78314416474425a1a53b2a64",
+            "Spigot": "14a2382f7da41c880fdbf64536fb222df98dc111"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.19.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#e6ebde42e39100b18ca0265596b04f557b2b27cc:info.json",
+          "java_class_versions": [
+            61,
+            62
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.19-41.1.0"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/14bbfb25fb1c1c798e3c9b9482b081a78d1f3a9d/1.19.json",
+      "downloads": {
+        "server": {
+          "sha1": "e00c4052dac1d59a1188b2aa9d5a87113aaf1122",
+          "size": 45538778,
+          "url": "https://piston-data.mojang.com/v1/objects/e00c4052dac1d59a1188b2aa9d5a87113aaf1122/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "1c1cea17d5cd63d68356df2ef31e724dd09f8c26",
+          "size": 5552032,
+          "url": "https://piston-data.mojang.com/v1/objects/1c1cea17d5cd63d68356df2ef31e724dd09f8c26/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.19.1",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3563",
+          "minecraft": "1.19.1",
+          "refs": {
+            "BuildData": "1a32ff0d74aec7d92025bebc5f7b40fc02040ea4",
+            "Bukkit": "caa7c4866ac49b04808b75284715543f221649a5",
+            "CraftBukkit": "1e3bf58cdb2b099308d94dbc34d950155ee83ac3",
+            "Spigot": "21831450a43f67f1730dd0dec987c7a7ff19caa9"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.19.1.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#1a32ff0d74aec7d92025bebc5f7b40fc02040ea4:info.json",
+          "java_class_versions": [
+            61,
+            62
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.19.1-42.0.9"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/39d5e8925d37490c6f2abb2e02b8c6f1b35719df/1.19.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "8399e1211e95faa421c1507b322dbeae86d604df",
+          "size": 45609936,
+          "url": "https://piston-data.mojang.com/v1/objects/8399e1211e95faa421c1507b322dbeae86d604df/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "3565648cdd47ae15738fb804a95a659137d7cfd3",
+          "size": 5584928,
+          "url": "https://piston-data.mojang.com/v1/objects/3565648cdd47ae15738fb804a95a659137d7cfd3/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.19.2",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3610",
+          "minecraft": "1.19.2",
+          "refs": {
+            "BuildData": "d96ad8e1e64b7c35bb632339c23621353be1f028",
+            "Bukkit": "38866413a790619d8d8873de5b62f807947b81f6",
+            "CraftBukkit": "19df23aa2e83d966efbc0674d5ac24cab56a1346",
+            "Spigot": "6198b5ae88da3f3650123abc22e6363a7543faa9"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.19.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#d96ad8e1e64b7c35bb632339c23621353be1f028:info.json",
+          "java_class_versions": [
+            61,
+            63
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.19.2-43.5.2"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/ed548106acf3ac7e8205a6ee8fd2710facfa164f/1.19.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "f69c284232d7c7580bd89a5a4931c3581eae1378",
+          "size": 45609512,
+          "url": "https://piston-data.mojang.com/v1/objects/f69c284232d7c7580bd89a5a4931c3581eae1378/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "ed5e6e8334ad67f5af0150beed0f3d156d74bd57",
+          "size": 5584686,
+          "url": "https://piston-data.mojang.com/v1/objects/ed5e6e8334ad67f5af0150beed0f3d156d74bd57/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.19.3",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3670",
+          "minecraft": "1.19.3",
+          "refs": {
+            "BuildData": "6dfa7428ba5c4275211f739316cd2a5f9644505d",
+            "Bukkit": "fb50924403915ad24e9389361a10dfbf53c1e696",
+            "CraftBukkit": "bd29f413c1c7ed34af01e14cc7c5b1999a534fc6",
+            "Spigot": "454acb73c87f8249040c2a4a434125e799237089"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.19.3.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#6dfa7428ba5c4275211f739316cd2a5f9644505d:info.json",
+          "java_class_versions": [
+            61,
+            64
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.19.3-44.1.23"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/5a447c52810ced5a8535b5f635f6bc63c94df64e/1.19.3.json",
+      "downloads": {
+        "server": {
+          "sha1": "c9df48efed58511cdd0213c56b9013a7b5c9ac1f",
+          "size": 47162712,
+          "url": "https://piston-data.mojang.com/v1/objects/c9df48efed58511cdd0213c56b9013a7b5c9ac1f/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "bc44f6dd84cd2f3ad8c0caad850eaca9e82067e3",
+          "size": 5852819,
+          "url": "https://piston-data.mojang.com/v1/objects/bc44f6dd84cd2f3ad8c0caad850eaca9e82067e3/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.19.4",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3763",
+          "minecraft": "1.19.4",
+          "refs": {
+            "BuildData": "4d9436f7b66190ad21fe4e3975b73a36b7ad2a7e",
+            "Bukkit": "5dbedae1cbbc70791dcfc374c4c8da35db309a44",
+            "CraftBukkit": "5a5e43ee6bab92419f7a7cfdb39af61a74b226ab",
+            "Spigot": "7d7b241e353e86ee90ad025dab0262b050a6fe4a"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.19.4.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#4d9436f7b66190ad21fe4e3975b73a36b7ad2a7e:info.json",
+          "java_class_versions": [
+            61,
+            64
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.19.4-45.4.5"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/509d363de59da2f2350fee270f11ace8a9412948/1.19.4.json",
+      "downloads": {
+        "server": {
+          "sha1": "8f3112a1049751cc472ec13e397eade5336ca7ae",
+          "size": 47515675,
+          "url": "https://piston-data.mojang.com/v1/objects/8f3112a1049751cc472ec13e397eade5336ca7ae/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "73c8bb982e420b33aad9632b482608c5c33e2d13",
+          "size": 6043763,
+          "url": "https://piston-data.mojang.com/v1/objects/73c8bb982e420b33aad9632b482608c5c33e2d13/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3774",
+          "minecraft": "1.20",
+          "refs": {
+            "BuildData": "2881c6b6dd146126596342d4025d37a9a84a0b03",
+            "Bukkit": "b4fd213c708979090665b6c6d4253696a01c7f2a",
+            "CraftBukkit": "725545630d7c34e3d2f774040294bea120b32ae4",
+            "Spigot": "b655c57d3c1f1bd3649f43946b66d2c480e73744"
+          },
+          "source": "https://hub.spigotmc.org/versions/3774.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#2881c6b6dd146126596342d4025d37a9a84a0b03:info.json",
+          "java_class_versions": [
+            61,
+            64
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20-46.0.14"
+        },
+        "neoforge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/a645b4aeda8c8d2a7b12550ecc91de5ba3a8d5e1/1.20.json",
+      "downloads": {
+        "server": {
+          "sha1": "15c777e2cfe0556eef19aab534b186c0c6f277e1",
+          "size": 47787288,
+          "url": "https://piston-data.mojang.com/v1/objects/15c777e2cfe0556eef19aab534b186c0c6f277e1/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "15e61168fd24c7950b22cd3b9e771a7ce4035b41",
+          "size": 6153964,
+          "url": "https://piston-data.mojang.com/v1/objects/15e61168fd24c7950b22cd3b9e771a7ce4035b41/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.1",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3871",
+          "minecraft": "1.20.1",
+          "refs": {
+            "BuildData": "221903b51701960ac778d8641b31cebcf411caa8",
+            "Bukkit": "69c7ce23f295a5bf1b1b7128bc1daece4ead768e",
+            "CraftBukkit": "3f9263ba3a726846a9466e12da95d73229af4ad9",
+            "Spigot": "d2eba2c820b52b742eb542c6d2c4d76e3d743570"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.20.1.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#221903b51701960ac778d8641b31cebcf411caa8:info.json",
+          "java_class_versions": [
+            61,
+            65
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.1-47.4.29"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.1-47.1.106",
+          "artifact": "net.neoforged:forge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/3ecf2cab995685d345a257326ba72192b7911250/1.20.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "84194a2f286ef7c14ed7ce0090dba59902951553",
+          "size": 47791053,
+          "url": "https://piston-data.mojang.com/v1/objects/84194a2f286ef7c14ed7ce0090dba59902951553/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "0b4dba049482496c507b2387a73a913230ebbd76",
+          "size": 6154195,
+          "url": "https://piston-data.mojang.com/v1/objects/0b4dba049482496c507b2387a73a913230ebbd76/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.2",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3950",
+          "minecraft": "1.20.2",
+          "refs": {
+            "BuildData": "172197ceb99364701937947ea7fc424ecf1bb694",
+            "Bukkit": "ef888c0741538690fb9adff0b401cfc868cb62ff",
+            "CraftBukkit": "d485cdeaf848cae907ed270f0f39f619af209ac9",
+            "Spigot": "2888990a11a5829db247c46438f43505fcd8dbb9"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.20.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#172197ceb99364701937947ea7fc424ecf1bb694:info.json",
+          "java_class_versions": [
+            61,
+            65
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.2-48.1.0"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "20.2.93",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/2b1c2be7cf1d1137b77716962b71e147b614c50c/1.20.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "5b868151bd02b41319f54c8d4061b8cae84e665c",
+          "size": 48285806,
+          "url": "https://piston-data.mojang.com/v1/objects/5b868151bd02b41319f54c8d4061b8cae84e665c/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "dced504a9b5df367ddd3477adac084cea8024ba4",
+          "size": 6548145,
+          "url": "https://piston-data.mojang.com/v1/objects/dced504a9b5df367ddd3477adac084cea8024ba4/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.3",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "3954",
+          "minecraft": "1.20.3",
+          "refs": {
+            "BuildData": "58819a3c2a15e6e47ad89d32fb60d44c253491f3",
+            "Bukkit": "d9c1eb83af46e61e089cb899a24a8cc0a66e625b",
+            "CraftBukkit": "8232a74cf8d32bce37c33ff6d0cd9b688a1ef8e9",
+            "Spigot": "9d728858d26d780a91aa8e3541bcfda9de7f76dc"
+          },
+          "source": "https://hub.spigotmc.org/versions/3954.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#58819a3c2a15e6e47ad89d32fb60d44c253491f3:info.json",
+          "java_class_versions": [
+            61,
+            65
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.3-49.0.2"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "20.3.8-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/b1023e33c4c35e8cb72127c7b4745236fa47b9d4/1.20.3.json",
+      "downloads": {
+        "server": {
+          "sha1": "4fb536bfd4a83d61cdbaf684b8d311e66e7d4c49",
+          "size": 49152320,
+          "url": "https://piston-data.mojang.com/v1/objects/4fb536bfd4a83d61cdbaf684b8d311e66e7d4c49/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "c1cafe916dd8b58ed1fe0564fc8f786885224e62",
+          "size": 6797462,
+          "url": "https://piston-data.mojang.com/v1/objects/c1cafe916dd8b58ed1fe0564fc8f786885224e62/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.4",
+      "java": 17,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4090",
+          "minecraft": "1.20.4",
+          "refs": {
+            "BuildData": "a9c23e0aa2429445ce39109e093bce0d89a14ab3",
+            "Bukkit": "0a850d95d96991609f01572b470256bb348696aa",
+            "CraftBukkit": "38b1f49d9546975e24e41421d8473dc676c9fbbc",
+            "Spigot": "b754dccf0c43518a34701b863125fde5a9fbbd32"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.20.4.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#a9c23e0aa2429445ce39109e093bce0d89a14ab3:info.json",
+          "java_class_versions": [
+            61,
+            66
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.4-49.2.13"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "20.4.253",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/bd984a42a9b403c620eae6cd77a1095850ca4479/1.20.4.json",
+      "downloads": {
+        "server": {
+          "sha1": "8dd1a28015f51b1803213892b50b7b4fc76e594d",
+          "size": 49150256,
+          "url": "https://piston-data.mojang.com/v1/objects/8dd1a28015f51b1803213892b50b7b4fc76e594d/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "c1cafe916dd8b58ed1fe0564fc8f786885224e62",
+          "size": 6797462,
+          "url": "https://piston-data.mojang.com/v1/objects/c1cafe916dd8b58ed1fe0564fc8f786885224e62/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.5",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4106",
+          "minecraft": "1.20.5",
+          "refs": {
+            "BuildData": "a7f7c2118b877fde4cf0f32f1f730ffcdee8e9ee",
+            "Bukkit": "fc1f96cfadac4d3f3b91f419891f98cfad264f30",
+            "CraftBukkit": "8c1e7c84109cbbf4755c295a0ac88f7e302aeefe",
+            "Spigot": "b698b49caf14f97a717afd67e13fd7ac59f51089"
+          },
+          "source": "https://hub.spigotmc.org/versions/4106.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#a7f7c2118b877fde4cf0f32f1f730ffcdee8e9ee:info.json",
+          "java_class_versions": [
+            65,
+            66
+          ]
+        },
+        "forge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "20.5.21-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/a7f0d5d66b6a76ac710858ea7c63791326dc6a64/1.20.5.json",
+      "downloads": {
+        "server": {
+          "sha1": "79493072f65e17243fd36a699c9a96b4381feb91",
+          "size": 51424012,
+          "url": "https://piston-data.mojang.com/v1/objects/79493072f65e17243fd36a699c9a96b4381feb91/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "14be97974a77b09eb8bca88ed9268445f0fde3e7",
+          "size": 7283217,
+          "url": "https://piston-data.mojang.com/v1/objects/14be97974a77b09eb8bca88ed9268445f0fde3e7/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.20.6",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4195-b",
+          "minecraft": "1.20.6",
+          "refs": {
+            "BuildData": "32d1baf2f4e0e7cd1ac22c7b2f6eb4c387e8a343",
+            "Bukkit": "376e37db4b23b1fc18f93d3aeccaa40b8bb16ed2",
+            "CraftBukkit": "65247583f8c04171632caab7487c8aabceacd5c8",
+            "Spigot": "f6a48054762b87d7c8568e567127b883241c592b"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.20.6.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#32d1baf2f4e0e7cd1ac22c7b2f6eb4c387e8a343:info.json",
+          "java_class_versions": [
+            65,
+            66
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.20.6-50.2.15"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "20.6.144",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/f218f389b6a159ac30b44a3adf9a8700ed42f397/1.20.6.json",
+      "downloads": {
+        "server": {
+          "sha1": "145ff0858209bcfc164859ba735d4199aafa1eea",
+          "size": 51420480,
+          "url": "https://piston-data.mojang.com/v1/objects/145ff0858209bcfc164859ba735d4199aafa1eea/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "9e96100f573a46ef44caab3e716d5eb974594bb7",
+          "size": 7283803,
+          "url": "https://piston-data.mojang.com/v1/objects/9e96100f573a46ef44caab3e716d5eb974594bb7/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4219",
+          "minecraft": "1.21",
+          "refs": {
+            "BuildData": "ae1e7b1e31cd3a3892bb05a6ccdcecc48c73c455",
+            "Bukkit": "aaf497316eafadcf6232d24c636ee95a519f6a50",
+            "CraftBukkit": "3f8e4161fdbc2d95fe3358e6b844371985ef3910",
+            "Spigot": "146439e88cdda2de5ce54c2a9d6a6cdd9aa8bc1b"
+          },
+          "source": "https://hub.spigotmc.org/versions/4219.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#ae1e7b1e31cd3a3892bb05a6ccdcecc48c73c455:info.json",
+          "java_class_versions": [
+            65,
+            66
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21-51.0.33"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.0.167",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/4fc7dfb1d245736485d1f0e9c7a41c0273ad8638/1.21.json",
+      "downloads": {
+        "server": {
+          "sha1": "450698d1863ab5180c25d7c804ef0fe6369dd1ba",
+          "size": 51623779,
+          "url": "https://piston-data.mojang.com/v1/objects/450698d1863ab5180c25d7c804ef0fe6369dd1ba/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "31c77994d96f05ba25a870ada70f47f315330437",
+          "size": 7454609,
+          "url": "https://piston-data.mojang.com/v1/objects/31c77994d96f05ba25a870ada70f47f315330437/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.1",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4344",
+          "minecraft": "1.21.1",
+          "refs": {
+            "BuildData": "533b02cd6ba8dbf8c8607250b02bf2d8c36421e8",
+            "Bukkit": "bb4e97c60d2978a1d008f21295a5234228341e14",
+            "CraftBukkit": "19bf846569f71fa9b64bf50b43154945124e44bc",
+            "Spigot": "a759b629cbf86401aab56b8c3f21a635e9e76c15"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.1.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#533b02cd6ba8dbf8c8607250b02bf2d8c36421e8:info.json",
+          "java_class_versions": [
+            65,
+            67
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.1-52.1.21"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.1.266",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/9aa86ea608c3ec777dcdc09e6c5a06c85b53599e/1.21.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "59353fb40c36d304f2035d51e7d6e6baa98dc05c",
+          "size": 51627615,
+          "url": "https://piston-data.mojang.com/v1/objects/59353fb40c36d304f2035d51e7d6e6baa98dc05c/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "03f8985492bda0afc0898465341eb0acef35f570",
+          "size": 7456063,
+          "url": "https://piston-data.mojang.com/v1/objects/03f8985492bda0afc0898465341eb0acef35f570/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.2",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4347",
+          "minecraft": "1.21.2",
+          "refs": {
+            "BuildData": "0ea6fcc9bc8ad9e7c729f5031123bcc69ce2b033",
+            "Bukkit": "205360171ca27ce7e5cf0d4cded89d26d404194b",
+            "CraftBukkit": "71e5738a05f9c820ffc36e8be3952bc93939f4a1",
+            "Spigot": "a084d85da8604d468f81091f56dc81166d912931"
+          },
+          "source": "https://hub.spigotmc.org/versions/4347.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#0ea6fcc9bc8ad9e7c729f5031123bcc69ce2b033:info.json",
+          "java_class_versions": [
+            65,
+            67
+          ]
+        },
+        "forge": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.2.1-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/5b8e9f8a64f481c92f4c715db4faf496849b2c3a/1.21.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "7bf95409b0d9b5388bfea3704ec92012d273c14c",
+          "size": 56120171,
+          "url": "https://piston-data.mojang.com/v1/objects/7bf95409b0d9b5388bfea3704ec92012d273c14c/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "ce1d4ab050af87c41fc3d51050ef6862385da784",
+          "size": 7841433,
+          "url": "https://piston-data.mojang.com/v1/objects/ce1d4ab050af87c41fc3d51050ef6862385da784/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.3",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4398",
+          "minecraft": "1.21.3",
+          "refs": {
+            "BuildData": "0c5ebabcb4ce41f69a7d2319b468b6faee434038",
+            "Bukkit": "ed0ec4893b5f755e2493e652091bba42dc7ad742",
+            "CraftBukkit": "561ceb92b22c58ad05c546883cd320da4498d0b9",
+            "Spigot": "60c9969b3e34b1a7c8f06e358241399b5f47bfb1"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.3.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#0c5ebabcb4ce41f69a7d2319b468b6faee434038:info.json",
+          "java_class_versions": [
+            65,
+            67
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.3-53.1.16"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.3.100",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/2d0db50acd45be754ca0d4b2a0b0f7fb93a121b3/1.21.3.json",
+      "downloads": {
+        "server": {
+          "sha1": "45810d238246d90e811d896f87b14695b7fb6839",
+          "size": 56122038,
+          "url": "https://piston-data.mojang.com/v1/objects/45810d238246d90e811d896f87b14695b7fb6839/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "c70e10f72ea65bb97e156143fd97c852dc958325",
+          "size": 7841795,
+          "url": "https://piston-data.mojang.com/v1/objects/c70e10f72ea65bb97e156143fd97c852dc958325/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.4",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4458",
+          "minecraft": "1.21.4",
+          "refs": {
+            "BuildData": "686446e5669a9aab7d35179fd989032560f289fc",
+            "Bukkit": "a3d67ef041c520a1225a6ce4bd8d777ad23886b0",
+            "CraftBukkit": "fb3f2b6452a010c4511c59cdee78ae5803cc0b7a",
+            "Spigot": "73860e064edc2599604dd46c0bc5202283e57e9c"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.4.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#686446e5669a9aab7d35179fd989032560f289fc:info.json",
+          "java_class_versions": [
+            65,
+            68
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.4-54.1.22"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.4.161",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/87fcc1eec25874d12bca737d6579a247ce2d2746/1.21.4.json",
+      "downloads": {
+        "server": {
+          "sha1": "4707d00eb834b446575d89a61a11b5d548d8c001",
+          "size": 56880250,
+          "url": "https://piston-data.mojang.com/v1/objects/4707d00eb834b446575d89a61a11b5d548d8c001/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "0b1e60cc509cfb0172573ae56b436c29febbc187",
+          "size": 7753825,
+          "url": "https://piston-data.mojang.com/v1/objects/0b1e60cc509cfb0172573ae56b436c29febbc187/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.5",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4504",
+          "minecraft": "1.21.5",
+          "refs": {
+            "BuildData": "9b48cd40193ae9f0cebbadce39052a242485eb4c",
+            "Bukkit": "c80061286e3bb33d611e1034fe6794ab98256582",
+            "CraftBukkit": "dacd062dd1c6d6a06f0774a837ea18ddf89edb6d",
+            "Spigot": "270012a3149d0a6e4200bcbb8dde44fc63dbe863"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.5.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#9b48cd40193ae9f0cebbadce39052a242485eb4c:info.json",
+          "java_class_versions": [
+            65,
+            68
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.5-55.1.18"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.5.101",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/deed2dfe12bd2f6dd3397178c68ce07d0a8f2604/1.21.5.json",
+      "downloads": {
+        "server": {
+          "sha1": "e6ec2f64e6080b9b5d9b471b291c33cc7f509733",
+          "size": 57269758,
+          "url": "https://piston-data.mojang.com/v1/objects/e6ec2f64e6080b9b5d9b471b291c33cc7f509733/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "f4812c1d66d0098a94616b19c21829e591d0af3a",
+          "size": 8027211,
+          "url": "https://piston-data.mojang.com/v1/objects/f4812c1d66d0098a94616b19c21829e591d0af3a/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.6",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4518",
+          "minecraft": "1.21.6",
+          "refs": {
+            "BuildData": "281ac0de7a76d808753ede97d11b034bc801b63d",
+            "Bukkit": "263d8147c921a2e04d6713c792622c9c74f00a26",
+            "CraftBukkit": "98f7fa28ed76204d2d290abb1c8b8083ed1787fb",
+            "Spigot": "d5ca3f833bb6128d88eaab2211b9c203953d23db"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.6.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#281ac0de7a76d808753ede97d11b034bc801b63d:info.json",
+          "java_class_versions": [
+            65,
+            68
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.6-56.0.9"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.6.20-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/207b4f08c3f45142111bfc385be1fb6ac29a35df/1.21.6.json",
+      "downloads": {
+        "server": {
+          "sha1": "6e64dcabba3c01a7271b4fa6bd898483b794c59b",
+          "size": 57554576,
+          "url": "https://piston-data.mojang.com/v1/objects/6e64dcabba3c01a7271b4fa6bd898483b794c59b/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "94d453080a58875d3acc1a9a249809767c91ed40",
+          "size": 8185946,
+          "url": "https://piston-data.mojang.com/v1/objects/94d453080a58875d3acc1a9a249809767c91ed40/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.7",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4521",
+          "minecraft": "1.21.7",
+          "refs": {
+            "BuildData": "436eac9815c211be1a2a6ca0702615f995e81c44",
+            "Bukkit": "fc3da16b94dd5041c79b22a5904bcda112086404",
+            "CraftBukkit": "d257c87b12b590c2363102bc4fa7c35a7f02012a",
+            "Spigot": "6e79c50e5e20567b67cb5d67c49e1417399215c1"
+          },
+          "source": "https://hub.spigotmc.org/versions/4521.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#436eac9815c211be1a2a6ca0702615f995e81c44:info.json",
+          "java_class_versions": [
+            65,
+            68
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.7-57.0.3"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.7.25-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/48c9b004f6add2f9dca3cca46cb036d1bed91cb4/1.21.7.json",
+      "downloads": {
+        "server": {
+          "sha1": "05e4b48fbc01f0385adb74bcff9751d34552486c",
+          "size": 57556704,
+          "url": "https://piston-data.mojang.com/v1/objects/05e4b48fbc01f0385adb74bcff9751d34552486c/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "eb1e1eb47cb740012fc82eacc394859463684132",
+          "size": 8186232,
+          "url": "https://piston-data.mojang.com/v1/objects/eb1e1eb47cb740012fc82eacc394859463684132/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.8",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4534",
+          "minecraft": "1.21.8",
+          "refs": {
+            "BuildData": "851ec26f86db9951c78dd8868e0b474c2290ecd2",
+            "Bukkit": "9ef6c8db34776b9d661a91e2d44c0a2d4e43e6cb",
+            "CraftBukkit": "65f1f1130a7052e7c8018e3bd579470edf206833",
+            "Spigot": "7c52c662ccee93e52a21c54a1b8f93721e4ec773"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.8.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#851ec26f86db9951c78dd8868e0b474c2290ecd2:info.json",
+          "java_class_versions": [
+            65,
+            69
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.8-58.1.26"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.8.57",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/7493ff7be80f54b68cd7a9a9cdfb5a1392aaa1a1/1.21.8.json",
+      "downloads": {
+        "server": {
+          "sha1": "6bce4ef400e4efaa63a13d5e6f6b500be969ef81",
+          "size": 57555044,
+          "url": "https://piston-data.mojang.com/v1/objects/6bce4ef400e4efaa63a13d5e6f6b500be969ef81/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "eb1e1eb47cb740012fc82eacc394859463684132",
+          "size": 8186232,
+          "url": "https://piston-data.mojang.com/v1/objects/eb1e1eb47cb740012fc82eacc394859463684132/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.9",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4539",
+          "minecraft": "1.21.9",
+          "refs": {
+            "BuildData": "42d18d4c4653ffc549778dbe223f6994a031d69e",
+            "Bukkit": "b6d15d8f8b03e16ffac4cc0b263f5735504b6766",
+            "CraftBukkit": "d1d7bf6f133e2091a725ff87e48bd6beaa243311",
+            "Spigot": "688b11a232392c6c672bf18fdee6f7e966c12ee4"
+          },
+          "source": "https://hub.spigotmc.org/versions/4539.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#42d18d4c4653ffc549778dbe223f6994a031d69e:info.json",
+          "java_class_versions": [
+            65,
+            69
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.9-59.0.5"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.9.16-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/1b06d2917e16b01b311a74e6e3abf644f390249c/1.21.9.json",
+      "downloads": {
+        "server": {
+          "sha1": "11e54c2081420a4d49db3007e66c80a22579ff2a",
+          "size": 58638725,
+          "url": "https://piston-data.mojang.com/v1/objects/11e54c2081420a4d49db3007e66c80a22579ff2a/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "587e016fe8a876cbc1cc98d73f9d0d79bfb32b2c",
+          "size": 8472780,
+          "url": "https://piston-data.mojang.com/v1/objects/587e016fe8a876cbc1cc98d73f9d0d79bfb32b2c/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.10",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4570",
+          "minecraft": "1.21.10",
+          "refs": {
+            "BuildData": "6cf716da198f9d94f9c36e36d9be6417c5c24824",
+            "Bukkit": "54dd32b56af7278dc8128a0b2fb54f91dca6b433",
+            "CraftBukkit": "5c73aaf1ef20a463bc6b0079bcb585b14e1968b5",
+            "Spigot": "6e369ba56125a52a628785448c15afa062a76932"
+          },
+          "source": "https://hub.spigotmc.org/versions/1.21.10.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#6cf716da198f9d94f9c36e36d9be6417c5c24824:info.json",
+          "java_class_versions": [
+            65,
+            69
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.10-60.1.18"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.10.64",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/1dcba28d18f2f8d1ac8611bf1c4d6273e8891f4c/1.21.10.json",
+      "downloads": {
+        "server": {
+          "sha1": "95495a7f485eedd84ce928cef5e223b757d2f764",
+          "size": 58642415,
+          "url": "https://piston-data.mojang.com/v1/objects/95495a7f485eedd84ce928cef5e223b757d2f764/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "c5440743411a6fd7490fa18a4b6c5d8edf36d88b",
+          "size": 8473286,
+          "url": "https://piston-data.mojang.com/v1/objects/c5440743411a6fd7490fa18a4b6c5d8edf36d88b/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "1.21.11",
+      "java": 21,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4581",
+          "minecraft": "1.21.11",
+          "refs": {
+            "BuildData": "17f77cee7117ab9d6175f088ae8962bfd04e61a9",
+            "Bukkit": "5905bd8fff152aae44cee72612910838c7f0bb80",
+            "CraftBukkit": "267bc71198e3e70f4245cff0abd8e36b00f98830",
+            "Spigot": "66411b972b0dc482dc64fe1e5ffe1b976de82ccb"
+          },
+          "source": "https://hub.spigotmc.org/versions/4581.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#17f77cee7117ab9d6175f088ae8962bfd04e61a9:info.json",
+          "java_class_versions": [
+            65,
+            69
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "1.21.11-61.2.5"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "21.11.48",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/812ee7fdfdf648bb872f7a1dca33718de4e786b4/1.21.11.json",
+      "downloads": {
+        "server": {
+          "sha1": "64bb6d763bed0a9f1d632ec347938594144943ed",
+          "size": 56327581,
+          "url": "https://piston-data.mojang.com/v1/objects/64bb6d763bed0a9f1d632ec347938594144943ed/server.jar"
+        },
+        "server_mappings": {
+          "sha1": "5621e9253f05fd57872bbe7f8ddf5f9a7d525955",
+          "size": 8678606,
+          "url": "https://piston-data.mojang.com/v1/objects/5621e9253f05fd57872bbe7f8ddf5f9a7d525955/server.txt"
+        }
+      }
+    },
+    {
+      "minecraft": "26.1",
+      "java": 25,
+      "platforms": {
+        "paper": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4609",
+          "minecraft": "26.1",
+          "refs": {
+            "BuildData": "5bf19beb9fa500f822c35eb5634fcefe27f60bec",
+            "Bukkit": "282dad0ee9804b783af8ea919ec6eb0727f42eea",
+            "CraftBukkit": "16aedd3e44a62176292107dd9bb257beedae6e05",
+            "Spigot": "cc5228d82b825a0288dd89cce14f9f49c1d07e1b"
+          },
+          "source": "https://hub.spigotmc.org/versions/4609.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#5bf19beb9fa500f822c35eb5634fcefe27f60bec:info.json",
+          "java_class_versions": [
+            69,
+            70
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1-62.0.9"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1.0.19-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/389f92510868468e073b7a12f19e70a7bf8684cd/26.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "3872a7f07a1a595e651aef8b058dfc2bb3772f46",
+          "size": 60417588,
+          "url": "https://piston-data.mojang.com/v1/objects/3872a7f07a1a595e651aef8b058dfc2bb3772f46/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "26.1.1",
+      "java": 25,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "purpur": {
+          "available": false,
+          "reason": "No published upstream for this exact Minecraft release."
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4616",
+          "minecraft": "26.1.1",
+          "refs": {
+            "BuildData": "71cd3e74d4a679366ccd4b6fff5e5595362832e3",
+            "Bukkit": "e2e27ca3506e4802c4d123239f57c2d9692072c6",
+            "CraftBukkit": "48244d7808b682af8fdc2d4070810540928fd459",
+            "Spigot": "4a90bec56da29bd9da0f2a7f15f3ba966a38caae"
+          },
+          "source": "https://hub.spigotmc.org/versions/4616.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#71cd3e74d4a679366ccd4b6fff5e5595362832e3:info.json",
+          "java_class_versions": [
+            69,
+            70
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1.1-63.0.2"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1.1.15-beta",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/63c56ca0cfc405b1679656db51c9006c43e59b1c/26.1.1.json",
+      "downloads": {
+        "server": {
+          "sha1": "49c8195703ad0ba4f0a4efbccfd85a4a8ca57431",
+          "size": 60417481,
+          "url": "https://piston-data.mojang.com/v1/objects/49c8195703ad0ba4f0a4efbccfd85a4a8ca57431/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "26.1.2",
+      "java": 25,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4632",
+          "minecraft": "26.1.2",
+          "refs": {
+            "BuildData": "1766f29a5430bb246f77e2fe24debb93a26a587d",
+            "Bukkit": "b5342f1ad2869a496f29d1d320744c00b161a162",
+            "CraftBukkit": "690a40233e2e171d94e2b99577b2b55b10d76d81",
+            "Spigot": "566f9723ddc5625b20aaa5f7acee9e8328ba5399"
+          },
+          "source": "https://hub.spigotmc.org/versions/26.1.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#1766f29a5430bb246f77e2fe24debb93a26a587d:info.json",
+          "java_class_versions": [
+            69,
+            70
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1.2-64.1.6"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.1.2.126",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/0bbfbdb8272531060afbba5c671fe4ed3dd6f72f/26.1.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51",
+          "size": 60417480,
+          "url": "https://piston-data.mojang.com/v1/objects/97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "26.2",
+      "java": 25,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4648",
+          "minecraft": "26.2",
+          "refs": {
+            "BuildData": "41bd187bd86ec1444d2dc9e0188e53559cf870b3",
+            "Bukkit": "a176036de14dbd873fcfed8f3111723cdb34e12c",
+            "CraftBukkit": "96ae8cd2f4f8bfcee57193455d0714f2bd4fcd1f",
+            "Spigot": "8db49a2b72ef138a615856934957da2978f72f08"
+          },
+          "source": "https://hub.spigotmc.org/versions/26.2.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#41bd187bd86ec1444d2dc9e0188e53559cf870b3:info.json",
+          "java_class_versions": [
+            69,
+            70
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.2-65.1.6"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.2.0.93",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/f28ad96ed5d65e2438da836144a3de15bb9cafe7/26.2.json",
+      "downloads": {
+        "server": {
+          "sha1": "823e2250d24b3ddac457a60c92a6a941943fcd6a",
+          "size": 60894273,
+          "url": "https://piston-data.mojang.com/v1/objects/823e2250d24b3ddac457a60c92a6a941943fcd6a/server.jar"
+        }
+      }
+    },
+    {
+      "minecraft": "26.3",
+      "java": 25,
+      "platforms": {
+        "paper": {
+          "available": true,
+          "status": "unverified"
+        },
+        "folia": {
+          "available": true,
+          "status": "unverified"
+        },
+        "purpur": {
+          "available": true,
+          "status": "unverified"
+        },
+        "fabric": {
+          "available": true,
+          "status": "unverified",
+          "loader": "0.20.1"
+        },
+        "spigot": {
+          "available": true,
+          "status": "unverified",
+          "revision": "4664",
+          "minecraft": "26.3",
+          "refs": {
+            "BuildData": "39e62795554dcf6b62e922bc061705b3dc228f88",
+            "Bukkit": "29025a7ed5789807e11158a2263316b13ed50c3b",
+            "CraftBukkit": "e89124d3e8e9585e75ceb7f9a4daba133788e5bd",
+            "Spigot": "bed90fca391bc35f0dbbcdc7ce5d7bb28e533681"
+          },
+          "source": "https://hub.spigotmc.org/versions/26.3.json",
+          "builddata": "https://hub.spigotmc.org/stash/scm/spigot/builddata.git#39e62795554dcf6b62e922bc061705b3dc228f88:info.json",
+          "java_class_versions": [
+            69,
+            70
+          ]
+        },
+        "forge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.3-66.1.8"
+        },
+        "neoforge": {
+          "available": true,
+          "status": "unverified",
+          "sdk": "26.3.0.103",
+          "artifact": "net.neoforged:neoforge"
+        }
+      },
+      "minecraft_metadata": "https://piston-meta.mojang.com/v1/packages/9f67e10ed013deeaad20ac3c800652765d493408/26.3.json",
+      "downloads": {
+        "server": {
+          "sha1": "33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c",
+          "size": 62294556,
+          "url": "https://piston-data.mojang.com/v1/objects/33680f5f2ac32864d6d7cf5e56a705fdb3e05f4c/server.jar"
+        }
+      }
+    }
+  ]
+}
