@@ -302,7 +302,12 @@ ALIASES = {
     "player.message": ("ServerPlayer", "sendSystemMessage", "net.minecraft.network.chat.Component"),
     "server.players": ("MinecraftServer", "getPlayerList", ""),
     "server.levels": ("MinecraftServer", "getAllLevels", ""),
+    "level.dimension": ("Level", "dimension", ""),
+    "dimension.location": ("ResourceKey", "location", ""),
+    "level.addPlayer": ("ServerLevel", "addNewPlayer", "net.minecraft.server.level.ServerPlayer"),
     "entity.setLevel": ("Entity", "setLevel", "net.minecraft.world.level.Level"),
+    "player.setLevel": ("ServerPlayer", "setLevel", "net.minecraft.server.level.ServerLevel"),
+    "player.teleport": ("ServerPlayer", "teleportTo", "net.minecraft.server.level.ServerLevel,double,double,double,java.util.Set,float,float,boolean"),
     "living.health": ("LivingEntity", "getHealth", ""),
     "living.setHealth": ("LivingEntity", "setHealth", "float"),
     "player.nativeDisconnect": ("ServerPlayer", "disconnect", ""),
@@ -344,6 +349,12 @@ CLASSES = {
     "InteractionHand": "net.minecraft.world.InteractionHand",
     "CompoundTag": "net.minecraft.nbt.CompoundTag",
     "BlockPos": "net.minecraft.core.BlockPos",
+    "ChunkPos": "net.minecraft.world.level.ChunkPos",
+    "Vec3": "net.minecraft.world.phys.Vec3",
+    "ResourceKey": "net.minecraft.resources.ResourceKey",
+    "AddEntityPacket": "net.minecraft.network.protocol.game.ClientboundAddEntityPacket",
+    "EntityDataPacket": "net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket",
+    "PassengersPacket": "net.minecraft.network.protocol.game.ClientboundSetPassengersPacket",
     "ServerEntity": "net.minecraft.server.level.ServerEntity",
     "EntityType": "net.minecraft.world.entity.EntityType",
     "EntityTypes": "net.minecraft.world.entity.EntityTypes",
@@ -466,6 +477,8 @@ def mapped_table(target, platform):
         "horse.saddle": [("AbstractHorse", "equipSaddle", "net.minecraft.sounds.SoundSource")],
         "horse.saddled": [("Mob", "isSaddled", "")],
         "tracker.pairing": [("ServerEntity", "sendPairingData", "java.util.function.Consumer")],
+        "player.teleport": [("ServerPlayer", "teleportTo", "net.minecraft.server.level.ServerLevel,double,double,double,java.util.Set,float,float"), ("ServerPlayer", "teleportTo", "net.minecraft.server.level.ServerLevel,double,double,double,float,float")],
+        "dimension.location": [("ResourceKey", "identifier", "")],
     }
     for key, choices in fallbacks.items():
         if "m." + key in table:
@@ -475,7 +488,7 @@ def mapped_table(target, platform):
             if member:
                 table["m." + key] = mapped_member(member)
                 break
-    for owner, fields_wanted in {"Entity": ["noPhysics", "level", "yRot", "removed"], "Level": ["isClientSide"], "LivingEntity": ["yBodyRot"], "InteractionResult": ["PASS", "SUCCESS"], "EntityType": ["HORSE"], "InteractionHand": ["MAIN_HAND"], "PacketFlow": ["SERVERBOUND"], "ServerPlayer": ["connection"], "ServerEntity": ["updateInterval", "entity"], "Connection": ["channel"], "ClickAction": ["RUN_COMMAND"], "SoundSource": ["PLAYERS"], "Items": ["SADDLE"], "EquipmentSlot": ["SADDLE"], "Permissions": ["COMMANDS_GAMEMASTER"], "ConnectionProtocol": ["LOGIN", "CONFIGURATION", "PLAY", "flows"], "PacketFlow": ["CLIENTBOUND", "SERVERBOUND"], "ProtocolPacketSet": ["classToId"], "IdDispatchCodec": ["toId", "byId"], "LoginProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "ConfigurationProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "GameProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"]}.items():
+    for owner, fields_wanted in {"Entity": ["noPhysics", "level", "yRot", "removed", "position", "blockPosition", "chunkPosition"], "Level": ["isClientSide"], "LivingEntity": ["yBodyRot"], "InteractionResult": ["PASS", "SUCCESS"], "EntityType": ["HORSE"], "InteractionHand": ["MAIN_HAND"], "PacketFlow": ["SERVERBOUND"], "ServerPlayer": ["connection"], "ServerEntity": ["updateInterval", "entity"], "Connection": ["channel"], "ClickAction": ["RUN_COMMAND"], "SoundSource": ["PLAYERS"], "Items": ["SADDLE"], "EquipmentSlot": ["SADDLE"], "Permissions": ["COMMANDS_GAMEMASTER"], "ConnectionProtocol": ["LOGIN", "CONFIGURATION", "PLAY", "flows"], "PacketFlow": ["CLIENTBOUND", "SERVERBOUND"], "ProtocolPacketSet": ["classToId"], "IdDispatchCodec": ["toId", "byId"], "LoginProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "ConfigurationProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "GameProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"]}.items():
         canonical = CLASSES.get(owner, "net.minecraft.world.entity." + owner)
         for name in fields_wanted:
             member = fields.get((canonical, name))
@@ -486,6 +499,13 @@ def mapped_table(target, platform):
         member = fields.get((CLASSES["AreaEffectCloud"], name))
         if member:
             table["f.AreaEffectCloud." + name] = mapped_member(member, True)
+    # Dedicated 1.16.5 strips the passenger packet's client getters even though
+    # its published server mappings list them. Its exact fields remain present.
+    for owner, wanted in {"AddEntityPacket": ("id", "x", "y", "z"), "EntityDataPacket": ("id", "packedItems"), "PassengersPacket": ("vehicle", "passengers")}.items():
+        for name in wanted:
+            member = fields.get((CLASSES[owner], name))
+            if member:
+                table["f." + owner + "." + name] = mapped_member(member, True)
     for canonical in names:
         if canonical.startswith("net.minecraft.network.protocol.") and canonical.endswith("Packet"):
             runtime = runtime_classes.get(names[canonical].replace(".", "/"), names[canonical].replace(".", "/")).replace("/", ".")

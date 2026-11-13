@@ -14,6 +14,7 @@ import java.util.*;
 
 /** Disposable runtime fixture. It is never included in the release plugin. */
 public final class NativeFixture extends JavaPlugin implements Listener {
+    private static final int RETURN_CHUNK = 8;
     private TandemountPlugin tandem;
     private Horse horse;
     private Player driver, rider, third;
@@ -25,6 +26,14 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private UUID horseIdentity;
     private ItemStack[] riderInventory;
     private Location driveStart;
+    private volatile Location playerHome;
+    private Location otherWorldDestination;
+    private volatile World otherWorldSetup;
+    private volatile int otherWorldX, otherWorldZ;
+    private volatile World returnWorld;
+    private volatile World unloadWorld;
+    private volatile int unloadX, unloadZ;
+    private volatile boolean unloadObserved, unloadContainedHelper;
 
     @Override public void onEnable() {
         tandem = (TandemountPlugin)getServer().getPluginManager().getPlugin("Tandemount");
@@ -65,9 +74,30 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR) public void cancelledTeleport(PlayerTeleportEvent event) {
         if (cancelTeleport && event.getPlayer() == rider) event.setCancelled(true);
     }
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void nativeUnloaded(org.bukkit.event.world.ChunkUnloadEvent event) {
+        if (event.getWorld() != unloadWorld || event.getChunk().getX() != unloadX || event.getChunk().getZ() != unloadZ) return;
+        for (Entity entity : event.getChunk().getEntities())
+            if (helperIds.contains(entity.getUniqueId()) && entity.isValid() && !entity.isDead()) unloadContainedHelper = true;
+        unloadObserved = true;
+    }
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void keepLegacyLandingLoaded(org.bukkit.event.world.ChunkUnloadEvent event) {
+        // Old Bukkit lacks plugin chunk tickets. Retain only the controlled
+        // landing chunk during this disposable fixture, without changing the
+        // Tandemount plugin or any production-world loading policy.
+        if (((event.getWorld() == otherWorldSetup && event.getChunk().getX() == otherWorldX
+                    && event.getChunk().getZ() == otherWorldZ)
+                || (event.getWorld() == returnWorld && event.getChunk().getX() == RETURN_CHUNK && event.getChunk().getZ() == RETURN_CHUNK))
+                && event instanceof Cancellable)
+            ((Cancellable)event).setCancelled(true);
+    }
     @EventHandler public void locate(final PlayerJoinEvent event) {
         next(event.getPlayer(), new Runnable() { public void run() {
-            Location at = new Location(Bukkit.getWorlds().get(0), 8.5, 64.0, 8.5);
+            Location at = playerHome == null ? new Location(Bukkit.getWorlds().get(0), 8.5, 64.0, 8.5) : playerHome.clone();
+            if (!at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4)) {
+                failed("player-home-loaded", new IllegalStateException("Fixture home chunk is not already loaded")); return;
+            }
             if (folia()) invoke(event.getPlayer(), "teleportAsync", at);
             else event.getPlayer().teleport(at);
         }});
@@ -87,20 +117,79 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         return true;
     }
     private void region(final Runnable work) throws ReflectiveOperationException {
+        region(Bukkit.getWorlds().get(0), 0, 0, work);
+    }
+    private void region(World world, int x, int z, final Runnable work) throws ReflectiveOperationException {
         if (!folia()) { Bukkit.getScheduler().runTask(this, work); return; }
         Object region = Probe.call(getServer(), "getRegionScheduler");
-        Probe.call(region, "execute", this, Bukkit.getWorlds().get(0), 0, 0, work);
+        Probe.call(region, "execute", this, world, x, z, work);
     }
     private void prepare() throws ReflectiveOperationException {
         Bukkit.getWorlds().get(0).setGameRuleValue("spawnRadius", "0");
         region(new Runnable() { public void run() {
             try {
-                World world = Bukkit.getWorlds().get(0);
+                final World world = Bukkit.getWorlds().get(0);
+                world.setKeepSpawnInMemory(false);
                 for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) world.getBlockAt(x, 63, z).setType(Material.STONE);
                 world.setSpawnLocation(8, 64, 8);
-                state("prepared", "0");
+                returnWorld = world;
+                prepareChunk(world, RETURN_CHUNK, RETURN_CHUNK, guarded("prepare-return-chunk", new Runnable() { public void run() {
+                    retainPreparedChunk(world, RETURN_CHUNK, RETURN_CHUNK);
+                    prepareLanding(world, RETURN_CHUNK, RETURN_CHUNK);
+                    try { prepareOtherWorld(world); }
+                    catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+                }}));
             } catch (Throwable failure) { failed("prepare-world", failure); }
         }});
+    }
+    private void prepareOtherWorld(World primary) throws ReflectiveOperationException {
+        for (final World world : Bukkit.getWorlds()) if (world != primary) {
+            Chunk[] loaded = world.getLoadedChunks();
+            final int x = loaded.length == 0 ? 0 : loaded[0].getX(), z = loaded.length == 0 ? 0 : loaded[0].getZ();
+            otherWorldSetup = world; otherWorldX = x; otherWorldZ = z;
+            final Runnable prepare = guarded("prepare-other-world", new Runnable() { public void run() {
+                if (!world.isChunkLoaded(x, z)) throw new IllegalStateException("Other-world chunk unloaded before fixture preparation");
+                retainPreparedChunk(world, x, z);
+                otherWorldDestination = prepareLanding(world, x, z);
+                state("prepared", "0");
+            }});
+            prepareChunk(world, x, z, prepare);
+            return;
+        }
+        record("world-change-loaded-destination-available", false,
+                "No secondary disposable world exists; enable a native dimension before this fixture.");
+        state("prepared", "no-other-loaded-world");
+    }
+    private void prepareChunk(final World world, final int x, final int z, final Runnable prepare) throws ReflectiveOperationException {
+        if (folia()) {
+            Object future = Probe.call(world, "getChunkAtAsync", x, z, true);
+            ((java.util.concurrent.CompletableFuture<?>)future).whenComplete(new java.util.function.BiConsumer<Object, Throwable>() {
+                public void accept(Object chunk, Throwable failure) {
+                    if (failure != null) { failed("prepare-chunk-async", failure); return; }
+                    try { region(world, x, z, prepare); }
+                    catch (ReflectiveOperationException problem) { failed("prepare-chunk-region", problem); }
+                }
+            });
+        } else {
+            // Explicit generation belongs to disposable test setup. Runtime
+            // transfers below continue to reject unloaded destinations.
+            world.getChunkAt(x, z);
+            region(world, x, z, prepare);
+        }
+    }
+    private Location prepareLanding(World world, int x, int z) {
+        if (!world.isChunkLoaded(x, z)) throw new IllegalStateException("Fixture landing chunk is not already loaded");
+        int centerX = (x << 4) + 8, centerZ = (z << 4) + 8;
+        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
+            world.getBlockAt(centerX + dx, 63, centerZ + dz).setType(Material.STONE);
+            for (int y = 64; y <= 67; y++) world.getBlockAt(centerX + dx, y, centerZ + dz).setType(Material.AIR);
+        }
+        return new Location(world, centerX + 0.5, 64, centerZ + 0.5);
+    }
+    private void retainPreparedChunk(World world, int x, int z) {
+        try { Probe.call(world, "addPluginChunkTicket", x, z, NativeFixture.this); }
+        catch (NoSuchMethodException oldApi) { /* The legacy unload listener retains the fixture landing/return chunks. */ }
+        catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
     }
     private void start() throws ReflectiveOperationException {
         region(new Runnable() { public void run() {
@@ -109,6 +198,15 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("three-real-loopback-players", driver != null && rider != null && third != null);
                 if (driver == null || rider == null || third == null) { state("failed", "players"); return; }
                 require("players-owned-by-region", owns(driver) && owns(rider) && owns(third));
+                Field bounds = (Field)field(field(tandem, "nativeAccess"), "bounds");
+                require("native-seat-shape-uses-mutable-instance-aabb",
+                        !Modifier.isStatic(bounds.getModifiers())
+                                && (!Modifier.isFinal(bounds.getModifiers())
+                                    || ((Boolean)field(field(tandem, "nativeAccess"), "oldest")
+                                        && bounds.getName().equals("boundingBox")
+                                        && field(field(tandem, "nativeAccess"), "boxMutator") != null))
+                                && (bounds.getType().getSimpleName().equals("AABB")
+                                        || bounds.getType().getSimpleName().equals("AxisAlignedBB")));
                 driver.setOp(false); rider.setOp(false); third.setOp(false);
                 horse = (Horse)driver.getWorld().spawnEntity(new Location(driver.getWorld(), 8, 64, 8), org.bukkit.entity.EntityType.HORSE);
                 ordinaryHorse(horse); horse.setAdult(); horse.setTamed(true); horse.setOwner(driver);
@@ -264,16 +362,38 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         } catch (IOException e) { throw new IllegalStateException(e); }
     }
     private Horse newHorse() {
-        Horse next = (Horse)rider.getWorld().spawnEntity(new Location(rider.getWorld(), 8, 64, 8), org.bukkit.entity.EntityType.HORSE);
+        Location at = rider.getLocation().clone(); at.setY(64.0);
+        if (!at.getWorld().isChunkLoaded(at.getBlockX() >> 4, at.getBlockZ() >> 4))
+            throw new IllegalStateException("Fixture horse chunk is not already loaded");
+        Horse next = (Horse)rider.getWorld().spawnEntity(at, org.bukkit.entity.EntityType.HORSE);
         ordinaryHorse(next); next.setAdult(); next.setTamed(true); next.setOwner(driver); next.getInventory().setSaddle(new ItemStack(Material.SADDLE));
+        playerHome = at.clone().add(0.5, 0, 0.5);
         return next;
     }
     @SuppressWarnings({"unchecked", "rawtypes"}) private void ordinaryHorse(Horse horse) {
+        if (horse.getType() != EntityType.HORSE)
+            throw new IllegalStateException("Fixture did not create an ordinary horse entity");
+        // Since 1.11, EntityType.HORSE itself is the ordinary horse and the old
+        // variant setter is unsupported by modern server implementations. Keep
+        // the variant normalization only for APIs where horse variants existed.
+        if (!legacyHorseVariants()) return;
         try {
             Object variant = Probe.call(horse, "getVariant");
             if (!variant.toString().equals("HORSE")) Probe.call(horse, "setVariant", Enum.valueOf((Class<? extends Enum>)variant.getClass(), "HORSE"));
         } catch (NoSuchMethodException modern) { }
         catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+    }
+    private boolean legacyHorseVariants() {
+        try {
+            String[] version = Bukkit.getBukkitVersion().split("[.-]");
+            int major = Integer.parseInt(version[0]);
+            int minor = Integer.parseInt(version[1]);
+            return major == 1 && minor < 11;
+        } catch (RuntimeException unrecognized) {
+            // Unknown versions must never fall through to a setter that may be
+            // unsupported. Exact legacy targets use the version string above.
+            return false;
+        }
     }
     private void transport(Player player, Location at) {
         if (folia()) invoke(player, "teleportAsync", at); else player.teleport(at);
@@ -292,7 +412,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             new Runnable() { public void run() { mount(horse, driver); interact(rider); } },
             new Runnable() { public void run() { require("lifecycle-ride-started", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); configure(getServer().getConsoleSender(), "disable"); } },
             new Runnable() { public void run() { require("configuration-disable-cleans-active-seat", !rider.isInsideVehicle() && countSeats() == 0); configure(getServer().getConsoleSender(), "enable"); interact(rider); } },
-            new Runnable() { public void run() { require("configuration-enable-allows-retry", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); cancelTeleport = true; transport(rider, new Location(horse.getWorld(), 8.5, 64, 8.5)); } },
+            new Runnable() { public void run() { require("configuration-enable-allows-retry", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); cancelTeleport = true; transport(rider, horse.getLocation().add(0.5, 0, 0.5)); } },
             new Runnable() { public void run() {
                 require(folia() ? "mounted-folia-teleport-api-preserves-ride" : "cancelled-teleport-keeps-ride", rider.isInsideVehicle() && countSeats() == 1);
                 cancelTeleport = false;
@@ -300,15 +420,136 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 // passenger before firing teleport events (native flags=3).
                 // Test an accepted public API teleport after a normal dismount.
                 if (folia()) rider.leaveVehicle();
-                transport(rider, new Location(horse.getWorld(), 8.5, 64, 8.5));
+                transport(rider, horse.getLocation().add(0.5, 0, 0.5));
             } },
             new Runnable() { public void run() { require("passenger-teleport-cleans-seat", !rider.isInsideVehicle() && countSeats() == 0); interact(rider); } },
-            new Runnable() { public void run() { require("retry-after-teleport", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); horse.remove(); } },
+            new Runnable() { public void run() {
+                require("retry-after-teleport", rider.isInsideVehicle() && countSeats() == 1); trackSeat();
+                worldAndChunkLifecycle(new Runnable() { public void run() { lifecycleRemoval(); }});
+            } }
+        );
+    }
+    private void lifecycleRemoval() {
+        sequence(
+            new Runnable() { public void run() { trackSeat(); horse.remove(); } },
             new Runnable() { public void run() { require("horse-removal-cleans-seat", countSeats() == 0 && !rider.isInsideVehicle()); horse = newHorse(); mount(horse, driver); interact(rider); } },
             new Runnable() { public void run() { require("new-horse-independent-identity", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); horse.setHealth(0); } },
             new Runnable() { public void run() { require("horse-death-cleans-seat", countSeats() == 0 && !rider.isInsideVehicle()); horse = newHorse(); mount(horse, driver); interact(rider); } },
             new Runnable() { public void run() { require("ride-before-real-disconnect", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); state("disconnect", "rider"); } }
         );
+    }
+
+    /** Native transfers and a real unload, confined to already-loaded disposable chunks. */
+    private void worldAndChunkLifecycle(final Runnable complete) {
+        if (otherWorldDestination == null) { complete.run(); return; }
+        final World originalWorld = horse.getWorld();
+        final Location back = horse.getLocation().add(0.5, 0, 0.5);
+        require("ride-active-before-native-world-change", rider.isInsideVehicle() && countSeats() == 1);
+        transfer(rider, otherWorldDestination, new Runnable() { public void run() {
+            record("native-passenger-world-change-cleans-seat", rider.getWorld() != originalWorld
+                            && rider.getWorld() == otherWorldDestination.getWorld() && !rider.isInsideVehicle() && countSeats() == 0,
+                    folia() ? "Actual Folia native async transfer requested while mounted, UNMOUNT flag enabled, LOAD_CHUNK flag disabled; native unmount is part of world transfer."
+                            : "Actual Bukkit cross-world teleport requested while mounted; native teleport/dismount lifecycle removed the helper.");
+            transfer(rider, back, new Runnable() { public void run() {
+                interact(rider);
+                afterOwned(rider, 6, new Runnable() { public void run() {
+                    require("retry-after-native-world-change", rider.isInsideVehicle() && countSeats() == 1);
+                    trackSeat(); evacuateAndUnload(originalWorld, complete);
+                }});
+            }});
+        }});
+    }
+    private void evacuateAndUnload(final World originalWorld, final Runnable complete) {
+        Location origin = horse.getLocation();
+        unloadX = origin.getBlockX() >> 4; unloadZ = origin.getBlockZ() >> 4;
+        // The return chunk is selected from the fixture's prepared platform and
+        // must already be loaded. We never reload the chunk under test.
+        if ((unloadX == RETURN_CHUNK && unloadZ == RETURN_CHUNK) || !originalWorld.isChunkLoaded(RETURN_CHUNK, RETURN_CHUNK))
+            throw new IllegalStateException("Prepared retained return chunk must be loaded and separate from the unload arena");
+        final Location returnDestination = new Location(originalWorld, (RETURN_CHUNK << 4) + 8.5, 64, (RETURN_CHUNK << 4) + 8.5);
+        unloadObserved = false; unloadContainedHelper = false; unloadWorld = originalWorld;
+        require("ride-active-before-native-chunk-evacuation", rider.isInsideVehicle() && countSeats() == 1);
+        transferAll(otherWorldDestination, new Runnable() { public void run() {
+            require("native-chunk-evacuation-cleans-seat", countSeats() == 0 && !rider.isInsideVehicle());
+            pollUnload(60, new Runnable() { public void run() {
+                record("native-chunk-unload-after-evacuation", unloadObserved && !unloadContainedHelper
+                                && !originalWorld.isChunkLoaded(unloadX, unloadZ) && countSeats() == 0,
+                        "Actual ChunkUnloadEvent and unloaded-state observation after native world teleport/dismount evacuated all four loopback players; observed="
+                                + unloadObserved + ", liveHelper=" + unloadContainedHelper + ", loaded=" + originalWorld.isChunkLoaded(unloadX, unloadZ)
+                                + ". Removed/dead native references are not live helpers. This does not isolate unloading an occupied ride.");
+                unloadWorld = null;
+                transferAll(returnDestination, new Runnable() { public void run() {
+                    horse = newHorse(); mount(horse, driver); interact(rider);
+                    afterOwned(rider, 6, new Runnable() { public void run() {
+                        require("retry-after-native-chunk-unload", rider.isInsideVehicle() && countSeats() == 1);
+                        complete.run();
+                    }});
+                }});
+            }});
+        }});
+    }
+    private void pollUnload(final int attempts, final Runnable complete) {
+        if (!unloadWorld.isChunkLoaded(unloadX, unloadZ)) { complete.run(); return; }
+        if (attempts == 0) throw new IllegalStateException("Native chunk remains loaded after evacuation; no ticket or loading policy was overridden");
+        final World world = unloadWorld;
+        try { region(world, unloadX, unloadZ, guarded("native-chunk-unload", new Runnable() { public void run() {
+            if (world.isChunkLoaded(unloadX, unloadZ)) world.unloadChunk(unloadX, unloadZ, true);
+            afterOwned(driver, 6, new Runnable() { public void run() { pollUnload(attempts - 1, complete); }});
+        }})); } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+    }
+    private void transferAll(final Location destination, final Runnable complete) {
+        final java.util.concurrent.atomic.AtomicInteger remaining = new java.util.concurrent.atomic.AtomicInteger(4);
+        for (String name : new String[] {"TmDriver", "TmRider", "TmThird", "TmLate"}) {
+            final Player player = Bukkit.getPlayerExact(name);
+            if (player == null || !player.isOnline() || player.isDead()) throw new IllegalStateException("All four live loopback players are required for native chunk evacuation");
+            next(player, guarded("native-player-transfer", new Runnable() { public void run() {
+                transfer(player, destination, new Runnable() { public void run() {
+                    if (remaining.decrementAndGet() == 0) afterOwned(driver, 6, complete);
+                }});
+            }}));
+        }
+    }
+    private void transfer(final Player player, final Location destination, final Runnable landed) {
+        if (!owns(player)) throw new IllegalStateException("Native transfer must run on the player's owning entity scheduler");
+        if (!destination.getWorld().isChunkLoaded(destination.getBlockX() >> 4, destination.getBlockZ() >> 4))
+            throw new IllegalStateException("Native transfer destination is not already loaded; fixture will not load it");
+        if (!folia()) {
+            if (!player.teleport(destination)) throw new IllegalStateException("Native Bukkit world transfer was rejected");
+            afterOwned(player, 6, landed); return;
+        }
+        try {
+            Object handle = Probe.handle(player), world = Probe.handle(destination.getWorld());
+            Class<?> vector = Class.forName("net.minecraft.world.phys.Vec3");
+            Object at = vector.getConstructor(double.class, double.class, double.class)
+                    .newInstance(destination.getX(), destination.getY(), destination.getZ());
+            Object zero = vector.getConstructor(double.class, double.class, double.class).newInstance(0.0, 0.0, 0.0);
+            for (Method method : handle.getClass().getMethods()) {
+                Class<?>[] args = method.getParameterTypes();
+                if (method.getName().equals("teleportAsync") && args.length == 8 && args[0].isInstance(world)
+                        && args[1] == vector && args[2] == Float.class && args[3] == Float.class && args[4] == vector
+                        && args[5] == PlayerTeleportEvent.TeleportCause.class && args[6] == long.class
+                        && args[7] == java.util.function.Consumer.class) {
+                    long unmount = method.getDeclaringClass().getField("TELEPORT_FLAG_UNMOUNT").getLong(null);
+                    long load = method.getDeclaringClass().getField("TELEPORT_FLAG_LOAD_CHUNK").getLong(null);
+                    if ((unmount & load) != 0) throw new IllegalStateException("Native transfer flags unexpectedly request chunk loading");
+                    Object accepted = Probe.call(method, handle, world, at, Float.valueOf(destination.getYaw()), Float.valueOf(destination.getPitch()),
+                            zero, PlayerTeleportEvent.TeleportCause.PLUGIN, Long.valueOf(unmount), new java.util.function.Consumer<Object>() {
+                                public void accept(Object arrived) { afterOwned(player, 6, landed); }
+                            });
+                    if (!Boolean.TRUE.equals(accepted)) throw new IllegalStateException("Native Folia mounted world transfer was rejected");
+                    return;
+                }
+            }
+            throw new NoSuchMethodException("Native Folia teleportAsync with explicit no-load flags");
+        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+    }
+    private Runnable guarded(final String name, final Runnable work) {
+        return new Runnable() { public void run() { try { work.run(); } catch (Throwable failure) { failed(name, failure); } }};
+    }
+    private void afterOwned(final Entity owner, final int ticks, final Runnable work) {
+        next(owner, guarded("native-lifecycle-step", new Runnable() { public void run() {
+            if (ticks <= 1) work.run(); else afterOwned(owner, ticks - 1, work);
+        }}));
     }
     private void disconnected() {
         later(6, new Runnable() { public void run() {

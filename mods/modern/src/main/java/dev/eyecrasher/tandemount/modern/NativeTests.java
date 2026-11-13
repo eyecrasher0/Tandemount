@@ -6,7 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -96,17 +98,64 @@ public final class NativeTests {
     private static void empty(String checkName) {
         check(TandemRuntime.rideCount() == 0 && TandemRuntime.seatCount() == 0, checkName);
     }
+    private static void setFixturePlayerLevel(Object player, Object level) throws Exception {
+        // Exact vanilla setter moved from Entity to ServerPlayer in 1.17.
+        if (Names.callIfPresent("entity.setLevel", player, level)) return;
+        if (Names.callIfPresent("player.setLevel", player, level)) return;
+        // Newer releases expose no mapped setter; this fixture mutates only the
+        // exact mapped level field to exercise TandemRuntime's world-change guard.
+        Names.field("Entity.level", player, level);
+    }
+    private static Object blockPosition(double x, double y, double z) throws Exception {
+        return Names.type("BlockPos").getConstructor(int.class, int.class, int.class)
+                .newInstance((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+    }
+    private static boolean loaded(Object level, double x, double y, double z) throws Exception {
+        return Boolean.TRUE.equals(Names.call("level.loaded", level, blockPosition(x, y, z)));
+    }
+    private static void setFixturePositionWithoutChunkAccess(Object entity, double x, double y, double z) throws Exception {
+        // Model unavailable-chunk state without calling a native teleport or
+        // position setter: Forge 1.16.5 deliberately loads their target chunk.
+        // Used only for an immediate lifecycle guard probe, never native ticking.
+        Names.field("Entity.position", entity, Names.type("Vec3").getConstructor(double.class, double.class, double.class).newInstance(x, y, z));
+        Names.field("Entity.blockPosition", entity, blockPosition(x, y, z));
+        if (Names.hasField("Entity.chunkPosition")) Names.field("Entity.chunkPosition", entity,
+                Names.type("ChunkPos").getConstructor(int.class, int.class).newInstance((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4));
+    }
+    private static void teleport(Object player, Object level, double x, double y, double z) throws Exception {
+        check(loaded(level, x, y, z), "fixture-native-teleport-destination-already-loaded");
+        Class<?>[] types = Names.method("player.teleport").getParameterTypes();
+        Object[] args = new Object[types.length];
+        int coordinate = 0;
+        for (int index = 0; index < types.length; index++) {
+            if (types[index] == Names.type("ServerLevel")) args[index] = level;
+            else if (types[index] == double.class) args[index] = new double[]{x, y, z}[coordinate++];
+            else if (types[index] == float.class) args[index] = 0.0f;
+            else if (types[index] == boolean.class) args[index] = false;
+            else if (Set.class.isAssignableFrom(types[index])) args[index] = Collections.emptySet();
+            else throw new IllegalStateException("Unsupported exact player teleport fixture argument " + types[index].getName());
+        }
+        Object result = Names.call("player.teleport", player, args);
+        check(!Boolean.FALSE.equals(result)
+                && Names.call("entity.level", player) == level
+                && Math.abs(((Number) Names.call("entity.x", player)).doubleValue() - x) < 0.000001
+                && Math.abs(((Number) Names.call("entity.z", player)).doubleValue() - z) < 0.000001,
+                "fixture-native-player-teleport-applied");
+    }
     private static Object interact(Object player, Object horse, Object hand) throws Exception {
         if (Names.method("player.interact").getParameterCount() == 3) return Names.call("player.interact", player, horse, hand, null);
         return Names.call("player.interact", player, horse, hand);
     }
-    private static void pairing(Object level, Object seat, Object observer) throws Exception {
+    private static String dimension(Object level) throws Exception {
+        return Names.call("dimension.location", Names.call("level.dimension", level)).toString();
+    }
+    private static List<Object> pairingPackets(Object level, Object entity, Object observer) throws Exception {
         String[] declaration = Names.TABLE.getProperty("h.tracker").split("#");
         Class<?>[] types = Names.arguments(declaration[2]);
         Object[] args = new Object[types.length];
         for (int index = 0; index < types.length; index++) {
             Class<?> type = types[index];
-            if (type == Names.type("Entity")) args[index] = seat;
+            if (type == Names.type("Entity")) args[index] = entity;
             else if (type == Names.type("ServerLevel")) args[index] = level;
             else if (type == int.class) args[index] = 3;
             else if (type == boolean.class) args[index] = false;
@@ -117,12 +166,46 @@ public final class NativeTests {
         }
         Object tracker = Names.type("ServerEntity").getConstructor(types).newInstance(args);
         Object interval = Names.field("ServerEntity.updateInterval", tracker);
-        check(!(interval instanceof Number) || ((Number) interval).intValue() == 1, "seat-native-tracker-updates-every-tick");
+        if (TandemRuntime.isSeat(entity)) check(!(interval instanceof Number) || ((Number) interval).intValue() == 1, "seat-native-tracker-updates-every-tick");
         final List<Object> packets = new ArrayList<Object>();
         Consumer<Object> collect = packet -> packets.add(packet);
         if (Names.method("tracker.pairing").getParameterCount() == 1) Names.call("tracker.pairing", tracker, collect);
         else Names.call("tracker.pairing", tracker, observer, collect);
-        check(packets.size() >= 2, "late-observer-native-pairing-includes-state");
+        return packets;
+    }
+    private static boolean passengerEdge(List<Object> packets, Object vehicle, Object passenger) throws Exception {
+        int vehicleId = ((Number) Names.call("entity.id", vehicle)).intValue();
+        int passengerId = ((Number) Names.call("entity.id", passenger)).intValue();
+        boolean found = false;
+        for (Object packet : packets) {
+            if (!Names.type("PassengersPacket").isInstance(packet)
+                    || ((Number) Names.field("PassengersPacket.vehicle", packet)).intValue() != vehicleId) continue;
+            int[] passengers = (int[]) Names.field("PassengersPacket.passengers", packet);
+            if (passengers.length != 1 || passengers[0] != passengerId) return false;
+            found = true;
+        }
+        return found;
+    }
+    private static void pairing(Object level, Object seat, Object rider, Object horse, Object driver, Object observer) throws Exception {
+        List<Object> packets = pairingPackets(level, seat, observer);
+        int seatId = ((Number) Names.call("entity.id", seat)).intValue();
+        boolean spawn = false, state = false;
+        for (Object packet : packets) {
+            if (Names.type("AddEntityPacket").isInstance(packet)
+                    && ((Number) Names.field("AddEntityPacket.id", packet)).intValue() == seatId) {
+                spawn = Math.abs(((Number) Names.field("AddEntityPacket.x", packet)).doubleValue() - ((Number) Names.call("entity.x", seat)).doubleValue()) < 0.000001
+                        && Math.abs(((Number) Names.field("AddEntityPacket.y", packet)).doubleValue() - ((Number) Names.call("entity.y", seat)).doubleValue()) < 0.000001
+                        && Math.abs(((Number) Names.field("AddEntityPacket.z", packet)).doubleValue() - ((Number) Names.call("entity.z", seat)).doubleValue()) < 0.000001;
+            } else if (Names.type("EntityDataPacket").isInstance(packet)
+                    && ((Number) Names.field("EntityDataPacket.id", packet)).intValue() == seatId) {
+                Object items = Names.field("EntityDataPacket.packedItems", packet);
+                state = items instanceof List && !((List<?>) items).isEmpty();
+            }
+        }
+        check(spawn, "late-observer-native-seat-spawn-matches-location");
+        check(spawn && state, "late-observer-native-pairing-includes-state");
+        check(passengerEdge(packets, seat, rider), "late-observer-native-seat-passenger-edge");
+        check(passengerEdge(pairingPackets(level, horse, observer), horse, driver), "late-observer-native-horse-driver-edge");
     }
     private static void run(Object server) throws Exception {
         Object level = Names.call("server.overworld", server);
@@ -189,7 +272,7 @@ public final class NativeTests {
             }
             check(Boolean.FALSE.equals(Names.method("seat.hurt").invoke(seat, args)), "seat-rejects-native-damage");
         }
-        pairing(level, seat, third);
+        pairing(level, seat, rider, horse, driver, third);
         interact(third, horse, hand);
         check(TandemRuntime.rideCount() == 1 && Names.call("entity.vehicle", third) == null, "third-rider-rejected");
         if (Names.method("entity.save").getParameterTypes()[0] == Names.type("CompoundTag")) {
@@ -273,16 +356,72 @@ public final class NativeTests {
         Names.call("living.setHealth", driver, originalRiderHealth);
         interact(rider, horse, hand);
         Object anotherLevel = null;
-        for (Object candidate : (Iterable<?>) Names.call("server.levels", server)) if (candidate != level) { anotherLevel = candidate; break; }
+        for (Object candidate : (Iterable<?>) Names.call("server.levels", server)) if (candidate != level && dimension(candidate).equals("minecraft:the_nether")) { anotherLevel = candidate; break; }
         check(anotherLevel != null, "fixture-second-world-available");
-        Names.call("entity.setLevel", rider, anotherLevel);
+        setFixturePlayerLevel(rider, anotherLevel);
         TandemRuntime.entityTick(horse);
         check(TandemRuntime.rideCount() == 1, "rider-world-change-cleans-own-ride");
-        Names.call("entity.setLevel", rider, level);
+        setFixturePlayerLevel(rider, level);
         interact(rider, horse, hand);
-        Names.call("entity.position", horse, 1000000.5, 80.0, 1000000.5);
+        check(TandemRuntime.rideCount() == 2, "fixture-native-teleport-starts-with-active-ride");
+        teleport(rider, level, 8.5, 80.0, 8.5);
         TandemRuntime.entityTick(horse);
-        check(TandemRuntime.rideCount() == 1, "unloaded-chunk-cleans-without-force-loading");
+        check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatFor(horse) == null
+                && Names.call("entity.vehicle", rider) == null, "native-player-teleport-cleans-own-ride");
+        // Prepare only the disposable fixture's chosen destination. Production
+        // TandemRuntime never acquires a world or chunk to maintain a ride.
+        Names.call("level.chunk", anotherLevel, 0, 0);
+        check(loaded(anotherLevel, 8.5, 80.0, 8.5), "fixture-native-world-change-destination-prepared");
+        Object transferDriver = player(server, level, 8), transferRider = player(server, level, 9);
+        Names.call("level.addPlayer", level, transferRider);
+        boolean registered = false;
+        for (Object entity : (Iterable<?>) Names.call("level.entities", level)) if (entity == transferRider) { registered = true; break; }
+        check(registered && Names.call("entity.level", transferRider) == level, "fixture-native-world-change-player-registered");
+        Object transferHorse = horse(level, 4.5);
+        check(Names.mount(transferDriver, transferHorse), "fixture-native-world-change-driver-mounted");
+        interact(transferRider, transferHorse, hand);
+        check(TandemRuntime.rideCount() == 2 && TandemRuntime.seatFor(transferHorse) != null, "fixture-native-world-change-starts-with-active-ride");
+        teleport(transferRider, anotherLevel, 8.5, 80.0, 8.5);
+        check(Names.call("entity.level", transferRider) == anotherLevel
+                && dimension(Names.call("entity.level", transferRider)).equals("minecraft:the_nether"), "fixture-native-player-world-transfer-applied");
+        TandemRuntime.entityTick(transferHorse);
+        check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatCount() == 1
+                && TandemRuntime.seatFor(transferHorse) == null && TandemRuntime.seatFor(otherHorse) != null
+                && Names.call("entity.vehicle", transferRider) == null, "native-player-world-change-cleans-own-ride");
+        teleport(transferRider, level, 8.5, 80.0, 8.5);
+        check(Names.call("entity.level", transferRider) == level, "fixture-native-world-transfer-returned-to-source");
+        Names.call("entity.discard", transferHorse);
+        Names.call("entity.discard", transferDriver);
+        Names.call("entity.discard", transferRider);
+        interact(rider, horse, hand);
+        check(TandemRuntime.rideCount() == 2, "fixture-unloaded-seat-starts-with-active-ride");
+        // Find a loaded edge using non-loading queries only. A seat behind a
+        // horse facing +Z would cross from this edge into an absent chunk.
+        double boundary = Double.NaN;
+        for (int z = 0; z >= -2048; z -= 16) {
+            if (loaded(level, 0.5, 80.0, z + 0.25) && !loaded(level, 0.5, 80.0, z - 0.25)) { boundary = z; break; }
+        }
+        check(Double.isFinite(boundary), "fixture-loaded-edge-borders-unloaded-seat-chunk");
+        Names.call("entity.position", horse, 0.5, 80.0, boundary + 0.25);
+        Names.call("entity.rotation", horse, 0.0f);
+        if (Names.hasField("LivingEntity.yBodyRot")) Names.field("LivingEntity.yBodyRot", horse, 0.0f);
+        TandemRuntime.entityTick(horse);
+        check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatFor(horse) == null
+                && !loaded(level, 0.5, 80.0, boundary - 0.25), "unloaded-seat-destination-cleans-without-force-loading");
+        interact(rider, horse, hand);
+        check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatCount() == 1
+                && !loaded(level, 0.5, 80.0, boundary - 0.25), "unloaded-seat-destination-rejects-mount-without-force-loading");
+        Names.call("entity.position", horse, 0.5, 80.0, 8.5);
+        interact(rider, horse, hand);
+        check(TandemRuntime.rideCount() == 2, "fixture-unloaded-horse-starts-with-active-ride");
+        check(!loaded(level, 1000000.5, 80.0, 1000000.5), "fixture-unloaded-horse-destination-is-absent");
+        setFixturePositionWithoutChunkAccess(horse, 1000000.5, 80.0, 1000000.5);
+        check(!loaded(level, 1000000.5, 80.0, 1000000.5), "fixture-unloaded-horse-setup-does-not-load-chunk");
+        TandemRuntime.entityTick(horse);
+        check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatFor(horse) == null
+                && !loaded(level, 1000000.5, 80.0, 1000000.5), "unloaded-chunk-cleans-without-force-loading");
+        // Restore the fixture's coherent native position before disposal.
+        Names.call("entity.position", horse, 0.5, 80.0, 8.5);
         Names.call("player.nativeDisconnect", otherRider);
         TandemRuntime.entityTick(otherHorse);
         empty("native-rider-disconnect-cleans-seat");
@@ -309,7 +448,17 @@ public final class NativeTests {
     private static void record(boolean passed, String error) {
         StringBuilder json = new StringBuilder("{\n  \"minecraft\":\"").append(Names.TABLE.getProperty("minecraft")).append("\",\n  \"platform\":\"").append(Names.TABLE.getProperty("platform")).append("\",\n  \"native_fixture\":").append(passed).append(",\n  \"error\":\"").append(error).append("\",\n  \"connected_clients\":false,\n  \"visual\":\"not-run\",\n  \"checks\":[");
         for (int i=0; i<checks.size(); i++) { if (i>0) json.append(','); json.append('"').append(checks.get(i)).append('"'); }
-        json.append("]\n}\n");
+        json.append("],\n  \"world_change_fixture\":\"native-player-transfer-and-separate-mapped-level-guard\",\n  \"unloaded_chunk_fixture\":\"mapped-position-guard\",\n  \"loader_cancellation\":{");
+        if (Names.TABLE.getProperty("platform").equals("fabric")) {
+            json.append("\"status\":\"not-applicable\",\"reason\":\"Fabric Loader-only distribution supplies no native gameplay cancellation event bus; Fabric API and third-party protection mixins are not installed or tested\"");
+        } else {
+            boolean interaction = checks.contains("loader-native-interaction-veto-observed") && checks.contains("loader-cancelled-interaction-stays-cancelled");
+            boolean mount = checks.contains("loader-native-mount-veto-observed") && checks.contains("loader-cancelled-mount-stays-cancelled");
+            boolean dismount = checks.contains("loader-native-dismount-veto-observed") && checks.contains("loader-cancelled-dismount-retains-ride");
+            json.append("\"status\":\"").append(interaction && mount && dismount ? "passed" : "incomplete")
+                    .append("\",\"interaction\":").append(interaction).append(",\"mount\":").append(mount).append(",\"dismount\":").append(dismount);
+        }
+        json.append("}\n}\n");
         try { Files.write(Paths.get(System.getProperty("tandemount.selftest.result", "tandemount-native-result.json")), json.toString().getBytes(StandardCharsets.UTF_8)); }
         catch (Exception failure) { failure.printStackTrace(); }
         TandemRuntime.log("NATIVE RESULT " + passed);

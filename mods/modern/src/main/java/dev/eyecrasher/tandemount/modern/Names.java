@@ -48,6 +48,12 @@ public final class Names {
         }
         return method(key).invoke(target, args);
     }
+    /** Invokes only the exact-version mapping entry; false means no callable mapped member is present. */
+    public static boolean callIfPresent(String key, Object target, Object... args) throws Exception {
+        if (!has(key)) return false;
+        try { method(key).invoke(target, args); return true; }
+        catch (NoSuchMethodException absentMappedMember) { return false; }
+    }
     public static boolean mount(Object player, Object vehicle) throws Exception {
         Method method = method("entity.mount");
         return Boolean.TRUE.equals(method.getParameterCount() == 1 ? method.invoke(player, vehicle) : method.invoke(player, vehicle, false));

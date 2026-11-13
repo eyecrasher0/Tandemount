@@ -199,6 +199,38 @@ public final class NativeChecks {
         if(!multi)call(h,"setHorseType",0);
         call(world,"spawnEntity|spawnEntityInWorld",h);return h;
     }
+    private static boolean hasNoPassengers(Object entity){return multi?((List<?>)call(entity,"getPassengers")).isEmpty():get(entity,"riddenByEntity")==null;}
+    private static void dimensionChanges(List<Object> cleanup){
+        // Test setup only: Forge may have unloaded the empty End since server startup.
+        // Initialize that standard dimension explicitly before either real player transfer.
+        // The ordinary End teleporter prepares only a local landing platform in this disposable fixture.
+        int dimension=1;
+        Class<?> dimensions=type("net.minecraftforge.common.DimensionManager");
+        Object target=call(dimensions,"getWorld",dimension);
+        boolean initialized=target==null;
+        if(initialized){call(dimensions,"initDimension",dimension);target=call(dimensions,"getWorld",dimension);}
+        check(initialized?"native-world-change-target-initialized-for-fixture":"native-world-change-target-already-loaded",
+                target!=null&&target!=world&&type("net.minecraft.world.WorldServer").isInstance(target));
+        for(boolean driverChanges:new boolean[]{false,true}){
+            String role=driverChanges?"driver":"passenger";
+            Object driver=player(driverChanges?"WorldDriverTwo":"WorldDriverOne"),rider=player(driverChanges?"WorldRiderTwo":"WorldRiderOne");
+            cleanup.add(driver);cleanup.add(rider);
+            Object seat=ride(cleanup,driver,rider,8.0D),horse=vehicle(driver),moving=driverChanges?driver:rider;
+            try{
+                call(moving,multi?"changeDimension":"travelToDimension",dimension);
+                LegacyRuntime.worldTick(world);
+                check("native-"+role+"-dimension-transfer-completes",get(moving,"world|worldObj")==target&&number(moving,"dimension")==dimension
+                        &&call(target,"getEntityByID",call(moving,"getEntityId"))==moving&&call(world,"getEntityByID",call(moving,"getEntityId"))!=moving);
+                check("native-"+role+"-world-change-cleans-seat",vehicle(rider)==null&&hasNoPassengers(seat)&&!LegacyRuntime.isSeat(seat)&&Boolean.TRUE.equals(get(seat,"isDead")));
+                check("native-"+role+"-world-change-preserves-source-horse",get(horse,"world|worldObj")==world
+                        &&call(world,"getEntityByID",call(horse,"getEntityId"))==horse&&(driverChanges||vehicle(driver)==horse));
+            }finally{
+                // Native player dimension APIs do not unlink an ordinary horse; that link belongs to the caller.
+                // Verify Tandemount's extra-seat cleanup first, then clear the fixture's ordinary riding link.
+                if(driverChanges)dismount(driver);
+            }
+        }
+    }
     private static void run(){
         List<Object> cleanup=new ArrayList<Object>();
         try{
@@ -286,6 +318,7 @@ public final class NativeChecks {
             Object driverTeleportSeat=ride(cleanup,movedDriver,movedRider,8.0D);
             call(movedDriver,"setPositionAndUpdate",32.0D,65.0D,8.0D);
             check("native-driver-teleport-cleans-seat",vehicle(movedRider)==null&&!LegacyRuntime.isSeat(driverTeleportSeat));
+            dimensionChanges(cleanup);
             Object remoteDriver=player("ChunkDriver"),remoteRider=player("ChunkRider");cleanup.add(remoteDriver);cleanup.add(remoteRider);
             Object chunk=call(world,"getChunkFromChunkCoords|getChunk",64,0);
             Object chunkSeat=ride(cleanup,remoteDriver,remoteRider,1032.0D);
@@ -301,7 +334,13 @@ public final class NativeChecks {
             System.out.println("[TandemountNative] {\"name\":\"suite-exception\",\"passed\":false}");ex.printStackTrace();
         }finally{
             cancelInteraction=cancelMount=cancelDismount=false;
-            for(Object entity:cleanup){try{call(world,"removeEntity",entity);}catch(Throwable ignored){}}
+            for(Object entity:cleanup){try{
+                Object currentWorld=get(entity,"world|worldObj");
+                // Native dimension transfer registers the player in the destination chunk manager.
+                if(currentWorld!=world&&type("net.minecraft.entity.player.EntityPlayerMP").isInstance(entity))
+                    call(call(server,"getPlayerList|getConfigurationManager"),"playerLoggedOut",entity);
+                call(currentWorld,"removeEntity",entity);
+            }catch(Throwable ignored){}}
             try{((List<?>)get(call(server,"getPlayerList|getConfigurationManager"),"playerEntityList|players")).removeAll(cleanup);}catch(Throwable ignored){}
         }
     }

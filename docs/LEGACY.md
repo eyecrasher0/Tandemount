@@ -104,6 +104,24 @@ upstream outer method otherwise ignores. Explicit rider teleports and world
 changes end the shared ride. Expired seats detach their native relationships
 without searching for terrain or reloading an unloading chunk.
 
+The native object suite exercises actual player `travelToDimension` (1.7.10
+and 1.8.9) or `changeDimension` (1.12.2) calls for the passenger and driver in
+separate rides. Fixture setup looks up the disposable server's standard End
+with `DimensionManager.getWorld(1)`. If Forge has unloaded that empty dimension,
+the fixture calls `DimensionManager.initDimension(1)` before either transfer.
+The assertion records whether the End was already loaded or initialized for
+the fixture; failure to obtain a distinct `WorldServer` fails the suite without
+skipping the transfers. It verifies destination dimension, world identity and entity membership,
+source absence, preserved source horse, and removal of the managed seat and
+its passenger relationship. The native player dimension APIs do not unlink
+an ordinary horse themselves; the fixture clears that separate driver link
+after verifying the extra seat. It never assigns a world field to simulate a transfer. Vanilla's
+End teleporter may prepare its local landing platform and destination chunks
+inside the disposable fixture. Dimension initialization and local preparation
+are test setup only, separate from Tandemount's
+runtime, which never loads a destination world or chunk. These are synthetic
+native-object checks, not rendered-client evidence.
+
 Seats use ordinary vanilla tracking. Tandemount never manually spawns a horse
 for observers or sends packets forcing a hidden horse visible. Pose updates
 check the already loaded destination chunk and never load one. Managed seats

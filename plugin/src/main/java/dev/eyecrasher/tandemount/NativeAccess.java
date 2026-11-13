@@ -20,6 +20,7 @@ final class NativeAccess {
     private final Object airBlock, airState;
     private final Field bounds;
     private final Constructor<?> boxConstructor;
+    private final Method boxMutator;
     final Method position;
     final int legacySeatType;
     private final String oldPackage;
@@ -30,7 +31,9 @@ final class NativeAccess {
     NativeAccess(Object server) throws ReflectiveOperationException, java.io.IOException {
         craftServer = server;
         String craft = server.getClass().getPackage().getName();
-        Class<?> craftSeat = Class.forName(craft + ".entity.CraftFallingBlock");
+        Class<?> craftSeat;
+        try { craftSeat = Class.forName(craft + ".entity.CraftFallingBlock"); }
+        catch (ClassNotFoundException oldName) { craftSeat = Class.forName(craft + ".entity.CraftFallingSand"); }
         boolean legacy;
         try { Class.forName(craft + ".entity.CraftArmorStand"); legacy = false; }
         catch (ClassNotFoundException noArmorStand) { legacy = true; }
@@ -56,13 +59,38 @@ final class NativeAccess {
         Class<?> root = seatBase;
         while (root.getSuperclass() != Object.class) root = root.getSuperclass();
         entityClass = root;
+        Class<?> boxType = null;
+        for (Field f : entityClass.getDeclaredFields())
+            if (f.getType().getSimpleName().equals("AABB") || f.getType().getSimpleName().equals("AxisAlignedBB")) {
+                boxType = f.getType(); break;
+            }
         Field box = null;
-        for (Field f : entityClass.getDeclaredFields()) if (f.getType().getSimpleName().equals("AABB") || f.getType().getSimpleName().equals("AxisAlignedBB")) {
-            box = f; box.setAccessible(true); break;
+        if (boxType != null) for (Field f : entityClass.getDeclaredFields()) {
+            int modifiers = f.getModifiers();
+            if (f.getType() == boxType && !Modifier.isStatic(modifiers) && !Modifier.isFinal(modifiers)) {
+                box = f; box.setAccessible(true); break;
+            }
+        }
+        // 1.7 keeps one final, mutable AxisAlignedBB on each entity. Never
+        // replace that final reference or select a newer shared empty box.
+        Method mutate = null;
+        if (box == null && oldest && boxType != null) {
+            Field legacyBox = entityClass.getDeclaredField("boundingBox");
+            if (legacyBox.getType() == boxType && !Modifier.isStatic(legacyBox.getModifiers())) {
+                mutate = boxType.getMethod("b", double.class, double.class, double.class,
+                        double.class, double.class, double.class);
+                if (Modifier.isStatic(mutate.getModifiers()) || mutate.getReturnType() != boxType)
+                    throw new NoSuchMethodException("Mutable legacy entity bounds");
+                box = legacyBox; box.setAccessible(true);
+            }
         }
         if (box == null) throw new NoSuchFieldException("Native entity bounds");
+        if (Modifier.isStatic(box.getModifiers()) || (Modifier.isFinal(box.getModifiers()) && mutate == null))
+            throw new IllegalStateException("Native entity bounds field is not mutable instance state");
         bounds = box;
-        boxConstructor = box.getType().getConstructor(double.class, double.class, double.class, double.class, double.class, double.class);
+        boxMutator = mutate;
+        boxConstructor = mutate == null ? box.getType().getConstructor(double.class, double.class,
+                double.class, double.class, double.class, double.class) : null;
         oldPackage = entityClass.getPackage().getName();
         int numericType = -1;
         if (oldPackage.startsWith("net.minecraft.server.v")) {
@@ -100,7 +128,14 @@ final class NativeAccess {
         if (parentConstructor == null) throw new NoSuchMethodException("Vanilla seat world constructor");
         Class<?> generated = SeatClass.create(seatBase, parentConstructor, pos, oldest);
         seatConstructor = generated.getConstructor(parentConstructor.getParameterTypes());
-        vehicleWrapper = oldest ? SeatClass.vehicleWrapper(craftSeat).getConstructors()[0] : null;
+        boolean cancellableDismount = false;
+        for (String event : new String[] {"org.bukkit.event.entity.EntityDismountEvent",
+                "org.spigotmc.event.entity.EntityDismountEvent"}) try {
+            if (org.bukkit.event.Cancellable.class.isAssignableFrom(Class.forName(event))) cancellableDismount = true;
+        } catch (ClassNotFoundException absent) { /* Older platform event family. */ }
+        // Some old Spigot APIs only offer cancellable VehicleExitEvent. Keep
+        // their falling-block wrapper a Vehicle without making it living.
+        vehicleWrapper = oldest || !cancellableDismount ? SeatClass.vehicleWrapper(craftSeat).getConstructors()[0] : null;
         Method factory = null;
         Constructor<?> constructor = null;
         Class<?> packet = null;
@@ -134,7 +169,7 @@ final class NativeAccess {
             if (airState != null && f.getType().isInstance(airState)) { f.setAccessible(true); f.set(seat, airState); }
             else if (oldest && f.getType().isInstance(airBlock)) { f.setAccessible(true); f.set(seat, airBlock); }
         }
-        if (oldest) for (Field f : Reflect.fields(entityClass)) if (f.getName().equals("bukkitEntity")) {
+        if (vehicleWrapper != null) for (Field f : Reflect.fields(entityClass)) if (f.getName().equals("bukkitEntity")) {
             f.setAccessible(true); f.set(seat, vehicleWrapper.newInstance(craftServer, seat)); break;
         }
         Entity bukkit = (Entity) Reflect.call(seat, "getBukkitEntity");
@@ -169,7 +204,10 @@ final class NativeAccess {
     void shape(Object seat) throws ReflectiveOperationException {
         Entity bukkit = (Entity)Reflect.call(seat, "getBukkitEntity");
         Location at = bukkit.getLocation();
-        bounds.set(seat, boxConstructor.newInstance(at.getX(), at.getY(), at.getZ(), at.getX(), at.getY(), at.getZ()));
+        if (boxMutator == null)
+            bounds.set(seat, boxConstructor.newInstance(at.getX(), at.getY(), at.getZ(), at.getX(), at.getY(), at.getZ()));
+        else Reflect.call(boxMutator, Reflect.get(bounds, seat),
+                at.getX(), at.getY(), at.getZ(), at.getX(), at.getY(), at.getZ());
     }
 
     void addSeat(Horse horse, Entity bukkit) throws ReflectiveOperationException {
@@ -203,6 +241,33 @@ final class NativeAccess {
         try { result = Reflect.call(vehicle, "addPassenger", passenger); }
         catch (NoSuchMethodException old) { result = Reflect.call(vehicle, "setPassenger", passenger); }
         return !(result instanceof Boolean) || (Boolean)result;
+    }
+
+    void preserveCancelledExit(Entity vehicle, Entity passenger) throws ReflectiveOperationException {
+        // Spigot 1.12 clears the passenger's pointer before VehicleExitEvent,
+        // then returns on cancellation while retaining the vehicle's list.
+        // Restore only that exact half-detached state; never perform a remount
+        // or replace a vehicle chosen by another listener.
+        if (passenger.getVehicle() != null || !passengers(vehicle).contains(passenger)) return;
+        Object handle = Reflect.handle(passenger), nativeVehicle = Reflect.handle(vehicle);
+        Field pointer = null;
+        for (String name : new String[] {"vehicle", "au"}) try {
+            Field candidate = entityClass.getDeclaredField(name);
+            if (candidate.getType() == entityClass && !Modifier.isStatic(candidate.getModifiers())
+                    && !Modifier.isFinal(candidate.getModifiers())) { pointer = candidate; break; }
+        } catch (NoSuchFieldException absent) { /* Next verified legacy mapping. */ }
+        if (pointer == null) throw new NoSuchFieldException("Cancelled legacy vehicle pointer");
+        pointer.setAccessible(true);
+        if (pointer.get(handle) != null) return;
+        pointer.set(handle, nativeVehicle);
+        Object packet = null;
+        for (String name : new String[] {"net.minecraft.network.protocol.game.ClientboundSetPassengersPacket",
+                "net.minecraft.network.protocol.game.PacketPlayOutMount", oldPackage + ".PacketPlayOutMount"}) try {
+            packet = Class.forName(name).getConstructor(entityClass).newInstance(nativeVehicle); break;
+        } catch (ClassNotFoundException absent) { /* Next verified packet family. */ }
+        if (packet == null) packet = Class.forName(oldPackage + ".PacketPlayOutAttachEntity")
+                .getConstructor(int.class, entityClass, entityClass).newInstance(0, handle, nativeVehicle);
+        broadcast(vehicle, packet);
     }
 
     List<Entity> passengers(Entity entity) {

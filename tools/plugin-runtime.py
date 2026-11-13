@@ -345,7 +345,7 @@ def main():
         file.write('\ndebug: true\n')
     fixture_config = run / 'plugins/TandemountNativeFixture'
     (run / 'eula.txt').write_text('eula=true\n')
-    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=false\nlevel-seed=1\n')
+    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
     (run / 'bukkit.yml').write_text('settings:\n  allow-end: false\n  connection-throttle: 0\n  shutdown-message: Tandemount disposable test complete\nspawn-limits:\n  monsters: 0\n  animals: 0\n  water-animals: 0\n  ambient: 0\n')
     java = java_for(int(metadata['java']), args.java_home)
     command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', metadata['file'], 'nogui']

@@ -54,6 +54,7 @@ public final class TandemRuntime {
             }
             for (Ride ride : RIDES.values()) if (ride.rider == player || ride.driver == player) return original;
             Object level = Names.call("entity.level", horse);
+            if (!loaded(level, Names.call("entity.blockPosition", horse))) return original;
             Constructor<?> constructor = Names.type("AreaEffectCloud").getConstructor(Names.type("Level"), double.class, double.class, double.class);
             Object seat = constructor.newInstance(level, number("entity.x", horse), number("entity.y", horse), number("entity.z", horse));
             SEATS.add(seat); // Before addFreshEntity: saving/tracking hooks recognize it immediately.
@@ -67,19 +68,21 @@ public final class TandemRuntime {
                 Names.call("cloud.waiting", seat, false);
                 Names.call("cloud.radiusOnUse", seat, 0.0f);
                 Names.call("cloud.radiusPerTick", seat, 0.0f);
-                Names.call("cloud.durationOnUse", seat, 0);
+                // Vanilla initializes this adjustment to zero. Some exact
+                // loader namespaces do not expose a callable mapped setter.
+                Names.callIfPresent("cloud.durationOnUse", seat, 0);
                 int duration = Names.hasField("AreaEffectCloud.INFINITE_DURATION")
                         ? ((Number) Names.field("AreaEffectCloud.INFINITE_DURATION", null)).intValue()
                         : Integer.MAX_VALUE;
                 Names.call("cloud.duration", seat, duration);
                 Ride ride = new Ride(horse, passengers.get(0), player, seat, level);
-                update(ride);
+                if (!update(ride)) { discardSeat(seat); return original; }
                 if (!Boolean.TRUE.equals(Names.call("level.add", level, seat))) { if (Boolean.getBoolean("tandemount.selftest")) log("Native seat insertion refused"); discardSeat(seat); return original; }
                 // false retains normal native mount vetoes; it never overrides them.
                 if (!Names.mount(player, seat)) { discardSeat(seat); return original; }
                 Names.call("entity.positionRider", seat, player);
                 ride.riderOffset = number("entity.y", player) - number("entity.y", seat);
-                update(ride);
+                if (!update(ride)) { discardSeat(seat); return original; }
                 RIDES.put(horse, ride);
                 debug("Ride opened");
                 return Names.field("InteractionResult.SUCCESS", null);
@@ -90,6 +93,9 @@ public final class TandemRuntime {
         } catch (Exception exception) { error("Mount rejected", exception); return original; }
     }
     private static double number(String method, Object entity) throws Exception { return ((Number) Names.call(method, entity)).doubleValue(); }
+    private static boolean loaded(Object level, Object position) throws Exception {
+        return !Names.has("level.loaded") || Boolean.TRUE.equals(Names.call("level.loaded", level, position));
+    }
     private static boolean valid(Ride ride) throws Exception {
         if (!SETTINGS.enabled) return false;
         for (Object entity : new Object[] {ride.horse, ride.driver, ride.rider, ride.seat}) {
@@ -101,10 +107,10 @@ public final class TandemRuntime {
         if (Names.call("entity.vehicle", ride.driver) != ride.horse || Names.call("entity.vehicle", ride.rider) != ride.seat) return false;
         if (!((List<?>) Names.call("entity.passengers", ride.horse)).contains(ride.driver)) return false;
         if (!((List<?>) Names.call("entity.passengers", ride.seat)).contains(ride.rider)) return false;
-        if (Names.has("level.loaded") && !Boolean.TRUE.equals(Names.call("level.loaded", ride.level, Names.call("entity.blockPosition", ride.horse)))) return false;
+        if (!loaded(ride.level, Names.call("entity.blockPosition", ride.horse))) return false;
         return true;
     }
-    private static void update(Ride ride) throws Exception {
+    private static boolean update(Ride ride) throws Exception {
         double yaw;
         if (Names.hasField("LivingEntity.yBodyRot")) yaw = ((Number) Names.field("LivingEntity.yBodyRot", ride.horse)).doubleValue();
         else yaw = number("entity.yaw", ride.horse);
@@ -112,14 +118,21 @@ public final class TandemRuntime {
         double x = number("entity.x", ride.horse) + Math.sin(radians) * SETTINGS.rear;
         double z = number("entity.z", ride.horse) - Math.cos(radians) * SETTINGS.rear;
         double y = number("entity.y", ride.horse) + SETTINGS.height - ride.riderOffset;
+        // Forge 1.16.5's native position setter loads the target chunk for added
+        // entities. Check the offset seat's chunk as well as the horse's before
+        // any native position, rider-position, or world-insertion operation.
+        Object destination = Names.type("BlockPos").getConstructor(int.class, int.class, int.class)
+                .newInstance((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+        if (!loaded(ride.level, destination)) return false;
         Names.call("entity.position", ride.seat, x, y, z);
         Names.call("entity.rotation", ride.seat, (float) yaw);
         if (Names.call("entity.vehicle", ride.rider) == ride.seat) Names.call("entity.positionRider", ride.seat, ride.rider);
+        return true;
     }
     public static void entityTick(Object entity) {
         Ride ride = RIDES.get(entity);
         if (ride == null) return;
-        try { if (valid(ride)) update(ride); else remove(ride); }
+        try { if (!valid(ride) || !update(ride)) remove(ride); }
         catch (Exception exception) { error("Ride cleanup", exception); remove(ride); }
     }
     public static void tracker(Object tracker, Object entity) {
@@ -166,7 +179,7 @@ public final class TandemRuntime {
     public static void applySettings() {
         failed = false;
         for (Ride ride : new ArrayList<Ride>(RIDES.values())) {
-            try { if (SETTINGS.enabled) update(ride); else remove(ride); }
+            try { if (!SETTINGS.enabled || !valid(ride) || !update(ride)) remove(ride); }
             catch (Exception exception) { remove(ride); error("Settings application", exception); }
         }
     }

@@ -26,6 +26,11 @@ Upstream inputs consulted:
   [NeoForge Maven](https://maven.neoforged.net/releases/), exact userdev SDK
   configurations, MCP mappings where the production runtime uses SRG names,
   and installed dedicated-server distributions.
+- [Fabric Loader documentation](https://docs.fabricmc.net/develop/loader/) and
+  [Fabric events documentation](https://docs.fabricmc.net/develop/events/), for
+  the distinction between loader initialization/class transformation and the
+  separate Fabric API gameplay-event library. The tested Fabric distributions
+  install Fabric Loader, not Fabric API or third-party protection mixins.
 - The loader-provided Sponge Mixin and ASM APIs for narrow transformations of
   exact, published vanilla signatures. The mod compiles against those real APIs;
   substitute game or loader API stubs are not used or packaged.
@@ -65,9 +70,10 @@ application for empty potion contents and skips natural expiry for
 disables gravity/physics. On 1.16.5, which has no infinite-duration sentinel,
 the fallback is `Integer.MAX_VALUE`; vanilla can expire it only after that many
 loaded ticks (about 3.4 years at 20 TPS). The native fixture contains runtime
-assertions for these configured fields; those checks have not run while EULA
-acceptance is pending. This verifies the model and renderer code paths, not the
-appearance confirmed by a human using a client.
+assertions for these configured fields. The owner has confirmed EULA acceptance;
+native results are recorded separately for each exact artifact. This verifies
+the model and renderer code paths, not the appearance confirmed by a human
+using a client.
 
 Native test fixtures use official entities, tracking objects, save hooks and
 loader runtimes. Synthetic `ServerPlayer` fixtures, actual socket logins,
@@ -92,5 +98,75 @@ TANDEMOUNT_CACHE=/run/media/eyecrasher/files/Development/.tandemount-cache \
 
 With these additions, `.agents/modern-build/` contains 90 artifact records for
 90 available modern loader/version candidates. These compile-only checks did not
-launch a server or client. All native behavior checks remain paused pending
-explicit EULA acceptance; no human client visual check has been performed.
+launch a server or client and do not establish native compatibility. No human
+client visual check has been performed.
+
+## Early-modern portability and lifecycle fixtures
+
+The targeted Forge 1.16.5 failure was investigated using the official
+[Forge 1.16.5-36.2.42 userdev SDK](https://maven.minecraftforge.net/net/minecraftforge/forge/1.16.5-36.2.42/forge-1.16.5-36.2.42-userdev.jar),
+specifically `patches/net/minecraft/entity/Entity.java.patch`, plus the matching
+Mojang and MCP mappings already used by the build. Forge patches the native raw
+position setter to load the destination chunk for a live entity added to a
+server world. The former fixture moved an added horse through that setter, so
+the fixture itself loaded the chunk that its next assertion expected to be
+absent. The retained failure log establishes the failed assertion; the SDK
+patch explains its loader-specific setup error. SDK and patch hashes are in
+the ignored `.agents/modern-portability/forge-1.16.5-inputs.json`.
+
+The corrected unavailable-horse-chunk fixture deliberately writes only exact
+mapped position caches on a disposable native entity immediately before the
+lifecycle guard runs. It asserts the destination is absent before setup, after
+setup, and after cleanup. This is a native-object guard probe; it is not a
+claim that the engine completed a real chunk unload. The world-change guard
+similarly uses the exact mapped level setter or field on a disposable fixture
+player, without claiming a completed player dimension transition.
+
+Seat creation, movement, and settings updates now check the offset seat's
+destination with the native non-loading `hasChunkAt` query before native
+position setters, rider positioning, or world insertion. The fixture locates
+an already loaded chunk edge through non-loading queries, then checks that
+moving an active ride to an absent seat destination cleans the seat and that
+a fresh mount there is rejected. Both assertions also require that the absent
+neighbor remains unloaded. A separate player-teleport fixture calls the exact
+native `ServerPlayer.teleportTo` signature with an already loaded destination,
+confirms the native teleport occurred, and checks cleanup of that player's ride.
+These additions require fresh native runs; compilation alone cannot pass them.
+
+The strengthened late-observer fixture collects native `ServerEntity` pairing
+packets separately for the seat and horse. It requires a typed seat-add packet
+whose entity ID and coordinates match the current seat, a metadata packet for
+that seat with nonempty data, and exact passenger packets containing only the
+seat's second rider and the horse's driver, respectively. Passenger-packet
+getters listed in 1.16.5 mappings are absent from its actual dedicated-server
+class; the fixture reads the exact mapped `vehicle` and `passengers` fields
+instead. The official server declarations inspected across 1.16.5, 1.17.1,
+1.19.4, 1.21.1, 1.21.11, 26.1 and 26.3 retain those fields. This verifies the
+native pairing payload sent to a synthetic observer; it is not a connected
+client rendering or human visual confirmation.
+
+The actual world-transfer fixture is separate from the mapped-level guard.
+It selects the Nether world already created by the disposable server and
+prepares its chosen destination chunk as fixture setup. It registers a fresh
+synthetic player using native `ServerLevel.addNewPlayer`, opens that player's
+own ride, and invokes the exact native `ServerPlayer.teleportTo` overload.
+Assertions require the prepared destination, applied native teleport, target
+world and Nether dimension, detached rider, removed seat, and survival of an
+unrelated ride. The fixture returns that player through the native teleport
+API before disposal. Exact `Level.dimension` and `ResourceKey.location`
+signatures come from official mappings; the latter is named `identifier` in
+1.21.11 and 26.x. Preparing a disposable test chunk does not grant the
+production runtime a chunk-loading path. These strengthened fixtures require
+fresh artifact-bound native runs.
+
+Fabric Loader supplies initialization and class-transformation facilities;
+its official documentation assigns game-specific hooks to the separate Fabric
+API. This project's loader-only Fabric distribution supplies no native gameplay
+cancellation event bus to which the fixture can attach an interaction, mount,
+or dismount veto. Its result therefore records `loader_cancellation.status` as
+`not-applicable`, with that exact scope. The actual
+`consumed-interaction-not-overridden` assertion remains independent. Forge and
+NeoForge record true cancellation booleans only after their real event-bus
+listeners observed the veto and the matching state assertion passed. Fabric
+API and third-party protection mixins are not installed or tested; the Fabric
+exception does not establish compatibility with them.

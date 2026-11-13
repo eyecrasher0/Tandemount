@@ -90,10 +90,67 @@ implementation sets radius/duration adjustments to zero and disables gravity
 and physics. Class-file hashes and the complete model analysis are in the ignored
 `.agents/modern-renderer-audit.json` and `docs/MODERN_PROVENANCE.md`. This is
 source-level renderer evidence, not a human visual check. Native runtime checks
-were held pending explicit owner EULA acceptance.
+were not run during this targeted compile-only repair; the owner has since
+confirmed EULA acceptance, and the coordinator will resume them after the
+mapping fixes.
 
 GPL-3.0-only text: <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
 Implementation attestations and the final source inventory will be recorded
 here before release. Runtime behavior and real-client visuals require separate
 verification; availability metadata establishes neither.
+
+## Plugin native portability audit
+
+A fresh implementation conversation inspected only this repository's
+instructions, behavioral specification, independent sources, isolated native
+test reports, and official upstream server SDKs. No predecessor source,
+artifact, archive, design note, or global predecessor memory was consulted.
+`javap -p -c` inspection of the following exact upstream artifacts established
+the native wrapper, mutable bounds, mount-correction, cancellation, and fixture
+transfer entry points:
+
+| Upstream SDK | Distribution or pinned upstream revision | Inspected server JAR SHA-256 |
+| --- | --- | --- |
+| Paper 1.7.10 build 2025 | [PaperMC distribution](https://fill-data.papermc.io/v1/objects/33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185/paper-1.7.10-2025.jar), distribution SHA-256 `33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185` | Patched SDK `eb9b87e987c03492ae32709ab3bad4a4bb1aeadd2c906f848473c793487b9ba3` |
+| Paper 1.12.2 build 1620 | [PaperMC distribution](https://fill-data.papermc.io/v1/objects/3a2041807f492dcdc34ebb324a287414946e3e05ec3df6fd03f5b5f7d9afc210/paper-1.12.2-1620.jar), distribution SHA-256 `3a2041807f492dcdc34ebb324a287414946e3e05ec3df6fd03f5b5f7d9afc210` | Patched SDK `30d3843b04680391cf86b548ff67bb5d324df0b2a5a50a18f647bca3f6acda75` |
+| Spigot 1.12.2 | BuildTools revision `1573k`; CraftBukkit `f4830a1687f37a4ee7c0bd08a30d925fbe0f9349`, Spigot `79a30d7d26b9078dbf6071cbbfa060673bf117b2`, BuildData `be360cc298a06b5355ecd057f5b1feb894a73f0f` | `63fdb6df3327787f91fa469fd1cb323466e4b0ee3a3bdacb0ef2347f83cc9a08` |
+| Folia 1.21.11 build 14 | [PaperMC distribution](https://fill-data.papermc.io/v1/objects/f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39/folia-1.21.11-14.jar), distribution SHA-256 `f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39` | Patched SDK `6bfd94ffd8649cf416d247e849214667ac91759699a4c3536eef2307277c4e33` |
+
+Paper 1.7.10 exposes `CraftFallingSand.getHandle(): EntityFallingBlock` and a
+per-entity final `Entity.boundingBox`. Its `AxisAlignedBB.b(DDDDDD)` mutates
+that instance in place. No final reference or static box is written.
+
+Paper and Spigot 1.12.2 `EntityPlayer.a(Entity, boolean)` call the native player
+connection's position-correction method after mounting. That method emits an
+`UNKNOWN` `PlayerTeleportEvent` even when source and destination match. The
+adapter checks the final event destination instead of ending a ride for this
+no-op correction.
+
+Spigot 1.12.2's generic `EntityDismountEvent` does not implement `Cancellable`.
+Its `Entity.stopRiding()` clears the native vehicle pointer before firing
+`VehicleExitEvent`, while cancellation leaves the vehicle's original passenger
+list intact. `EntityLiving.stopRiding()` can then emit another `UNKNOWN`
+same-world position correction for the falling-block dismount path. The
+implementation repairs only that final-cancelled, half-detached pointer when
+the original vehicle still lists the passenger and no replacement vehicle has
+been chosen. It sends the ordinary native mount packet without dispatching a
+new mount. The associated correction is ignored only while the final exit
+remains cancelled and its final destination remains in the same world.
+
+Folia 1.21.11's native
+`Entity.teleportAsync(ServerLevel, Vec3, Float, Float, Vec3, TeleportCause, long, Consumer)`
+requires the owning entity tick thread. Its published constants are
+`TELEPORT_FLAG_LOAD_CHUNK=1`, `TELEPORT_FLAG_TELEPORT_PASSENGERS=2`, and
+`TELEPORT_FLAG_UNMOUNT=4`. The disposable fixture uses the unmount flag alone
+for an actual mounted-player world transfer into an already-prepared chunk.
+Setup uses the official async chunk API and region scheduler. The unload
+sequence and its limits are described in `PLUGIN_RENDERER.md`.
+
+The portability snapshot compiles all plugin target packages and its disposable
+fixture against the real Paper 1.12.2 SDK with Java release 8. A separate main
+source compile uses the published Paper 26.3 API and its official dependencies
+listed above. Exact source hashes, compiler commands, and artifact hashes are
+retained in the ignored `.agents/plugin-portability-*/compile.json` records.
+Compilation and API-bytecode inspection do not establish native or visual
+compatibility; final native runs remain the coordinator's responsibility.

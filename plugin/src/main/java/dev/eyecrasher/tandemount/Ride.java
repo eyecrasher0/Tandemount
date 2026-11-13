@@ -12,6 +12,7 @@ final class Ride {
     final Entity seat;
     final Object nativeSeat;
     volatile boolean closing, closed;
+    volatile org.bukkit.event.vehicle.VehicleExitEvent driverExit, riderExit;
     double passengerOffset;
     long ticks;
     Ride(TandemountPlugin plugin, Horse horse, Player driver, Player rider, Entity seat, Object nativeSeat) {

@@ -92,12 +92,35 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         if (ride == null) ride = riders.get(event.getEntity().getUniqueId());
         if (ride != null) ride.closing = true;
     }
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void exited(org.bukkit.event.vehicle.VehicleExitEvent event) {
+        Ride ride = riders.get(event.getExited().getUniqueId());
+        if (ride == null || ride.closed) return;
+        // Keep the event reference until dispatch completes, including later
+        // MONITOR listeners, before applying its final cancellation state.
+        if (event.getExited() == ride.driver && event.getVehicle() == ride.horse) ride.driverExit = event;
+        else if (event.getExited() == ride.rider && event.getVehicle() == ride.seat) ride.riderExit = event;
+    }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void teleported(final PlayerTeleportEvent event) {
         final Ride ride = riders.get(event.getPlayer().getUniqueId());
         if (ride == null) return;
+        final org.bukkit.event.vehicle.VehicleExitEvent exit = event.getPlayer() == ride.driver ? ride.driverExit : ride.riderExit;
+        final Entity vehicle = event.getPlayer() == ride.driver ? ride.horse : ride.seat;
+        // Spigot 1.12 also positions a living rider after a cancelled exit.
+        // Its falling-block branch emits an UNKNOWN same-world teleport while
+        // the original list still contains the half-detached passenger.
+        final boolean cancelledExitCorrection = exit != null && exit.isCancelled()
+                && event.getCause() == PlayerTeleportEvent.TeleportCause.UNKNOWN && event.getTo() != null
+                && event.getFrom().getWorld().equals(event.getTo().getWorld())
+                && event.getPlayer().getVehicle() == null && nativeAccess.passengers(vehicle).contains(event.getPlayer());
         scheduler.next(ride.horse, new Runnable() { public void run() {
-            if (!event.isCancelled() && !ride.closed) close(ride);
+            // Older native player mounting emits a same-location UNKNOWN
+            // teleport for its client correction. It does not end the ride.
+            // Inspect the final event destination after all listeners ran.
+            if (!event.isCancelled() && !ride.closed && !event.getFrom().equals(event.getTo())
+                    && !(cancelledExitCorrection && exit.isCancelled() && event.getTo() != null
+                        && event.getFrom().getWorld().equals(event.getTo().getWorld()))) close(ride);
         }});
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void unloading(ChunkUnloadEvent event) {
@@ -199,6 +222,10 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     void tickRide(Ride ride) {
         if (ride.closed) return;
         try {
+            org.bukkit.event.vehicle.VehicleExitEvent driverExit = ride.driverExit, riderExit = ride.riderExit;
+            ride.driverExit = null; ride.riderExit = null;
+            if (driverExit != null && driverExit.isCancelled()) nativeAccess.preserveCancelledExit(ride.horse, ride.driver);
+            if (riderExit != null && riderExit.isCancelled()) nativeAccess.preserveCancelledExit(ride.seat, ride.rider);
             if (stopping || !isEnabled() || ride.closing || !settings.enabled || !ride.horse.isValid()
                     || ride.horse.isDead() || !ride.seat.isValid() || !ride.driver.isOnline() || !ride.rider.isOnline()
                     || ride.driver.isDead() || ride.rider.isDead() || ride.driver.getVehicle() != ride.horse
