@@ -282,7 +282,9 @@ def saved_world_checks(run, fixture_config):
     file = fixture_config / 'seat-uuids.txt'
     uuids = [uuid.UUID(line) for line in file.read_text().splitlines()] if file.exists() else []
     hits, sectors = [], 0
-    for region in list(run.glob('world*/region/*.mca')) + list(run.glob('world*/entities/*.mca')):
+    regions = sorted({file for world in run.glob('world*') if world.is_dir() and not world.is_symlink()
+                      for file in world.rglob('*.mca') if file.parent.name in {'region', 'entities'}})
+    for region in regions:
         data = region.read_bytes()
         for chunk in range(1024):
             location = int.from_bytes(data[chunk * 4:chunk * 4 + 4], 'big')

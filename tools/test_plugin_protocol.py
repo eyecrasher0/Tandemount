@@ -3,7 +3,10 @@
 import importlib.util
 from pathlib import Path
 import struct
+import tempfile
 import unittest
+import uuid
+import zlib
 
 spec = importlib.util.spec_from_file_location("plugin_runtime", Path(__file__).with_name("plugin-runtime.py"))
 runtime = importlib.util.module_from_spec(spec)
@@ -68,6 +71,30 @@ class PluginProtocolTest(unittest.TestCase):
             client.send = lambda identifier, body: sent.append((identifier, body))
             client.acknowledge_position(77, packet)
             self.assertEqual(sent, [(77, runtime.vi(42))])
+
+    def test_saved_world_scan_covers_26_3_dimension_directories_and_rejects_helper(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            fixture = root / "plugins/Fixture"
+            fixture.mkdir(parents=True)
+            helper = uuid.UUID("42f6c23f-48bd-4ee6-a3b9-030d16342db1")
+            (fixture / "seat-uuids.txt").write_text(str(helper) + "\n")
+            region = root / "world/dimensions/minecraft/overworld/entities/r.0.0.mca"
+            region.parent.mkdir(parents=True)
+            def save(payload):
+                compressed = zlib.compress(payload)
+                header = bytearray(8192)
+                header[:4] = (2 << 8 | 1).to_bytes(4, "big")
+                chunk = struct.pack(">IB", len(compressed) + 1, 2) + compressed
+                region.write_bytes(header + chunk.ljust(4096, b"\0"))
+            save(b"saved native entity data without helper")
+            check = runtime.saved_world_checks(root, fixture)[0]
+            self.assertEqual(check["status"], "passed", check)
+            self.assertEqual(check["detail"]["native_mca_chunks_inspected"], 1)
+            save(b"saved entity UUID:" + helper.bytes)
+            check = runtime.saved_world_checks(root, fixture)[0]
+            self.assertEqual(check["status"], "failed", check)
+            self.assertEqual(check["detail"]["matches"][0]["helper"], str(helper))
 
 
 if __name__ == "__main__":
