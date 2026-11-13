@@ -1,0 +1,16 @@
+name: Tandemount
+version: 1.0.0
+main: dev.eyecrasher.tandemount.TandemountPlugin
+author: EyeCrasher
+description: Share an ordinary horse with a second rider. Server only.
+website: https://github.com/EyeCrasher/Tandemount
+folia-supported: true
+api-version: '1.13'
+commands:
+  tandemount:
+    description: Tandemount help and seat settings
+    usage: /tandemount help
+permissions:
+  tandemount.admin:
+    description: Change Tandemount server settings
+    default: op

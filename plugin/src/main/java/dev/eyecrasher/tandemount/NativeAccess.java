@@ -1,0 +1,312 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
+package dev.eyecrasher.tandemount;
+
+import org.bukkit.Location;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Horse;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
+import java.lang.reflect.*;
+import java.util.*;
+
+/** Narrow adapter discovered from the loaded upstream server's real signatures. */
+final class NativeAccess {
+    final boolean oldest;
+    final Class<?> entityClass, seatBase;
+    final Constructor<?> seatConstructor;
+    private final Constructor<?> vehicleWrapper;
+    private final Object craftServer;
+    private final Object airBlock, airState;
+    private final Field bounds;
+    private final Constructor<?> boxConstructor;
+    final Method position;
+    final int legacySeatType;
+    private final String oldPackage;
+    private final Method positionPacketFactory;
+    private final Constructor<?> positionPacketConstructor;
+    private final Map<Class<?>, Method> riderPositionMethods = new HashMap<Class<?>, Method>();
+
+    NativeAccess(Object server) throws ReflectiveOperationException, java.io.IOException {
+        craftServer = server;
+        String craft = server.getClass().getPackage().getName();
+        Class<?> craftSeat = Class.forName(craft + ".entity.CraftFallingBlock");
+        boolean legacy;
+        try { Class.forName(craft + ".entity.CraftArmorStand"); legacy = false; }
+        catch (ClassNotFoundException noArmorStand) { legacy = true; }
+        oldest = legacy;
+        Class<?> magic = Class.forName(craft + ".util.CraftMagicNumbers");
+        airBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, org.bukkit.Material.AIR);
+        Object state = null;
+        for (String name : new String[] {"defaultBlockState", "getBlockData", "n"}) try {
+            state = Reflect.call(airBlock, name);
+            if (state != null && (state.getClass().getName().contains("BlockState") || state.getClass().getName().contains("BlockData"))) break;
+            state = null;
+        } catch (NoSuchMethodException absent) { }
+        if (state == null) for (Field f : Reflect.fields(airBlock.getClass()))
+            if (!Modifier.isStatic(f.getModifiers()) && (f.getType().getSimpleName().equals("BlockState") || f.getType().getSimpleName().equals("IBlockData"))) {
+                state = Reflect.get(f, airBlock); break;
+            }
+        airState = state;
+        Method getHandle = null;
+        for (Method m : craftSeat.getMethods())
+            if (m.getName().equals("getHandle") && m.getParameterTypes().length == 0 && !m.isBridge()) getHandle = m;
+        if (getHandle == null) throw new NoSuchMethodException("Craft seat native handle");
+        seatBase = getHandle.getReturnType();
+        Class<?> root = seatBase;
+        while (root.getSuperclass() != Object.class) root = root.getSuperclass();
+        entityClass = root;
+        Field box = null;
+        for (Field f : entityClass.getDeclaredFields()) if (f.getType().getSimpleName().equals("AABB") || f.getType().getSimpleName().equals("AxisAlignedBB")) {
+            box = f; box.setAccessible(true); break;
+        }
+        if (box == null) throw new NoSuchFieldException("Native entity bounds");
+        bounds = box;
+        boxConstructor = box.getType().getConstructor(double.class, double.class, double.class, double.class, double.class, double.class);
+        oldPackage = entityClass.getPackage().getName();
+        int numericType = -1;
+        if (oldPackage.startsWith("net.minecraft.server.v")) {
+            Class<?> types = Class.forName(oldPackage + ".EntityTypes");
+            for (Field f : types.getDeclaredFields()) if (Modifier.isStatic(f.getModifiers())) {
+                Object registry = Reflect.get(f, null);
+                if (registry instanceof Map) {
+                    Object value = ((Map<?, ?>)registry).get(seatBase);
+                    if (value instanceof Number) numericType = ((Number)value).intValue();
+                } else if (registry != null && f.getType().getSimpleName().equals("RegistryMaterials")) {
+                    for (Method m : registry.getClass().getMethods()) if (m.getReturnType() == int.class
+                            && Arrays.equals(m.getParameterTypes(), new Class<?>[] {Object.class})) {
+                        Object value = Reflect.call(m, registry, seatBase);
+                        if (((Number)value).intValue() > 0) numericType = ((Number)value).intValue();
+                    }
+                }
+            }
+        }
+        legacySeatType = numericType;
+        Method pos = null;
+        for (String name : new String[] {"setPos", "setPosition", "a_"}) {
+            try { pos = entityClass.getMethod(name, double.class, double.class, double.class); break; }
+            catch (NoSuchMethodException absent) { /* Try the next official mapping family. */ }
+        }
+        if (pos == null || Modifier.isFinal(pos.getModifiers())) throw new NoSuchMethodException("Overrideable native entity position method");
+        position = pos;
+        Constructor<?> parentConstructor = null;
+        for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
+            Class<?>[] p = c.getParameterTypes();
+            if (!Modifier.isPrivate(c.getModifiers()) && ((p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level")))
+                    || (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class && airState != null && p[4].isInstance(airState)))) {
+                parentConstructor = c; break;
+            }
+        }
+        if (parentConstructor == null) throw new NoSuchMethodException("Vanilla seat world constructor");
+        Class<?> generated = SeatClass.create(seatBase, parentConstructor, pos, oldest);
+        seatConstructor = generated.getConstructor(parentConstructor.getParameterTypes());
+        vehicleWrapper = oldest ? SeatClass.vehicleWrapper(craftSeat).getConstructors()[0] : null;
+        Method factory = null;
+        Constructor<?> constructor = null;
+        Class<?> packet = null;
+        try { packet = Class.forName("net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket"); }
+        catch (ClassNotFoundException absent) { /* Older movement protocol. */ }
+        if (packet != null) {
+            for (Method m : packet.getDeclaredMethods()) if (Modifier.isStatic(m.getModifiers())
+                    && m.getReturnType() == packet && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
+                factory = m; break;
+            }
+        }
+        if (factory == null) {
+            for (String name : new String[] {"net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket",
+                    "net.minecraft.network.protocol.game.PacketPlayOutEntityTeleport", oldPackage + ".PacketPlayOutEntityTeleport"}) {
+                try { packet = Class.forName(name); constructor = packet.getConstructor(entityClass); break; }
+                catch (ClassNotFoundException absent) { /* Next mapping family. */ }
+                catch (NoSuchMethodException absent) { /* Newer position packet above is mandatory. */ }
+            }
+        }
+        if (factory == null && constructor == null) throw new NoSuchMethodException("Native seat position synchronization packet");
+        positionPacketFactory = factory;
+        positionPacketConstructor = constructor;
+    }
+
+    Entity createSeat(Horse horse) throws ReflectiveOperationException {
+        Location at = horse.getLocation();
+        Object world = Reflect.handle(horse.getWorld());
+        Object seat = seatConstructor.getParameterTypes().length == 1 ? seatConstructor.newInstance(world)
+                : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), airState);
+        for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
+            if (airState != null && f.getType().isInstance(airState)) { f.setAccessible(true); f.set(seat, airState); }
+            else if (oldest && f.getType().isInstance(airBlock)) { f.setAccessible(true); f.set(seat, airBlock); }
+        }
+        if (oldest) for (Field f : Reflect.fields(entityClass)) if (f.getName().equals("bukkitEntity")) {
+            f.setAccessible(true); f.set(seat, vehicleWrapper.newInstance(craftServer, seat)); break;
+        }
+        Entity bukkit = (Entity) Reflect.call(seat, "getBukkitEntity");
+        // The client LivingEntityRenderer clamps passenger body yaw against a
+        // LivingEntity vehicle. Keep this helper on the vanilla, nonliving
+        // falling-block entity so a head-yaw wrap cannot steer the rider model.
+        if (bukkit instanceof LivingEntity || bukkit.getType() != EntityType.FALLING_BLOCK) {
+            bukkit.remove();
+            throw new IllegalStateException("The shared seat must be a nonliving vanilla falling block");
+        }
+        Reflect.optional(bukkit, "setPersistent", false);
+        Reflect.optional(bukkit, "setInvulnerable", true);
+        Reflect.optional(bukkit, "setSilent", true);
+        Reflect.optional(bukkit, "setGravity", false);
+        Reflect.optional(bukkit, "setAI", false);
+        Reflect.optional(bukkit, "setRemoveWhenFarAway", false);
+        Reflect.optional(bukkit, "setCollidable", false);
+        Reflect.optional(bukkit, "setCanTick", true);
+        Reflect.optional(bukkit, "setDropItem", false);
+        Reflect.optional(bukkit, "setHurtEntities", false);
+        Reflect.optional(bukkit, "setDamagePerBlock", 0.0f);
+        Reflect.optional(bukkit, "setMaxDamage", 0);
+        for (String flag : new String[] {"noPhysics", "noclip"}) {
+            try { entityClass.getField(flag).setBoolean(seat, true); }
+            catch (NoSuchFieldException absent) { /* Next mapping family. */ }
+        }
+        Reflect.call(position, seat, at.getX(), at.getY(), at.getZ());
+        shape(seat);
+        return bukkit;
+    }
+
+    void shape(Object seat) throws ReflectiveOperationException {
+        Entity bukkit = (Entity)Reflect.call(seat, "getBukkitEntity");
+        Location at = bukkit.getLocation();
+        bounds.set(seat, boxConstructor.newInstance(at.getX(), at.getY(), at.getZ(), at.getX(), at.getY(), at.getZ()));
+    }
+
+    void addSeat(Horse horse, Entity bukkit) throws ReflectiveOperationException {
+        Object seat = Reflect.handle(bukkit);
+        Object world = Reflect.handle(horse.getWorld());
+        boolean added = false;
+        if (!oldest) {
+            for (Method m : horse.getWorld().getClass().getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (m.getName().equals("addEntity") && p.length == 2 && p[0].isInstance(seat) && p[1] == SpawnReason.class) {
+                    Object result = Reflect.call(m, horse.getWorld(), seat, SpawnReason.CUSTOM);
+                    added = !(result instanceof Boolean) || (Boolean)result;
+                    break;
+                }
+            }
+        } else {
+            for (Method m : world.getClass().getMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (m.getName().equals("addEntity") && p.length == 2 && p[0].isInstance(seat) && p[1] == SpawnReason.class) {
+                    added = Boolean.TRUE.equals(Reflect.call(m, world, seat, SpawnReason.CUSTOM)); break;
+                }
+            }
+        }
+        if (!added || !bukkit.isValid()) {
+            bukkit.remove(); throw new IllegalStateException("The server cancelled the seat's custom spawn");
+        }
+    }
+
+    boolean mount(Entity vehicle, Entity passenger) throws ReflectiveOperationException {
+        Object result;
+        try { result = Reflect.call(vehicle, "addPassenger", passenger); }
+        catch (NoSuchMethodException old) { result = Reflect.call(vehicle, "setPassenger", passenger); }
+        return !(result instanceof Boolean) || (Boolean)result;
+    }
+
+    List<Entity> passengers(Entity entity) {
+        try {
+            try {
+                Object result = Reflect.call(entity, "getPassengers");
+                @SuppressWarnings("unchecked") List<Entity> passengers = (List<Entity>) result;
+                return new ArrayList<Entity>(passengers);
+            } catch (NoSuchMethodException old) {
+                Entity passenger = (Entity) Reflect.call(entity, "getPassenger");
+                return passenger == null ? Collections.<Entity>emptyList() : Collections.singletonList(passenger);
+            }
+        } catch (ReflectiveOperationException e) { throw new IllegalStateException("Cannot inspect native passengers", e); }
+    }
+
+    void place(Entity seat) throws ReflectiveOperationException {
+        Object nativeSeat = Reflect.handle(seat);
+        Location at = seat.getLocation();
+        Reflect.call(position, nativeSeat, at.getX(), at.getY(), at.getZ());
+        // For a detached 1.7 seat, explicitly perform its native passenger update.
+        // Newer seats are updated once more here so configuration applies immediately.
+        List<Entity> passengers = passengers(seat);
+        for (Entity rider : passengers) positionRider(nativeSeat, Reflect.handle(rider));
+    }
+
+    private void positionRider(Object seat, Object rider) throws ReflectiveOperationException {
+        if (oldest) {
+            // Entity.ac(): vanilla 1.7 passenger position update.
+            Method m = entityClass.getMethod("ac"); Reflect.call(m, seat); return;
+        }
+        Method selected = riderPositionMethods.get(seat.getClass());
+        if (selected == null) {
+            for (Method m : Reflect.methods(entityClass)) {
+                Class<?>[] p = m.getParameterTypes();
+                if (m.getReturnType() == void.class && p.length == 2 && p[0] == entityClass
+                        && p[1].isInterface() && p[1].getEnclosingClass() == entityClass
+                        && p[1].getSimpleName().contains("MoveFunction")) { selected = m; break; }
+            }
+            outer: for (String name : new String[] {"positionRider", "positionPassenger", "updatePassenger", "syncPositionOf", "i", "k", "j"})
+                for (Method m : Reflect.methods(entityClass)) if (m.getName().equals(name)
+                        && m.getReturnType() == void.class && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
+                    if (selected == null) selected = m; break outer;
+                }
+            if (selected == null) {
+                // Older Bukkit mappings expose this as a(Entity); verified by native probe.
+                throw new NoSuchMethodException("Native passenger positioning entry point");
+            }
+            riderPositionMethods.put(seat.getClass(), selected);
+        }
+        if (selected.getParameterTypes().length == 1) Reflect.call(selected, seat, rider);
+        else {
+            Class<?> mover = selected.getParameterTypes()[1];
+            Object callback = Proxy.newProxyInstance(mover.getClassLoader(), new Class<?>[] {mover}, new InvocationHandler() {
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    if (args != null && args.length == 4) return Reflect.call(position, args[0], args[1], args[2], args[3]);
+                    if (method.getName().equals("toString")) return "Tandemount native passenger positioning";
+                    if (method.getName().equals("hashCode")) return System.identityHashCode(proxy);
+                    if (method.getName().equals("equals")) return proxy == args[0];
+                    return null;
+                }
+            });
+            Reflect.call(selected, seat, rider, callback);
+        }
+    }
+
+    Object positionPacket(Entity seat) throws ReflectiveOperationException {
+        Object handle = Reflect.handle(seat);
+        return positionPacketFactory == null ? positionPacketConstructor.newInstance(handle)
+                : Reflect.call(positionPacketFactory, (Object)null, handle);
+    }
+
+    void broadcast(Entity seat, Object packet) throws ReflectiveOperationException {
+        Object world = Reflect.handle(seat.getWorld());
+        Object tracker = null;
+        for (String name : new String[] {"getTracker", "getChunkSource", "getChunkProvider"}) {
+            try { tracker = Reflect.call(world, name); break; }
+            catch (NoSuchMethodException absent) { /* Next upstream mapping family. */ }
+        }
+        if (tracker == null) for (Method m : world.getClass().getMethods()) if (m.getParameterTypes().length == 0
+                && (m.getReturnType().getSimpleName().equals("ServerChunkCache")
+                    || m.getReturnType().getSimpleName().equals("ChunkProviderServer"))) {
+            tracker = Reflect.call(m, world); break;
+        }
+        if (tracker == null) throw new NoSuchMethodException("Native observer tracker");
+        Object handle = Reflect.handle(seat);
+        Method send = null;
+        for (Method m : Reflect.methods(tracker.getClass())) {
+            Class<?>[] p = m.getParameterTypes();
+            if (p.length == 2 && p[0].isInstance(handle) && p[1].isInstance(packet)
+                    && m.getReturnType() == void.class) {
+                send = m;
+                if (m.getName().equals("broadcast") || m.getName().equals("a")) break;
+            }
+        }
+        if (send == null) throw new NoSuchMethodException("Tracker broadcast(Entity,Packet)");
+        Reflect.call(send, tracker, handle, packet);
+    }
+
+    boolean canSee(Entity viewer, Entity entity) throws ReflectiveOperationException {
+        try { return Boolean.TRUE.equals(Reflect.call(viewer, "canSee", entity)); }
+        catch (NoSuchMethodException old) {
+            if (entity instanceof org.bukkit.entity.Player)
+                return ((org.bukkit.entity.Player)viewer).canSee((org.bukkit.entity.Player)entity);
+            return true;
+        }
+    }
+}

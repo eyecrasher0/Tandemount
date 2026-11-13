@@ -22,8 +22,9 @@ Create two projects in the **Minecraft** game: one in **Mods** and one in
 **Bukkit Plugins**. Use the title **Tandemount**, author **EyeCrasher**, license
 **GPL-3.0-only**, source `https://github.com/eyecrasher0/Tandemount`, and the
 same server-only feature description as this repository. Leave the icon blank
-until the owner supplies one. The publisher accepts their numeric IDs only
-after the release audit passes. It
+until the owner supplies one. CurseForge's [project-submission guide](https://support.curseforge.com/support/solutions/articles/9000197241-creating-and-submitting-a-project)
+states that a logo is required for texture packs or Sims projects, not mods.
+The publisher accepts the two numeric IDs only after the release audit passes. It
 uses CurseForge's documented multipart upload route and author token, keeps a
 local hash ledger to avoid duplicate retries, and stops on an ambiguous upload
 outcome. CurseForge's documented upload response returns a file ID rather than
