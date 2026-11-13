@@ -205,6 +205,7 @@ def validate_provider_tags(plan, project):
     loaders = request("GET", V2 + "/tag/loader")
     game_versions = request("GET", V2 + "/tag/game_version")
     categories = request("GET", V2 + "/tag/category")
+    licenses = request("GET", V2 + "/tag/license")
     by_loader = {item["name"]: item for item in loaders}
     required_loaders = set()
     required_versions = set()
@@ -220,11 +221,17 @@ def validate_provider_tags(plan, project):
     missing_categories = required_categories - category_rows.keys()
     wrong_categories = [name for name in sorted(required_categories)
                         if category_rows.get(name, {}).get("project_type") not in (None, "mod")]
-    if missing_loaders or missing_versions or unsupported or missing_categories or wrong_categories:
+    license_ids = {item.get("short", item.get("id")) for item in licenses}
+    if (project.get("modrinth_requested_visibility") != "unlisted"
+            or set(project.get("modrinth_disclosures", [])) != {"ai_content_code", "ai_content_text"}):
+        raise ValueError("Modrinth visibility or AI disclosure metadata is incomplete")
+    if (missing_loaders or missing_versions or unsupported or missing_categories or wrong_categories
+            or project["license"] not in license_ids):
         raise ValueError("Modrinth tags do not match the audited matrix: " + json.dumps({
             "missing_loaders": sorted(missing_loaders), "missing_versions": sorted(missing_versions),
             "loaders_incompatible_with_project": unsupported, "missing_categories": sorted(missing_categories),
             "categories_incompatible_with_project": wrong_categories,
+            "license_id_present": project["license"] in license_ids,
         }))
 
 

@@ -18,6 +18,30 @@ GitHub is intended to host the complete source and public release artifacts.
 CurseForge mods and Bukkit plugins require separate project categories. The
 documented CurseForge upload API can upload to existing projects; project
 creation in its Authors Console still needs an available browser connection.
+Create two projects in the **Minecraft** game: one in **Mods** and one in
+**Bukkit Plugins**. Use the title **Tandemount**, author **EyeCrasher**, license
+**GPL-3.0-only**, source `https://github.com/eyecrasher0/Tandemount`, and the
+same server-only feature description as this repository. Leave the icon blank
+until the owner supplies one. The publisher accepts their numeric IDs only
+after the release audit passes. It
+uses CurseForge's documented multipart upload route and author token, keeps a
+local hash ledger to avoid duplicate retries, and stops on an ambiguous upload
+outcome. CurseForge's documented upload response returns a file ID rather than
+the uploaded file hash; remote byte verification must be completed from an
+available public download or the Authors Console after review.
+
+```sh
+python3 tools/publish_curseforge.py
+python3 tools/publish_curseforge.py --mods-project-id MODS_ID \
+  --plugins-project-id PLUGINS_ID --apply
+```
+
+The second command reads `CURSEFORGE_TOKEN` from the environment. An upload
+accepted by the API may still be waiting for CurseForge moderation; it is not
+reported as public until that review completes. The official [CurseForge Upload
+API](https://support.curseforge.com/support/solutions/articles/9000197321-curseforge-upload-api)
+documents the API token, game-version tags, upload request, and file ID
+response.
 
 ## Modrinth
 
