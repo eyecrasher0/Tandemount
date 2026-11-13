@@ -78,6 +78,15 @@ def jar_contract(path, java_min, license_bytes):
     return errors, descriptors
 
 
+def artifact_targets(artifact):
+    if "targets" in artifact:
+        values = [(item["minecraft"], item["platform"]) for item in artifact["targets"]]
+        if len(values) != len(set(values)):
+            raise ValueError("Duplicate exact target in one artifact")
+        return set(values)
+    return {(mc, platform) for mc in artifact["minecraft"] for platform in artifact["platforms"]}
+
+
 def audit(root, matrix, manifest, evidence_root):
     errors = []
     expected = {(t["minecraft"], p) for t in matrix["targets"]
@@ -115,14 +124,15 @@ def audit(root, matrix, manifest, evidence_root):
                 raise ValueError("Invalid minimum Java version")
             jar_errors, descriptors = jar_contract(path, artifact["java_min"], license_bytes)
             errors.extend(prefix + error for error in jar_errors)
-            pairs = {(mc, platform) for mc in artifact["minecraft"] for platform in artifact["platforms"]}
+            pairs = artifact_targets(artifact)
+            platforms = {platform for _, platform in pairs}
             if not pairs:
                 raise ValueError("Empty compatibility declaration")
-            if set(artifact["platforms"]) & PLUGIN_PLATFORMS and not descriptors & {"plugin.yml", "paper-plugin.yml"}:
+            if platforms & PLUGIN_PLATFORMS and not descriptors & {"plugin.yml", "paper-plugin.yml"}:
                 errors.append(prefix + "Plugin descriptor missing")
-            if "fabric" in artifact["platforms"] and "fabric.mod.json" not in descriptors:
+            if "fabric" in platforms and "fabric.mod.json" not in descriptors:
                 errors.append(prefix + "Fabric descriptor missing")
-            if set(artifact["platforms"]) & {"forge", "neoforge"} and not descriptors & {
+            if platforms & {"forge", "neoforge"} and not descriptors & {
                 "mcmod.info", "META-INF/mods.toml", "META-INF/neoforge.mods.toml"}:
                 errors.append(prefix + "Forge/NeoForge descriptor missing")
             invalid = pairs - expected

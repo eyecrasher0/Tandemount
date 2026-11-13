@@ -10,6 +10,11 @@ record is bound to the artifact SHA256 and one exact game/platform pair. Its
 checks must execute the server's real behavior; mock-only or model-only tests
 are insufficient. Actual rendered appearance is recorded separately.
 
+For a universal JAR use an explicit `targets` list of `minecraft`/`platform`
+objects. This describes only the available pairs and avoids implying that a
+particular platform existed on every Minecraft release. A rectangular mod
+artifact may instead use `minecraft` and `platforms` lists.
+
 Run the gate before creating a publication plan:
 
 ```sh

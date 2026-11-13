@@ -56,7 +56,12 @@ def install(cache, platform, target):
         actual = profile.get("minecraft") or profile.get("install", {}).get("minecraft")
         if actual and actual != version:
             raise ValueError(f"Installer Minecraft {actual} differs from requested {version}")
-    command = [java_for(target["java"]), "-Xmx1G", "-XX:ActiveProcessorCount=2", "-jar", str(installer), "--installServer", str(directory)]
+    # This older installer pins processor ZIP hashes produced with JDK 8's
+    # deflater. JDK 16 produces valid contents with different compressed bytes,
+    # which its integrity check correctly rejects. Run only the installer on 8;
+    # Minecraft 1.17.1 itself still runs on its required Java 16.
+    installer_java = 8 if platform == "forge" and version == "1.17.1" else target["java"]
+    command = [java_for(installer_java), "-Xmx1G", "-XX:ActiveProcessorCount=2", "-jar", str(installer), "--installServer", str(directory)]
     log = directory / "installation.log"
     with log.open("wb") as output:
         result = subprocess.run(command, cwd=directory, stdout=output, stderr=subprocess.STDOUT, timeout=900)
@@ -68,7 +73,8 @@ def install(cache, platform, target):
         raise RuntimeError(f"No usable server launcher installed by {platform}/{version}")
     record = {"platform": platform, "minecraft": version, "sdk": sdk, "installer_url": url,
               "installer_sha256": checksum(installer), "installer_sha1": expected, "java": target["java"],
-              "installation": "pass", "args_files": [str(p.relative_to(directory)) for p in args_files],
+              "installation": "pass", "installer_java": installer_java,
+              "args_files": [str(p.relative_to(directory)) for p in args_files],
               "launcher_jars": [p.name for p in launch_jars]}
     record_path.write_text(json.dumps(record, indent=2) + "\n")
     return {"minecraft": version, "platform": platform, "result": "installed", "directory": str(directory)}

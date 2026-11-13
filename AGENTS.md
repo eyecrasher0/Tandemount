@@ -7,6 +7,9 @@ Independent server-side horse sharing implementation, by EyeCrasher, GPL-3.0-onl
 - Clean-room implementers receive a fresh conversation and only the behavioral
   specification. Do not retrieve predecessor project memory. Record consulted
   upstream APIs and mappings and any third-party material in `docs/PROVENANCE.md`.
+- The coordinator has already fulfilled EyeCrasher context discovery. Fresh
+  implementers must not repeat the global fallback or read EyeCrasherLab's
+  CURRENT.md; it contains excluded predecessor design descriptions.
 - Platform APIs, official game mappings, loader SDKs, and official vanilla
   runtime evidence are allowed. Never copy another horse-sharing mod's code.
 - Keep `.agents/`, credentials, local game worlds, downloaded game binaries,

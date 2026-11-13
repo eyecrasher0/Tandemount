@@ -11,5 +11,7 @@
   "source_url": "https://github.com/eyecrasher0/Tandemount",
   "issues_url": "https://github.com/eyecrasher0/Tandemount/issues",
   "requested_minecraft_versions": 38,
+  "modrinth_requested_visibility": "unlisted",
+  "modrinth_disclosures": ["ai_content_code", "ai_content_text"],
   "release_status": "development"
 }

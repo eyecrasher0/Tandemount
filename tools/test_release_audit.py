@@ -77,6 +77,16 @@ class ReleaseAuditTest(unittest.TestCase):
         self.write_jar({"changed.txt": "different build"})
         self.assert_failed("Artifact SHA256 mismatch")
 
+    def test_universal_artifact_can_declare_only_its_exact_available_pairs(self):
+        self.artifact.pop("minecraft")
+        self.artifact.pop("platforms")
+        self.artifact["targets"] = [{"minecraft": "1.7.10", "platform": "forge"}]
+        self.assertEqual(self.run_audit()["result"], "pass")
+
+    def test_duplicate_target_in_universal_artifact_is_rejected(self):
+        self.artifact["targets"] = [{"minecraft": "1.7.10", "platform": "forge"}] * 2
+        self.assert_failed("Duplicate exact target")
+
     def test_evidence_for_a_previous_build_is_rejected(self):
         self.report["artifact_sha256"] = "0" * 64
         self.save_report()
