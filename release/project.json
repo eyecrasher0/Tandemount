@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "name": "Tandemount",
+  "id": "tandemount",
+  "version": "1.0.0",
+  "author": "EyeCrasher",
+  "license": "GPL-3.0-only",
+  "repository": "eyecrasher0/Tandemount",
+  "summary": "Share a horse with a friend while the first rider stays in control.",
+  "environment": "server_only",
+  "source_url": "https://github.com/eyecrasher0/Tandemount",
+  "issues_url": "https://github.com/eyecrasher0/Tandemount/issues",
+  "requested_minecraft_versions": 38,
+  "release_status": "development"
+}

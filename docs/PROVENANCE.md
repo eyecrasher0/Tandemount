@@ -1,17 +1,20 @@
 # Implementation provenance
 
-Status: behavioral specification and upstream availability research prepared;
-independent implementation has not started. No release has been published.
+Status: independent implementation started after the owner's instruction to
+continue. No release has been published.
 
 The specification author read the predecessor's user documentation and handoff,
 which included internal design descriptions. That material is excluded from
 the implementers' input. No predecessor Java sources, patches, tests, or binary
 code have been read or incorporated into this repository.
 
-The intended clean-room separation is a behavioral specification author and
+The clean-room separation is a behavioral specification author and
 fresh implementation conversations receiving `BEHAVIOR.md`, this repository's
-instructions, and official platform specifications. Explicit authorization to
-delegate the implementation is pending.
+instructions, and official platform specifications. On 13 November 2026 the
+owner instructed the coordinator to continue after a limits interruption. Three
+implementers were started with no inherited conversation: plugin platforms,
+modern mod loaders, and legacy Forge. Their input explicitly excludes
+predecessor material. They share new implementation findings with each other.
 
 The platform resolver consults official Mojang, Fabric, MinecraftForge,
 NeoForged, PaperMC, PurpurMC, and SpigotMC metadata. Spigot `BuildData/info.json`
