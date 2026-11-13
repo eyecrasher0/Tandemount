@@ -113,7 +113,7 @@ def write_state(path, state):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, default=ROOT / ".agents/release/plan.json")
-    parser.add_argument("--manifest", type=Path, default=ROOT / "release/artifacts.json")
+    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
     parser.add_argument("--state", type=Path, default=ROOT / ".agents/release/curseforge-state.json")
     parser.add_argument("--mods-project-id", type=int, help="CurseForge Mods project created in the Authors Console")
     parser.add_argument("--plugins-project-id", type=int, help="CurseForge Bukkit Plugins project created in the Authors Console")

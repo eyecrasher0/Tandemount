@@ -41,7 +41,7 @@ def entries_for(manifest):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=ROOT / "release/artifacts.json")
+    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
     parser.add_argument("--evidence", type=Path, default=ROOT / ".agents/native")
     parser.add_argument("--output", type=Path, default=ROOT / ".agents/release/plan.json")
     parser.add_argument("--dist", type=Path, default=ROOT / "dist/1.0.0")

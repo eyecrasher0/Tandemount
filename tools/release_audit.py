@@ -201,7 +201,7 @@ def audit(root, matrix, manifest, evidence_root):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=ROOT / "release/artifacts.json")
+    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
     parser.add_argument("--evidence", type=Path, default=ROOT / ".agents/native")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()

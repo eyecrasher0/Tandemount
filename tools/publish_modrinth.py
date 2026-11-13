@@ -279,7 +279,7 @@ def hash_matches(version, entry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, default=ROOT / ".agents/release/plan.json")
-    parser.add_argument("--manifest", type=Path, default=ROOT / "release/artifacts.json")
+    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
     parser.add_argument("--state", type=Path, default=ROOT / ".agents/release/modrinth-state.json")
     parser.add_argument("--apply", action="store_true", help="Create the unlisted project and upload all audited files")
     args = parser.parse_args()

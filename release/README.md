@@ -1,8 +1,11 @@
 # Release evidence
 
-`project.json` defines the project identity. `artifacts.json` will be produced
-after the implementation has real compiled artifacts and native test evidence.
-Its absence means there is no complete release candidate yet.
+`project.json` defines the project identity. `tools/collect_release.py` produces
+the ignored `build/release/artifacts.json` from current compiled artifacts and
+native matrix records. Its absence means there is no complete release candidate
+yet. Collection refuses changed source, changed raw reports, mismatched artifact
+hashes, and missing named behavioral checks; it does not convert an overall
+fixture result into blanket compatibility.
 
 Each artifact entry identifies an exact file, SHA256, required Java version,
 Minecraft versions, platforms, and paths to native result records. A native
@@ -18,10 +21,16 @@ artifact may instead use `minecraft` and `platforms` lists.
 Run the gate before creating a publication plan:
 
 ```sh
-python3 tools/release_audit.py --manifest release/artifacts.json \
+python3 tools/collect_release.py
+python3 tools/release_audit.py --manifest build/release/artifacts.json \
   --evidence .agents/native --output .agents/release/audit.json
 ```
 
 The audit verifies the artifact and metadata contracts, evidence hashes and
 coverage. The native runners supply behavioral evidence; the audit does not
 replace those runners or a review of their tests.
+
+An unavailable cancellable dismount API is disclosed as `not-applicable`, with
+a reason, only for Forge 1.7.10 and Fabric Loader-only installations. Ordinary
+dismount still requires native evidence. No lifecycle check can use this
+exception. Actual rendered appearance remains a separate verification item.
