@@ -13,5 +13,8 @@
   "requested_minecraft_versions": 38,
   "modrinth_requested_visibility": "unlisted",
   "modrinth_disclosures": ["ai_content_code", "ai_content_text"],
+  "modrinth_disclosure_note": "AI tools generated most of the implementation code and English project text. EyeCrasher defined the requirements and reviewed the project.",
+  "modrinth_slug": "tandemount",
+  "modrinth_categories": ["game-mechanics", "transportation"],
   "release_status": "development"
 }

@@ -18,3 +18,27 @@ GitHub is intended to host the complete source and public release artifacts.
 CurseForge mods and Bukkit plugins require separate project categories. The
 documented CurseForge upload API can upload to existing projects; project
 creation in its Authors Console still needs an available browser connection.
+
+## Modrinth
+
+The Modrinth publisher consumes the hash-bound `.agents/release/plan.json` and
+uploads every exact game/platform version as a draft first. It records the
+`ai_content` disclosure for generated code and text, requests unlisted status,
+and verifies the SHA-512 reported for every uploaded JAR. It does not upload an
+icon. The official API describes [project creation](https://docs.modrinth.com/api/operations/createproject/),
+[version creation](https://docs.modrinth.com/api/operations/createversion/),
+[version updates](https://docs.modrinth.com/api/operations/modifyversion/),
+and [project updates](https://docs.modrinth.com/api/operations/modifyproject/).
+
+After the complete native audit and publication plan exist, inspect the upload
+plan without changing Modrinth:
+
+```sh
+python3 tools/publish_modrinth.py
+```
+
+With `MODRINTH_TOKEN` already present in the environment, `--apply` creates or
+resumes the project and uploads the audited files. The script refuses an
+incomplete audit, a dirty source tree, a changed source commit, a mismatched
+artifact, or a conflicting remote version. Its local resume record stays in
+ignored `.agents/release/`.
