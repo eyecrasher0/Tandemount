@@ -16,13 +16,11 @@ establish approval or public availability.
 
 GitHub is intended to host the complete source and public release artifacts.
 CurseForge mods and Bukkit plugins require separate project categories. The
-documented CurseForge upload API can upload to existing projects; project
-creation in its Authors Console still needs an available browser connection.
-Create two projects in the **Minecraft** game: one in **Mods** and one in
-**Bukkit Plugins**. Use the title **Tandemount**, author **EyeCrasher**, license
-**GPL-3.0-only**, source `https://github.com/eyecrasher0/Tandemount`, and the
-same server-only feature description as this repository. Leave the icon blank
-until the owner supplies one. CurseForge's [project-submission guide](https://support.curseforge.com/support/solutions/articles/9000197241-creating-and-submitting-a-project)
+owner supplied two existing Minecraft projects: **Tandemount**, Mods ID
+**1802613**, and **Tandemount (Plugin)**, Bukkit Plugins ID **1802617**. Both
+list EyeCrasher as author and GNU GPLv3 as license. Upload into these projects;
+do not create duplicates. No files have been uploaded by this publisher yet.
+Leave the icon blank until the owner supplies one. CurseForge's [project-submission guide](https://support.curseforge.com/support/solutions/articles/9000197241-creating-and-submitting-a-project)
 states that a logo is required for texture packs or Sims projects, not mods.
 The publisher accepts the two numeric IDs only after the release audit passes. It
 uses CurseForge's documented multipart upload route and author token, keeps a
@@ -33,8 +31,8 @@ available public download or the Authors Console after review.
 
 ```sh
 python3 tools/publish_curseforge.py
-python3 tools/publish_curseforge.py --mods-project-id MODS_ID \
-  --plugins-project-id PLUGINS_ID --apply
+python3 tools/publish_curseforge.py --mods-project-id 1802613 \
+  --plugins-project-id 1802617 --apply
 ```
 
 The second command reads `CURSEFORGE_TOKEN` from the environment. An upload
