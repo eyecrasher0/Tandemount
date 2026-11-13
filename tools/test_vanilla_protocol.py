@@ -10,10 +10,26 @@ import time
 import unittest
 import zlib
 
-from vanilla_protocol import VanillaClient, frame, load_ids, read_varint, receive, text, varint
+from vanilla_protocol import VanillaClient, accept_teleport, frame, load_ids, read_varint, receive, text, varint
 
 
 class FramingTest(unittest.TestCase):
+    def test_26_3_teleport_acknowledges_position_and_rotation(self):
+        packet = varint(42) + struct.pack(">ddddddffI", 3.0, 64.0, -4.0, 0.0, 0.0, 0.0, 90.0, 15.0, 0)
+        payload, position = accept_teleport("26.3", packet)
+        self.assertEqual(payload, varint(42) + struct.pack(">dddff", 3.0, 64.0, -4.0, 90.0, 15.0))
+        self.assertEqual(position, (3.0, 64.0, -4.0, 90.0, 15.0))
+
+    def test_26_3_relative_teleport_uses_previous_client_position(self):
+        packet = varint(99) + struct.pack(">ddddddffI", 1.0, 2.0, 3.0, 0.0, 0.0, 0.0, 5.0, 6.0, 1 | 4 | 8)
+        _, position = accept_teleport("26.3", packet, (10.0, 20.0, 30.0, 40.0, 50.0))
+        self.assertEqual(position, (11.0, 2.0, 33.0, 45.0, 6.0))
+
+    def test_earlier_modern_teleport_ack_contains_only_id(self):
+        for version in ["1.21.2", "1.21.11", "26.1", "26.2"]:
+            payload, _ = accept_teleport(version, varint(300) + b"extra packet fields")
+            self.assertEqual(payload, varint(300))
+
     def test_varints_round_trip_protocol_values(self):
         for value in [0, 1, 127, 128, 255, 340, 765, 2**31-1, 2**32-1]:
             with self.subTest(value=value):

@@ -116,6 +116,25 @@ def load_ids(path):
     return result
 
 
+def accept_teleport(version, body, previous=(0.0, 0.0, 0.0, 0.0, 0.0)):
+    parts = tuple(map(int, version.split(".")))
+    if parts < (1, 21, 2):
+        identifier, _ = read_varint(body, 33)
+        return varint(identifier), previous
+    identifier, offset = read_varint(body)
+    if parts < (26, 3):
+        return varint(identifier), previous
+    # The official 26.3 record adds the client's resulting position/rotation to
+    # teleport acknowledgements; 26.1/26.2 still contain only the VarInt id.
+    x, y, z = struct.unpack_from(">ddd", body, offset)
+    yaw, pitch = struct.unpack_from(">ff", body, offset + 48)
+    flags = struct.unpack_from(">I", body, offset + 56)[0]
+    values = [x, y, z, yaw, pitch]
+    values = [value + previous[index] if flags & (1 << index) else value
+              for index, value in enumerate(values)]
+    return varint(identifier) + struct.pack(">dddff", *values), tuple(values)
+
+
 class VanillaClient:
     def __init__(self, port, version, ids, name="TmVanillaTest", timeout=30):
         self.port, self.version, self.ids, self.name = port, version, ids, name
@@ -129,6 +148,7 @@ class VanillaClient:
         self.errors = []
         self.observed = []
         self.custom_queries_declined = 0
+        self.position = (0.0, 0.0, 0.0, 0.0, 0.0)
         self.lock = threading.Lock()
         protocol = ping(port)["version"]["protocol"]
         self.send(0, varint(protocol) + text("localhost") + struct.pack(">H", port) + varint(2))
@@ -222,9 +242,8 @@ class VanillaClient:
         elif identifier == self.packet("game", "clientbound", "player_position", "ClientboundPlayerPositionPacket", "PacketPlayOutPosition"):
             confirm = self.packet("game", "serverbound", "accept_teleportation", "ServerboundAcceptTeleportationPacket", "PacketPlayInTeleportAccept")
             if confirm is not None:
-                parts = tuple(map(int, self.version.split(".")))
-                teleport, _ = read_varint(body, 0 if parts >= (1, 21, 2) else 33)
-                self.send(confirm, varint(teleport))
+                payload, self.position = accept_teleport(self.version, body, self.position)
+                self.send(confirm, payload)
 
     def verify(self, timeout=30, remain=1):
         deadline = time.monotonic() + timeout
