@@ -162,12 +162,18 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private void prepareChunk(final World world, final int x, final int z, final Runnable prepare) throws ReflectiveOperationException {
         if (folia()) {
-            Object future = Probe.call(world, "getChunkAtAsync", x, z, true);
-            ((java.util.concurrent.CompletableFuture<?>)future).whenComplete(new java.util.function.BiConsumer<Object, Throwable>() {
-                public void accept(Object chunk, Throwable failure) {
-                    if (failure != null) { failed("prepare-chunk-async", failure); return; }
-                    try { region(world, x, z, prepare); }
-                    catch (ReflectiveOperationException problem) { failed("prepare-chunk-region", problem); }
+            Probe.call(world, "getChunkAtAsync", x, z, true, false, new java.util.function.Consumer<Object>() {
+                public void accept(Object chunk) {
+                    if (chunk == null) { failed("prepare-chunk-async", new IllegalStateException("Async fixture chunk generation failed")); return; }
+                    try {
+                        // Upstream retires its temporary CHUNK_LOAD ticket as
+                        // soon as this callback returns. Retain the fixture
+                        // chunk before handing work to its owning region.
+                        retainPreparedChunk(world, x, z);
+                        region(world, x, z, guarded("prepare-chunk-region", new Runnable() { public void run() {
+                            prepareWhenLoaded(world, x, z, 100, prepare);
+                        }}));
+                    } catch (Throwable problem) { failed("prepare-chunk-region", problem); }
                 }
             });
         } else {
@@ -176,6 +182,20 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             world.getChunkAt(x, z);
             region(world, x, z, prepare);
         }
+    }
+    private void prepareWhenLoaded(final World world, final int x, final int z, final int attempts, final Runnable prepare) {
+        if (world.isChunkLoaded(x, z)) { prepare.run(); return; }
+        if (attempts == 0) throw new IllegalStateException("Retained fixture chunk did not reach native full loaded status");
+        try {
+            Object scheduler = Probe.call(getServer(), "getRegionScheduler");
+            Probe.call(scheduler, "runDelayed", this, world, x, z, new java.util.function.Consumer<Object>() {
+                public void accept(Object task) {
+                    guarded("prepare-chunk-ready", new Runnable() { public void run() {
+                        prepareWhenLoaded(world, x, z, attempts - 1, prepare);
+                    }}).run();
+                }
+            }, 1L);
+        } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
     }
     private Location prepareLanding(World world, int x, int z) {
         if (!world.isChunkLoaded(x, z)) throw new IllegalStateException("Fixture landing chunk is not already loaded");

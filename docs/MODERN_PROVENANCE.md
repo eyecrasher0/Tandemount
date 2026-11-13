@@ -170,3 +170,36 @@ NeoForge record true cancellation booleans only after their real event-bus
 listeners observed the veto and the matching state assertion passed. Fabric
 API and third-party protection mixins are not installed or tested; the Fabric
 exception does not establish compatibility with them.
+
+## Forge cancellation API generations
+
+The Forge 26.3 fixture failure was a missing legacy event class, not evidence
+that cancellation was unavailable. The official
+[Forge 26.3-66.1.8 sources](https://maven.minecraftforge.net/net/minecraftforge/forge/26.3-66.1.8/forge-26.3-66.1.8-sources.jar)
+and userdev `Player.java.patch` show that the three-argument native interaction
+posts `PlayerInteractEvent.EntityInteractSpecific` before invoking the target
+entity. `EntityMountEvent` still vetoes native mounting and dismounting. Both
+events have their own `CancellableEventBus`; the official
+[EventBus 7.0.6 sources](https://maven.minecraftforge.net/net/minecraftforge/eventbus/7.0.6/eventbus-7.0.6-sources.jar)
+define predicate listeners that cancel by returning true and listener handles
+removed through `EventBus.removeListener`. Cancellation state is held by the
+dispatcher, so the older `setCanceled` event mutation does not apply.
+
+Exact cached userdev configurations place the transition from EventBus 6 to 7
+between Forge 1.21.5 and 1.21.6. Dedicated event and EventBus declarations were
+checked for 1.21.5 through 1.21.11 and all requested 26.x releases. Forge
+1.21.6 through 1.21.11 retain `EntityInteract` with an event-specific bus;
+26.1, 26.1.1, 26.1.2, 26.2 and 26.3 use `EntityInteractSpecific` instead. All
+inspected EventBus 7 revisions expose the same predicate-registration and
+listener-handle removal signatures. Input hashes and exact declarations are
+recorded in the ignored `.agents/modern-portability/forge-eventbus-api-inputs.json`.
+
+The fixture detects a declared event-specific `BUS`, registers a predicate
+which vetoes only the chosen player and mount direction, and removes the
+returned handle on close. Legacy Forge and NeoForge retain their global-bus
+listener path. A missing Forge `EntityInteract` selects the actual native
+`EntityInteractSpecific` replacement; missing cancellation APIs still fail the
+fixture. This repair changes only the opt-in test listener and does not add a
+runtime hook or a cancellation exemption. New builds require fresh native
+interaction, mount and dismount cancellation checks before compatibility can
+be asserted.

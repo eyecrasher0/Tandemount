@@ -46,6 +46,19 @@ class RuntimeStorageTest(unittest.TestCase):
             report = workspace.finish({"run_directory": str(workspace.directory)})
             self.assertEqual(report["runtime_storage"], "distribution-symlinks")
 
+    def test_plugin_patched_cache_is_staged_without_reusing_sdk_worlds(self):
+        (self.sdk / "cache").mkdir()
+        (self.sdk / "cache/patched.jar").write_bytes(b"Patched SDK fixture")
+        (self.sdk / "world").mkdir()
+        (self.sdk / "world/level.dat").write_bytes(b"Never copy an existing SDK world")
+        with patch.dict(os.environ, {"TANDEMOUNT_RUN_CACHE": str(self.root / "fast")}):
+            workspace = RuntimeWorkspace(self.root / "retained", "plugin-run", self.sdk, extra_names=("cache",))
+            self.assertEqual((workspace.directory / "cache/patched.jar").read_bytes(), b"Patched SDK fixture")
+            self.assertFalse((workspace.directory / "world").exists())
+            workspace.finish({"run": str(workspace.directory)})
+        self.assertTrue((self.root / "retained/plugin-run/cache").is_symlink())
+        self.assertEqual((self.sdk / "world/level.dat").read_bytes(), b"Never copy an existing SDK world")
+
 
 if __name__ == "__main__":
     unittest.main()

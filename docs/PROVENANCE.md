@@ -96,6 +96,13 @@ mapping fixes.
 
 GPL-3.0-only text: <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
+The plugin runner shares the modern vanilla protocol helper for teleport
+acknowledgements. The official 26.3 `ServerboundAcceptTeleportationPacket`
+record requires the resulting position and rotation in addition to the
+teleport ID; earlier releases acknowledge the ID alone. The runner's wire
+regression tests exercise both layouts. This is protocol-fixture behavior,
+not rendered-client verification.
+
 Implementation attestations and the final source inventory will be recorded
 here before release. Runtime behavior and real-client visuals require separate
 verification; availability metadata establishes neither.
@@ -146,6 +153,10 @@ requires the owning entity tick thread. Its published constants are
 for an actual mounted-player world transfer into an already-prepared chunk.
 Setup uses the official async chunk API and region scheduler. The unload
 sequence and its limits are described in `PLUGIN_RENDERER.md`.
+The setup retains each controlled landing chunk inside the async API's callback,
+before its temporary upstream load ticket retires, and waits for full loaded
+status on the owning region before editing the landing platform. These tickets
+belong to the disposable fixture; the Tandemount runtime never installs them.
 
 The portability snapshot compiles all plugin target packages and its disposable
 fixture against the real Paper 1.12.2 SDK with Java release 8. A separate main

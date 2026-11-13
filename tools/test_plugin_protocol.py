@@ -48,6 +48,27 @@ class PluginProtocolTest(unittest.TestCase):
         self.assertEqual(results["observer-horse-has-only-driver-on-client"], "failed")
         self.assertEqual(results["observer-passenger-seat-edge-received"], "failed")
 
+    def test_plugin_client_sends_complete_26_3_teleport_acceptance(self):
+        client = object.__new__(runtime.Client)
+        client.minecraft = "26.3"
+        client.position = (10.0, 20.0, 30.0, 40.0, 50.0)
+        sent = []
+        client.send = lambda identifier, body: sent.append((identifier, body))
+        packet = runtime.vi(42) + struct.pack(">ddddddffI", 1.0, 64.0, -4.0, 0.0, 0.0, 0.0, 5.0, 15.0, 1 | 8)
+        client.acknowledge_position(77, packet)
+        self.assertEqual(sent, [(77, runtime.vi(42) + struct.pack(">dddff", 11.0, 64.0, -4.0, 45.0, 15.0))])
+        self.assertEqual(client.position, (11.0, 64.0, -4.0, 45.0, 15.0))
+
+    def test_plugin_client_preserves_earlier_teleport_id_only_contract(self):
+        for minecraft, packet in [("1.12.2", struct.pack(">dddffB", 1.0, 64.0, -4.0, 0.0, 0.0, 0) + runtime.vi(42)),
+                                  ("1.21.11", runtime.vi(42) + b"remaining fields")]:
+            client = object.__new__(runtime.Client)
+            client.minecraft, client.position = minecraft, (0.0,) * 5
+            sent = []
+            client.send = lambda identifier, body: sent.append((identifier, body))
+            client.acknowledge_position(77, packet)
+            self.assertEqual(sent, [(77, runtime.vi(42))])
+
 
 if __name__ == "__main__":
     unittest.main()

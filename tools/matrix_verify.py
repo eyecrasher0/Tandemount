@@ -22,7 +22,7 @@ def sources(mode):
     folder = ROOT / ("mods/modern/src" if mode == "modern" else "plugin/src")
     files = [p for p in folder.rglob("*") if p.is_file()]
     names = (["modern-build.py", "modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py"]
-             if mode == "modern" else ["plugin-build.py", "plugin-runtime.py"])
+             if mode == "modern" else ["plugin-build.py", "plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
     files += [ROOT / "tools" / name for name in names]
     files += [ROOT / "platforms.json", ROOT / "LICENSE"]
     hasher = hashlib.sha256()

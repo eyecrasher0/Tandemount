@@ -20,9 +20,11 @@ import time
 import uuid
 import zlib
 
+from vanilla_protocol import accept_teleport
+from runtime_storage import RuntimeWorkspace
+
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get('TANDEMOUNT_CACHE', ROOT / '.agents/cache'))
-RUN_CACHE = Path(os.environ.get('TANDEMOUNT_RUN_CACHE', CACHE))
 LOCAL_JAVAS = json.loads((ROOT / '.agents/toolchains.json').read_text()) if (ROOT / '.agents/toolchains.json').is_file() else {}
 
 def java_for(version, override=None):
@@ -107,6 +109,7 @@ class Client:
         self.packets = []
         self.errors = []
         self.lock = threading.Lock()
+        self.position = (0.0, 0.0, 0.0, 0.0, 0.0)
         self.send(0, vi(protocol) + string('localhost') + struct.pack('>H', port) + vi(2))
         modern = minecraft.startswith('26.') or tuple(int(x) for x in minecraft.split('.')) >= (1, 20, 2)
         tail = uuid.uuid3(uuid.NAMESPACE_DNS, name).bytes if modern else b''
@@ -182,16 +185,16 @@ class Client:
                     if packet_id == position:
                         confirm = self.identifier('game', 'serverbound', 'minecraft:accept_teleportation', 'PacketPlayInTeleportAccept')
                         if confirm is not None:
-                            if self.minecraft.startswith('26.') or self.minecraft.startswith('1.21.') and int(self.minecraft.split('.')[2]) >= 2:
-                                teleport_id, _ = read_vi(body)
-                            else:
-                                teleport_id, _ = read_vi(body, 33)
-                            self.send(confirm, vi(teleport_id))
+                            self.acknowledge_position(confirm, body)
         except Exception as error:
             if self.alive:
                 self.errors.append(str(error))
         finally:
             self.alive = False
+
+    def acknowledge_position(self, confirm, body):
+        payload, self.position = accept_teleport(self.minecraft, body, self.position)
+        self.send(confirm, payload)
 
     def steer(self, horse_id, forward=True):
         packet_id = self.identifier('game', 'serverbound', 'minecraft:player_input', 'PacketPlayInSteerVehicle')
@@ -330,11 +333,10 @@ def main():
         if not args.plugin.is_file(): args.plugin = ROOT / '.agents/plugin-fixture-build/tandemount-1.0.0-plugin.jar'
     metadata = json.loads((CACHE / 'servers' / args.platform / args.minecraft / 'distribution.json').read_text())
     sdk = Path(metadata['file']).parent
-    run = RUN_CACHE / 'plugin-runs' / args.platform / args.minecraft / time.strftime('%Y%m%d-%H%M%S')
-    run.mkdir(parents=True)
-    for directory in ('cache', 'libraries', 'versions'):
-        if (sdk / directory).is_dir():
-            (run / directory).symlink_to(sdk / directory, target_is_directory=True)
+    workspace = RuntimeWorkspace(CACHE / 'plugin-runs' / args.platform / args.minecraft,
+                                 args.platform + '-' + args.minecraft + '-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6],
+                                 sdk, extra_names=('cache',))
+    run = workspace.directory
     (run / 'plugins').mkdir()
     shutil.copy2(args.plugin, run / 'plugins/Tandemount.jar')
     shutil.copy2(args.fixture, run / 'plugins/TandemountNativeFixture.jar')
@@ -345,17 +347,18 @@ def main():
         file.write('\ndebug: true\n')
     fixture_config = run / 'plugins/TandemountNativeFixture'
     (run / 'eula.txt').write_text('eula=true\n')
-    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
+    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
     (run / 'bukkit.yml').write_text('settings:\n  allow-end: false\n  connection-throttle: 0\n  shutdown-message: Tandemount disposable test complete\nspawn-limits:\n  monsters: 0\n  animals: 0\n  water-animals: 0\n  ambient: 0\n')
     java = java_for(int(metadata['java']), args.java_home)
-    command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', metadata['file'], 'nogui']
+    command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', str(run / Path(metadata['file']).name), 'nogui']
     log = (run / 'server.log').open('w')
     server = subprocess.Popen(command, cwd=run, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     lines = queue.Queue()
     def drain():
         for line in server.stdout:
             log.write(line); log.flush(); lines.put(line)
-    threading.Thread(target=drain, daemon=True).start()
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
     clients = []
     result = {'schema': 1, 'platform': args.platform, 'minecraft': args.minecraft,
               'server': metadata, 'artifact': str(args.plugin),
@@ -456,6 +459,7 @@ def main():
             if result['status'] == 'passed' and not args.no_restart:
                 for client in clients: client.close()
                 command_line('stop'); server.wait(40)
+                reader.join(timeout=2)
                 result['save_assertions'] = saved_world_checks(run, fixture_config)
                 if not all(a['status'] == 'passed' for a in result['save_assertions']):
                     raise RuntimeError('A native helper UUID was saved, or world save evidence is missing')
@@ -463,7 +467,8 @@ def main():
                 log = (run / 'restart.log').open('w')
                 server = subprocess.Popen(command, cwd=run, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
                 lines = queue.Queue()
-                threading.Thread(target=drain, daemon=True).start()
+                reader = threading.Thread(target=drain, daemon=True)
+                reader.start()
                 restart_deadline = time.monotonic() + args.timeout
                 while time.monotonic() < restart_deadline and server.poll() is None:
                     try:
@@ -497,15 +502,19 @@ def main():
                 server.terminate()
                 try: server.wait(10)
                 except subprocess.TimeoutExpired: server.kill(); server.wait()
+        reader.join(timeout=2)
+        log.close()
         result['exit_code'] = server.returncode
         result['server_log'] = str(run / 'server.log')
         if (fixture_config / 'assertions.jsonl').exists():
             result['assertions'] = [json.loads(line) for line in (fixture_config / 'assertions.jsonl').read_text().splitlines()]
-        (run / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
+        result = workspace.finish(result)
+        report_path = Path(result['run']) / 'result.json'
+        report_path.write_text(json.dumps(result, indent=2) + '\n')
         evidence = ROOT / '.agents/plugin-evidence'
         evidence.mkdir(parents=True, exist_ok=True)
         (evidence / (args.platform + '-' + args.minecraft + '.json')).write_text(json.dumps(result, indent=2) + '\n')
-        print(json.dumps({'status': result['status'], 'error': result.get('error'), 'result': str(run / 'result.json')}))
+        print(json.dumps({'status': result['status'], 'error': result.get('error'), 'result': str(report_path)}))
     raise SystemExit(0 if result['status'] == 'passed' else 1)
 
 

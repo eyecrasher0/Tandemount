@@ -6,7 +6,7 @@ import shutil
 
 
 class RuntimeWorkspace:
-    def __init__(self, retained_root, name, distribution):
+    def __init__(self, retained_root, name, distribution, extra_names=()):
         self.retained = retained_root / name
         fast = os.environ.get("TANDEMOUNT_RUN_CACHE")
         self.directory = Path(fast).expanduser().resolve() / name if fast else self.retained
@@ -17,7 +17,7 @@ class RuntimeWorkspace:
         self.directory.mkdir(parents=True, exist_ok=False)
         self.sdk_sources = []
         for source in distribution.iterdir():
-            if source.name not in {"libraries", "versions"} and not source.name.endswith(".jar"):
+            if source.name not in {"libraries", "versions", *extra_names} and not source.name.endswith(".jar"):
                 continue
             target = self.directory / source.name
             if self.fast:

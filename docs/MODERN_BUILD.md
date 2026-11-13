@@ -63,6 +63,6 @@ zero iterations; 26.3 registers the cloud with `NoopRenderer` and its
 nonwaiting zero-radius client particle loop also has zero iterations. For 26.3,
 the empty-potion branch skips status-effect application and the infinite
 duration sentinel skips natural expiry. `TandemRuntime` configures gravity and
-physics off; corresponding native fixture assertions are present but await the
-separate EULA-gated native run. These source-level renderer assertions are not
+physics off. Native fixture results record these settings for each tested
+artifact. The client-bytecode analysis and native state checks do not establish
 a human visual check. That check remains a separate release-evidence item.
