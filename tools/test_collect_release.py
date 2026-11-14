@@ -57,6 +57,33 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["result"], "fail")
         self.assertIs(report["checks"]["mount"], False)
 
+    def plugin(self):
+        return {"minecraft": "26.3", "platform": "paper", "server": {"build": "249"},
+                "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
+                "restart": "passed", "exit_code": 0,
+                "assertions": [{"assertion": name, "status": "passed"}
+                               for name in sorted({name for required in PLUGIN.values() for name in required})]}
+
+    def test_server_event_alone_cannot_prove_real_client_mounting(self):
+        raw = self.plugin()
+        raw["assertions"] = [item for item in raw["assertions"]
+                             if item["assertion"] not in {"real-client-right-click-mount-persists",
+                                                          "real-client-repeated-click-keeps-ride",
+                                                          "real-client-mounted-movement-keeps-ride"}]
+        report = normalize(raw, "plugin")
+        self.assertEqual(report["result"], "fail")
+        self.assertIn("mount", report["incomplete_checks"])
+
+    def test_numeric_settings_alone_cannot_prove_formatted_working_controls(self):
+        raw = self.plugin()
+        raw["assertions"] = [item for item in raw["assertions"]
+                             if item["assertion"] not in {"command-chat-has-color-and-style",
+                                                          "command-chat-has-clickable-adjustments",
+                                                          "command-click-adjustment-applies"}]
+        report = normalize(raw, "plugin")
+        self.assertEqual(report["result"], "fail")
+        self.assertIn("settings", report["incomplete_checks"])
+
 
 if __name__ == "__main__":
     unittest.main()

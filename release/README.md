@@ -44,6 +44,13 @@ test player data, worlds, and downloaded game binaries. The publication plan
 stages this report with the source archive and checksums so the large local SDK
 cache can be removed after uploads have been verified.
 
+Plugin mount evidence must include a real vanilla-client right-click packet,
+sustained mounting after repeated interactions, and mounted movement. Calling a
+Bukkit interaction event directly does not cover the network handler's choice
+of event. Settings evidence must also inspect the actual chat's color/style and
+click actions and execute a reported adjustment command. Numeric configuration
+assertions alone do not establish a usable settings menu.
+
 An unavailable cancellable dismount API is disclosed as `not-applicable`, with
 a reason, only for Forge 1.7.10 and Fabric Loader-only installations. Ordinary
 dismount still requires native evidence. No lifecycle check can use this
