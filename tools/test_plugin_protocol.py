@@ -73,6 +73,28 @@ class PluginProtocolTest(unittest.TestCase):
             client.acknowledge_position(77, packet)
             self.assertEqual(sent, [(77, runtime.vi(42))])
 
+    def test_protocol_5_position_response_distinguishes_feet_and_eye_y(self):
+        client = object.__new__(runtime.Client)
+        client.minecraft = '1.7.10'
+        client.ids = {'play.serverbound.PacketPlayInPositionLook': 6}
+        sent = []
+        client.send = lambda identifier, body: sent.append((identifier, body))
+        client.acknowledge_legacy_position(struct.pack('>dddff?', 8.5, 65.62000000476837, 12.5, 90.0, 15.0, False))
+        self.assertEqual(sent, [(6, struct.pack('>ddddff?', 8.5, 64.0, 65.62000000476837, 12.5, 90.0, 15.0, False))])
+        self.assertEqual(client.position, (8.5, 64.0, 12.5, 90.0, 15.0))
+
+    def test_vehicle_movement_ground_flag_starts_at_1_21_4(self):
+        for version, length in [('1.21.2', 32), ('1.21.3', 32), ('1.21.4', 33), ('26.3', 33)]:
+            client = object.__new__(runtime.Client)
+            client.minecraft = version
+            client.ids = {'game.serverbound.minecraft:move_vehicle': 32}
+            sent = []
+            client.send = lambda identifier, body: sent.append((identifier, body))
+            client.move_vehicle(8.0, 64.0, 8.0)
+            self.assertEqual(sent[0][0], 32)
+            self.assertEqual(len(sent[0][1]), length, version)
+            self.assertEqual(sent[0][1][:32], struct.pack('>dddff', 8.0, 64.0, 8.0, 0.0, 0.0))
+
     def test_saved_world_scan_covers_26_3_dimension_directories_and_rejects_helper(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)

@@ -184,7 +184,9 @@ class Client:
                     position = self.identifier('game', 'clientbound', 'minecraft:player_position', 'PacketPlayOutPosition')
                     if packet_id == position:
                         confirm = self.identifier('game', 'serverbound', 'minecraft:accept_teleportation', 'PacketPlayInTeleportAccept')
-                        if confirm is not None:
+                        if self.minecraft == '1.7.10':
+                            self.acknowledge_legacy_position(body)
+                        elif confirm is not None:
                             self.acknowledge_position(confirm, body)
         except Exception as error:
             if self.alive:
@@ -195,6 +197,17 @@ class Client:
     def acknowledge_position(self, confirm, body):
         payload, self.position = accept_teleport(self.minecraft, body, self.position)
         self.send(confirm, payload)
+
+    def acknowledge_legacy_position(self, body):
+        # Paper's protocol 5 sends eye Y; its native movement check expects
+        # feet Y plus stance Y in the client's PositionLook response.
+        x, eye_y, z, yaw, pitch = struct.unpack_from('>dddff', body)
+        feet_y = eye_y - 1.6200000047683716
+        response = self.identifier('game', 'serverbound', 'PacketPlayInPositionLook')
+        if response is None:
+            raise ValueError('Native protocol export lacks the legacy PositionLook ID')
+        self.position = (x, feet_y, z, yaw, pitch)
+        self.send(response, struct.pack('>ddddff?', x, feet_y, eye_y, z, yaw, pitch, False))
 
     def steer(self, horse_id, forward=True):
         packet_id = self.identifier('game', 'serverbound', 'minecraft:player_input', 'PacketPlayInSteerVehicle')
@@ -210,7 +223,7 @@ class Client:
         packet_id = self.identifier('game', 'serverbound', 'minecraft:move_vehicle', 'PacketPlayInVehicleMove')
         if packet_id is not None:
             body = struct.pack('>dddff', x, y, z, yaw, pitch)
-            if self.minecraft.startswith('26.') or self.minecraft.startswith('1.21.') and int(self.minecraft.split('.')[2]) >= 2:
+            if tuple(map(int, self.minecraft.split('.'))) >= (1, 21, 4):
                 body += b'\x01'
             self.send(packet_id, body)
 
