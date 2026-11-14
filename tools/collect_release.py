@@ -190,6 +190,12 @@ def load_matrix_record(directory, key, mode):
     return raw, native_path, artifact
 
 
+def legacy_fixture_digest(root):
+    paths = ("tools/legacy-native-test.py", "mods/legacy/native-test/NativeChecks.java",
+             "tools/legacy-client-test.py", "mods/legacy/client-test/ClientChecks.java")
+    return hashlib.sha256(b"".join((root / path).read_bytes() for path in paths)).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--modern", type=Path, default=ROOT / ".agents/matrix-modern")
@@ -203,8 +209,7 @@ def main():
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     matrix = json.loads((ROOT / "platforms.json").read_text())
     legacy = {r["minecraft"]: r for r in json.loads(args.legacy.read_text())["targets"]}
-    test_sha = hashlib.sha256((ROOT / "tools/legacy-native-test.py").read_bytes()
-                              + (ROOT / "mods/legacy/native-test/NativeChecks.java").read_bytes()).hexdigest()
+    test_sha = legacy_fixture_digest(ROOT)
     args.evidence.mkdir(parents=True, exist_ok=True)
     artifacts, reports, errors = {}, [], []
     output_root = ROOT / "build/release/binaries"

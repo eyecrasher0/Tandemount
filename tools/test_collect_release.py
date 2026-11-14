@@ -1,8 +1,10 @@
 """Ensure report collection cannot promote missing or failed native behavior."""
 
+from pathlib import Path
+import tempfile
 import unittest
 
-from collect_release import LEGACY, MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, normalize
+from collect_release import LEGACY, MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, legacy_fixture_digest, normalize
 
 
 class NativeCollectionTest(unittest.TestCase):
@@ -175,6 +177,28 @@ class NativeCollectionTest(unittest.TestCase):
                 old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
                 self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+
+
+class LegacyFixtureBindingTest(unittest.TestCase):
+    def test_each_native_and_original_client_input_invalidates_evidence(self):
+        paths = ("tools/legacy-native-test.py", "mods/legacy/native-test/NativeChecks.java",
+                 "tools/legacy-client-test.py", "mods/legacy/client-test/ClientChecks.java")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in paths:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(name.encode())
+            for name in paths:
+                with self.subTest(input=name):
+                    before = legacy_fixture_digest(root)
+                    (root / name).write_bytes(b"changed executable probe input")
+                    self.assertNotEqual(before, legacy_fixture_digest(root))
+
+    def test_missing_original_client_probe_cannot_use_the_old_native_digest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(FileNotFoundError):
+                legacy_fixture_digest(Path(directory))
 
 
 if __name__ == "__main__":
