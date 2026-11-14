@@ -12,15 +12,31 @@ from matrix_verify import sources
 from release_audit import ROOT, REQUIRED_CHECKS, PLUGIN_PLATFORMS, audit, digest, unavailable_check
 
 
+FINAL_SETTINGS = (
+    "command-chat-has-color-and-style", "command-chat-has-clickable-adjustments",
+    "command-click-adjustment-applies", "missing-settings-use-owner-defaults",
+    "saved-settings-remain-preserved", "fresh-config-uses-owner-defaults",
+    "reset-restores-owner-defaults",
+)
+MOD_ATTACHMENT = {
+    "mount": ("server-native-attachment-shares-horse-root",
+              "server-native-horse-keeps-first-driver-control",
+              "vanilla-client-seat-survives-native-ticks"),
+    "late-observer": ("existing-observer-received-native-attachment-shares-horse-root",
+                      "late-observer-received-native-attachment-shares-horse-root",
+                      "attachment-has-no-periodic-position-follow-packets"),
+}
+
+
 MODERN = {
     "mount": ("native-interaction-opens-second-seat", "second-rider-uses-native-vehicle"),
-    "driver-control": ("driver-control-vehicle-preserved", "horse-keeps-only-driver"),
+    "driver-control": ("driver-control-vehicle-preserved",),
     "third-rider-rejected": ("third-rider-rejected",),
     "dismount": ("rider-dismount-cleans-seat", "driver-dismount-cleans-seat"),
     "cancelled-interaction": ("consumed-interaction-not-overridden",),
     "cancelled-dismount": ("loader-native-dismount-veto-observed", "loader-cancelled-dismount-retains-ride"),
     "permissions": ("ordinary-player-admin-denied", "permission-denial-preserves-settings"),
-    "settings": ("height-adjustment-independent", "rear-adjustment-independent", "nonfinite-config-rejected", "admin-settings-saved-immediately", "admin-reload-restores-saved-settings"),
+    "settings": ("height-adjustment-independent", "rear-adjustment-independent", "nonfinite-config-rejected", "admin-settings-saved-immediately", "admin-reload-restores-saved-settings") + FINAL_SETTINGS,
     "late-observer": ("late-observer-native-pairing-includes-state", "late-observer-native-seat-passenger-edge", "late-observer-native-horse-driver-edge"),
     "multiple-rides": ("multiple-rides-own-independent-seats",),
     "disconnect": ("native-rider-disconnect-cleans-seat", "same-identity-reconnect-uses-new-session"),
@@ -41,9 +57,7 @@ PLUGIN = {
     "cancelled-dismount": ("cancelled-dismount-keeps-ride", "cancelled-driver-dismount-keeps-ride"),
     "permissions": ("non-op-admin-denied",),
     "settings": ("vertical-independent-step", "rearward-independent-step", "nonfinite-setting-rejected", "active-rider-height", "active-rider-rearward",
-                 "command-chat-has-color-and-style", "command-chat-has-clickable-adjustments", "command-click-adjustment-applies",
-                 "missing-settings-use-owner-defaults", "saved-settings-remain-preserved",
-                 "fresh-config-uses-owner-defaults", "reset-restores-owner-defaults"),
+                 ) + FINAL_SETTINGS,
     "late-observer": ("late-observer-requires-no-remount", "tmthird-passenger-seat-edge-received", "tmlate-passenger-seat-edge-received", "tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"),
     "multiple-rides": ("two-simultaneous-rides-independent", "secondary-removal-preserves-primary-ride"),
     "disconnect": ("real-disconnect-cleans-seat", "reconnected-player-can-retry"),
@@ -73,7 +87,7 @@ LEGACY = {
     "cancelled-interaction": ("cancelled-interaction-no-join",),
     "cancelled-dismount": ("cancelled-dismount-stays-mounted",),
     "permissions": ("ordinary-player-settings-permission-denied",),
-    "settings": ("vertical-independent-and-live", "rear-independent-and-live", "nonfinite-config-rejected"),
+    "settings": ("vertical-independent-and-live", "rear-independent-and-live", "nonfinite-config-rejected") + FINAL_SETTINGS,
     "late-observer": ("protocol-observers-passed",),
     "multiple-rides": ("multiple-rides-isolated",),
     "disconnect": ("native-disconnect-cleans-seat", "real-vanilla-disconnect-cleans-seat", "same-identity-reconnect-can-ride"),
@@ -83,6 +97,13 @@ LEGACY = {
     "chunk-unload": ("native-chunk-unload-cleans-without-reloading",),
     "restart-cleanup": ("native-server-stop-cleans-seat", "restart-seat-absent-from-native-world"),
 }
+
+
+def with_attachment(groups, attachment, replace=()):
+    result = dict(groups)
+    for name, required in attachment.items():
+        result[name] = required if name in replace else result[name] + required
+    return result
 
 
 def index_assertions(items, name_key="name", pass_key="passed", success=True):
@@ -103,7 +124,7 @@ def normalize(raw, family):
         good = (raw.get("native_fixture") is True and raw.get("bootstrap") == "passed"
                 and raw.get("connected_clients") is True and raw.get("restart_passed") is True
                 and raw.get("exit_code") == 0 and not raw.get("error"))
-        groups = MODERN
+        groups = with_attachment(MODERN, MOD_ATTACHMENT)
     elif family == "plugin":
         items = [item for key in ("assertions", "packet_assertions", "active_save_assertions", "save_assertions")
                  for item in raw.get(key, [])]
@@ -111,14 +132,12 @@ def normalize(raw, family):
         good = (raw.get("status") == "passed" and raw.get("kind") == "native-runtime"
                 and raw.get("restart") == "passed" and raw.get("exit_code") == 0
                 and bool(items) and all(observed.values()))
-        groups = dict(PLUGIN)
-        for name, required in PLUGIN_ATTACHMENT.items():
-            # Every requested port must prove the native attachment, including
-            # received client graphs. A world-position follower is insufficient.
-            groups[name] = required if name == "late-observer" else groups[name] + required
+        # Every requested port must prove the native attachment, including
+        # received client graphs. A world-position follower is insufficient.
+        groups = with_attachment(PLUGIN, PLUGIN_ATTACHMENT, replace=("late-observer",))
     elif family == "legacy":
         items = (raw.get("native_checks", []) + raw.get("synthetic_behavior", {}).get("checks", [])
-                 + raw.get("restart", {}).get("checks", []))
+                 + raw.get("restart", {}).get("checks", []) + raw.get("final_checks", []))
         observed = index_assertions(items)
         observers = raw.get("protocol_observers", {})
         observed["protocol-observers-passed"] = isinstance(observers, dict) and observers.get("status") == "passed"
@@ -127,7 +146,7 @@ def normalize(raw, family):
                 and raw.get("vanilla_socket_login", {}).get("status") == "passed"
                 and raw.get("synthetic_behavior", {}).get("status") == "passed"
                 and bool(items) and all(observed.values()))
-        groups = LEGACY
+        groups = with_attachment(LEGACY, MOD_ATTACHMENT)
     else:
         raise ValueError("Unknown native report family: " + family)
     checks = {name: all(observed.get(item) is True for item in required)

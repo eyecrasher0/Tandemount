@@ -2,7 +2,7 @@
 
 import unittest
 
-from collect_release import MODERN, PLUGIN, PLUGIN_ATTACHMENT, normalize
+from collect_release import LEGACY, MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, normalize
 
 
 class NativeCollectionTest(unittest.TestCase):
@@ -10,7 +10,7 @@ class NativeCollectionTest(unittest.TestCase):
         return {"minecraft": "1.21.1", "platform": "forge", "sha256": "a" * 64,
                 "server": {"sdk": "1.21.1-52.1.14"}, "native_fixture": True,
                 "bootstrap": "passed", "connected_clients": True, "restart_passed": True,
-                "exit_code": 0, "error": "", "checks": sorted({n for v in MODERN.values() for n in v}),
+                "exit_code": 0, "error": "", "checks": sorted({n for v in [*MODERN.values(), *MOD_ATTACHMENT.values()] for n in v}),
                 "restart_fixture": {"native_fixture": True}}
 
     def test_complete_report_preserves_named_evidence(self):
@@ -29,6 +29,49 @@ class NativeCollectionTest(unittest.TestCase):
         raw = self.modern()
         raw["checks"].remove("native-player-world-change-cleans-own-ride")
         self.assertIs(normalize(raw, "modern")["checks"]["world-change"], False)
+
+    def test_mod_server_pairing_does_not_prove_received_client_graph_or_lifetime(self):
+        for name in (name for required in MOD_ATTACHMENT.values() for name in required):
+            with self.subTest(assertion=name):
+                raw = self.modern()
+                raw["checks"].remove(name)
+                self.assertEqual(normalize(raw, "modern")["result"], "fail")
+
+    def test_mod_numeric_settings_do_not_prove_new_defaults_or_working_click_controls(self):
+        from collect_release import FINAL_SETTINGS
+        for name in FINAL_SETTINGS:
+            with self.subTest(assertion=name):
+                raw = self.modern()
+                raw["checks"].remove(name)
+                self.assertIn("settings", normalize(raw, "modern")["incomplete_checks"])
+
+    def legacy(self):
+        return {"minecraft": "1.12.2", "platform": "forge", "sdk": "14.23.5.2864",
+                "artifact_sha256": "c" * 64, "status": "passed", "exit_code": 0,
+                "restart": {"status": "passed"}, "vanilla_socket_login": {"status": "passed"},
+                "synthetic_behavior": {"status": "passed"}, "protocol_observers": {"status": "passed"},
+                "native_checks": [{"name": name, "passed": True}
+                                  for name in sorted({n for v in [*LEGACY.values(), *MOD_ATTACHMENT.values()] for n in v})]}
+
+    def test_legacy_protocol_login_and_follower_cannot_pass_final_attachment(self):
+        self.assertEqual(normalize(self.legacy(), "legacy")["result"], "pass")
+        for version in ("1.7.10", "1.8.9", "1.12.2"):
+            with self.subTest(minecraft=version):
+                raw = self.legacy()
+                raw["minecraft"] = version
+                missing = {name for required in MOD_ATTACHMENT.values() for name in required}
+                raw["native_checks"] = [item for item in raw["native_checks"] if item["name"] not in missing]
+                report = normalize(raw, "legacy")
+                self.assertEqual(report["result"], "fail")
+                self.assertIn("mount", report["incomplete_checks"])
+                self.assertIn("late-observer", report["incomplete_checks"])
+
+    def test_failed_final_client_probe_overrides_legacy_server_success(self):
+        raw = self.legacy()
+        raw["final_checks"] = [{"name": "vanilla-client-seat-survives-native-ticks", "passed": False}]
+        report = normalize(raw, "legacy")
+        self.assertEqual(report["result"], "fail")
+        self.assertIs(report["checks"]["mount"], False)
 
     def test_failed_process_cannot_pass_from_finished_fixture(self):
         raw = self.modern()
