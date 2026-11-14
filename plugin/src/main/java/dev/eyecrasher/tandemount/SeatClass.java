@@ -46,7 +46,7 @@ final class SeatClass extends ClassLoader {
             boolean save = args.length >= 1 && (args[0].getSimpleName().equals("NBTTagCompound")
                     || args[0].getSimpleName().equals("CompoundTag")
                     || args[0].getSimpleName().equals("ValueOutput"))
-                    && (m.getName().startsWith("save") || m.getName().equals("c") || m.getName().equals("d")
+                    && (m.getName().startsWith("save") || m.getName().equals("serializeEntity") || m.getName().equals("c") || m.getName().equals("d")
                         || m.getName().equals("e") || m.getName().equals("f"));
             boolean damage = false;
             for (Class<?> arg : args) if (arg.getSimpleName().equals("DamageSource")) damage = true;

@@ -52,6 +52,13 @@ world APIs also disable spawn retention in the disposable primary world. These
 operations belong to the fixture; Tandemount's runtime does not load or retain
 chunks.
 
+On older Folia, the public async teleport API can unmount a passenger as part of
+an accepted transfer without emitting a cancellable teleport event. On later
+Folia, that public request can be rejected while the ride remains active. The
+fixture checks the returned future and observed events before asserting the
+corresponding lifecycle result. World settings run on the global scheduler;
+block preparation and player transfers use their region or entity owners.
+
 For the unload check, all four real loopback players leave the ride's original
 chunk through native world-transfer and dismount lifecycle. The fixture then
 requests a real unload, observes `ChunkUnloadEvent` and the unloaded chunk
@@ -60,6 +67,25 @@ landing. This establishes cleanup across evacuation and actual chunk unloading;
 it does not isolate unloading a chunk that still contains an occupied ride.
 Dead native references awaiting removal are distinct from live helpers. The
 world-save scan separately rejects every recorded helper UUID in saved data.
+
+Before disabling the plugin, `tmfixture saveprobe` runs on the helper's entity
+owner. It requires the same live helper and mounted riders to remain registered
+in both the plugin ride maps and the native-seat bridge before and after the
+probe. It invokes the exact native boolean save entry points, including
+`serializeEntity` where present and the available passenger-save overloads.
+Each invocation receives a new real native NBT compound, or a real
+`TagValueOutput` created with the entity's server registry context on recent
+versions. Boolean force-save arguments are true. Every call must return false
+and leave its output empty; recent outputs also expose an empty built NBT
+result. Only then does the fixture emit
+`active-seat-refuses-native-serialization` and enter `save-probed`, allowing
+the runner to disable the plugin.
+
+This active serialization check, the final shutdown world-file scan, and the
+native restart check are separate evidence. An old active-phase file scan
+proves only the inspected snapshot when a platform rejects a manual save
+command; Folia 1.20.6 exposed that earlier runner limitation. The current probe
+does not depend on a manual save command being available.
 
 ## Evidence limits
 

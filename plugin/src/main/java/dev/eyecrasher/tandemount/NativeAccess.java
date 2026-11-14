@@ -38,24 +38,38 @@ final class NativeAccess {
         try { Class.forName(craft + ".entity.CraftArmorStand"); legacy = false; }
         catch (ClassNotFoundException noArmorStand) { legacy = true; }
         oldest = legacy;
-        Class<?> magic = Class.forName(craft + ".util.CraftMagicNumbers");
-        airBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, org.bukkit.Material.AIR);
-        Object state = null;
-        for (String name : new String[] {"defaultBlockState", "getBlockData", "n"}) try {
-            state = Reflect.call(airBlock, name);
-            if (state != null && (state.getClass().getName().contains("BlockState") || state.getClass().getName().contains("BlockData"))) break;
-            state = null;
-        } catch (NoSuchMethodException absent) { }
-        if (state == null) for (Field f : Reflect.fields(airBlock.getClass()))
-            if (!Modifier.isStatic(f.getModifiers()) && (f.getType().getSimpleName().equals("BlockState") || f.getType().getSimpleName().equals("IBlockData"))) {
-                state = Reflect.get(f, airBlock); break;
-            }
-        airState = state;
         Method getHandle = null;
         for (Method m : craftSeat.getMethods())
             if (m.getName().equals("getHandle") && m.getParameterTypes().length == 0 && !m.isBridge()) getHandle = m;
         if (getHandle == null) throw new NoSuchMethodException("Craft seat native handle");
         seatBase = getHandle.getReturnType();
+        Class<?> stateType = null;
+        for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
+            Class<?>[] p = c.getParameterTypes();
+            if (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class
+                    && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level"))) {
+                stateType = p[4]; break;
+            }
+        }
+        Class<?> magic = Class.forName(craft + ".util.CraftMagicNumbers");
+        airBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, org.bukkit.Material.AIR);
+        Object state = null;
+        if (stateType != null) {
+            Method stateGetter = null;
+            for (Method m : airBlock.getClass().getMethods())
+                if (!Modifier.isStatic(m.getModifiers()) && m.getParameterTypes().length == 0
+                        && stateType.isAssignableFrom(m.getReturnType())) {
+                    if (stateGetter != null) throw new NoSuchMethodException("Unambiguous native AIR block state getter");
+                    stateGetter = m;
+                }
+            if (stateGetter != null) state = Reflect.call(stateGetter, airBlock);
+        }
+        if (state == null && stateType != null) for (Field f : Reflect.fields(airBlock.getClass()))
+            if (!Modifier.isStatic(f.getModifiers()) && stateType.isAssignableFrom(f.getType())) {
+                state = Reflect.get(f, airBlock); break;
+            }
+        if (stateType != null && !stateType.isInstance(state)) throw new NoSuchFieldException("Native AIR block state");
+        airState = state;
         Class<?> root = seatBase;
         while (root.getSuperclass() != Object.class) root = root.getSuperclass();
         entityClass = root;
@@ -224,7 +238,8 @@ final class NativeAccess {
         if (!oldest) {
             for (Method m : horse.getWorld().getClass().getMethods()) {
                 Class<?>[] p = m.getParameterTypes();
-                if (m.getName().equals("addEntity") && p.length == 2 && p[0].isInstance(seat) && p[1] == SpawnReason.class) {
+                if ((m.getName().equals("addEntity") || m.getName().equals("addEntityToWorld"))
+                        && p.length == 2 && p[0].isInstance(seat) && p[1] == SpawnReason.class) {
                     Object result = Reflect.call(m, horse.getWorld(), seat, SpawnReason.CUSTOM);
                     added = !(result instanceof Boolean) || (Boolean)result;
                     break;

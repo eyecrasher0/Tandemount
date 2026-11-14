@@ -20,6 +20,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private Player driver, rider, third;
     private final Set<UUID> helperIds = new HashSet<UUID>();
     private boolean cancelTeleport;
+    private boolean cancelledTeleportObserved;
+    private java.util.concurrent.CompletableFuture<?> publicTeleport;
     private boolean cancelInteraction, cancelDismount;
     private int failures;
     private double riderHealth, horseHealth, beforeVertical, beforeRearward;
@@ -34,6 +36,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private volatile World unloadWorld;
     private volatile int unloadX, unloadZ;
     private volatile boolean unloadObserved, unloadContainedHelper;
+    private volatile String currentPhase;
+    private boolean saveProbePending;
 
     @Override public void onEnable() {
         tandem = (TandemountPlugin)getServer().getPluginManager().getPlugin("Tandemount");
@@ -72,7 +76,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         if (cancelDismount) event.setCancelled(true);
     }
     @EventHandler(priority = EventPriority.MONITOR) public void cancelledTeleport(PlayerTeleportEvent event) {
-        if (cancelTeleport && event.getPlayer() == rider) event.setCancelled(true);
+        if (cancelTeleport && event.getPlayer() == rider) { cancelledTeleportObserved = true; event.setCancelled(true); }
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void nativeUnloaded(org.bukkit.event.world.ChunkUnloadEvent event) {
@@ -109,6 +113,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             if (args[0].equals("prepare")) prepare();
             if (args[0].equals("start")) start();
             if (args[0].equals("late")) late();
+            if (args[0].equals("saveprobe")) saveprobe();
             if (args[0].equals("finish")) finish();
             if (args[0].equals("disconnected")) disconnected();
             if (args[0].equals("rejoined")) rejoined();
@@ -125,22 +130,28 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         Probe.call(region, "execute", this, world, x, z, work);
     }
     private void prepare() throws ReflectiveOperationException {
-        Bukkit.getWorlds().get(0).setGameRuleValue("spawnRadius", "0");
-        region(new Runnable() { public void run() {
+        final Runnable prepare = guarded("prepare-world-settings", new Runnable() { public void run() {
             try {
                 final World world = Bukkit.getWorlds().get(0);
+                world.setGameRuleValue("spawnRadius", "0");
                 world.setKeepSpawnInMemory(false);
-                for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) world.getBlockAt(x, 63, z).setType(Material.STONE);
                 world.setSpawnLocation(8, 64, 8);
-                returnWorld = world;
-                prepareChunk(world, RETURN_CHUNK, RETURN_CHUNK, guarded("prepare-return-chunk", new Runnable() { public void run() {
-                    retainPreparedChunk(world, RETURN_CHUNK, RETURN_CHUNK);
-                    prepareLanding(world, RETURN_CHUNK, RETURN_CHUNK);
-                    try { prepareOtherWorld(world); }
-                    catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
-                }}));
+                region(new Runnable() { public void run() {
+                    try {
+                        for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) world.getBlockAt(x, 63, z).setType(Material.STONE);
+                        returnWorld = world;
+                        prepareChunk(world, RETURN_CHUNK, RETURN_CHUNK, guarded("prepare-return-chunk", new Runnable() { public void run() {
+                            retainPreparedChunk(world, RETURN_CHUNK, RETURN_CHUNK);
+                            prepareLanding(world, RETURN_CHUNK, RETURN_CHUNK);
+                            try { prepareOtherWorld(world); }
+                            catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+                        }}));
+                    } catch (Throwable failure) { failed("prepare-world", failure); }
+                }});
             } catch (Throwable failure) { failed("prepare-world", failure); }
         }});
+        if (!folia()) prepare.run();
+        else Probe.call(Probe.call(getServer(), "getGlobalRegionScheduler"), "execute", this, prepare);
     }
     private void prepareOtherWorld(World primary) throws ReflectiveOperationException {
         for (final World world : Bukkit.getWorlds()) if (world != primary) {
@@ -430,7 +441,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         }
     }
     private void transport(Player player, Location at) {
-        if (folia()) invoke(player, "teleportAsync", at); else player.teleport(at);
+        cancelledTeleportObserved = false;
+        if (folia()) publicTeleport = (java.util.concurrent.CompletableFuture<?>)invoke(player, "teleportAsync", at);
+        else player.teleport(at);
     }
     private void sequence(final Runnable... steps) { sequenceAt(steps, 0); }
     private void sequenceAt(final Runnable[] steps, final int index) {
@@ -448,12 +461,22 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             new Runnable() { public void run() { require("configuration-disable-cleans-active-seat", !rider.isInsideVehicle() && countSeats() == 0); configure(getServer().getConsoleSender(), "enable"); interact(rider); } },
             new Runnable() { public void run() { require("configuration-enable-allows-retry", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); cancelTeleport = true; transport(rider, horse.getLocation().add(0.5, 0, 0.5)); } },
             new Runnable() { public void run() {
-                require(folia() ? "mounted-folia-teleport-api-preserves-ride" : "cancelled-teleport-keeps-ride", rider.isInsideVehicle() && countSeats() == 1);
+                if (!folia() || cancelledTeleportObserved)
+                    require("cancelled-teleport-keeps-ride", rider.isInsideVehicle() && countSeats() == 1);
+                else {
+                    if (publicTeleport == null || !publicTeleport.isDone() || publicTeleport.isCompletedExceptionally())
+                        throw new IllegalStateException("Mounted public Folia teleport did not complete normally");
+                    boolean accepted = Boolean.TRUE.equals(publicTeleport.getNow(null));
+                    record(accepted ? "mounted-folia-teleport-api-unmounts-and-cleans" : "mounted-folia-teleport-api-preserves-ride",
+                            accepted ? !rider.isInsideVehicle() && countSeats() == 0 : rider.isInsideVehicle() && countSeats() == 1,
+                            accepted ? "The old native Folia public async API accepted the mounted transfer using its UNMOUNT path; no cancellable teleport event was emitted."
+                                    : "The native Folia public async API rejected a mounted passenger before emitting a teleport event; the ride remains active.");
+                }
                 cancelTeleport = false;
-                // Folia's public teleportAsync rejects an entity that is a
-                // passenger before firing teleport events (native flags=3).
-                // Test an accepted public API teleport after a normal dismount.
-                if (folia()) rider.leaveVehicle();
+                // Later Folia rejects mounted public transfers; older Folia
+                // unmounts as part of transfer. Ensure the following accepted
+                // public API request starts after an ordinary dismount.
+                if (folia() && rider.isInsideVehicle()) rider.leaveVehicle();
                 transport(rider, horse.getLocation().add(0.5, 0, 0.5));
             } },
             new Runnable() { public void run() { require("passenger-teleport-cleans-seat", !rider.isInsideVehicle() && countSeats() == 0); interact(rider); } },
@@ -626,7 +649,101 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             );
         }});
     }
+    private void saveprobe() {
+        if (!"save".equals(currentPhase) || saveProbePending)
+            throw new IllegalStateException("Native serialization probe requires the active save phase exactly once");
+        Object[] rides = ((Map<?, ?>)field(tandem, "horses")).values().toArray();
+        if (rides.length != 1) throw new IllegalStateException("Native serialization probe requires exactly one tracked ride");
+        final Object ride = rides[0];
+        final Entity seat = (Entity)field(ride, "seat");
+        saveProbePending = true;
+        next(seat, guarded("active-seat-refuses-native-serialization", new Runnable() { public void run() {
+            try {
+                Object nativeSeat = Probe.handle(seat);
+                activeSaveSeat(ride, seat, nativeSeat);
+                Class<?> base = (Class<?>)field(field(tandem, "nativeAccess"), "seatBase");
+                StringBuilder checks = new StringBuilder();
+                boolean entryPoint = false;
+                for (Method method : Probe.methods(base)) {
+                    Class<?>[] parameters = method.getParameterTypes();
+                    String name = method.getName();
+                    if (method.getReturnType() != boolean.class || Modifier.isStatic(method.getModifiers())
+                            || Modifier.isPrivate(method.getModifiers()) || parameters.length == 0
+                            || !(parameters[0].getSimpleName().equals("NBTTagCompound")
+                                || parameters[0].getSimpleName().equals("CompoundTag")
+                                || parameters[0].getSimpleName().equals("ValueOutput"))
+                            || !(name.equals("save") || name.equals("saveAsPassenger") || name.equals("serializeEntity")
+                                || name.equals("c") || name.equals("d") || name.equals("e") || name.equals("f"))) continue;
+                    boolean supported = true;
+                    for (int i = 1; i < parameters.length; i++) if (parameters[i] != boolean.class) supported = false;
+                    if (!supported) continue;
+                    Object output = nativeSaveOutput(parameters[0], nativeSeat);
+                    if (!emptySaveOutput(output)) throw new IllegalStateException("Native serialization output was not initially empty");
+                    Object[] arguments = new Object[parameters.length]; arguments[0] = output;
+                    // Exercise upstream force-save flags as well as the ordinary
+                    // entry points; the helper must refuse either request.
+                    for (int i = 1; i < arguments.length; i++) arguments[i] = Boolean.TRUE;
+                    Object saved = Probe.call(method, nativeSeat, arguments);
+                    boolean empty = emptySaveOutput(output);
+                    if (!Boolean.FALSE.equals(saved) || !empty)
+                        throw new IllegalStateException(method.toGenericString() + " returned " + saved + ", empty=" + empty);
+                    if (checks.length() != 0) checks.append("; ");
+                    checks.append(method.toGenericString()).append(" -> false, empty ").append(output.getClass().getName());
+                    if (parameters.length == 1 && !name.equals("saveAsPassenger")) entryPoint = true;
+                }
+                if (!entryPoint) throw new NoSuchMethodException("Exact native boolean save/serializeEntity entry point");
+                activeSaveSeat(ride, seat, nativeSeat);
+                record("active-seat-refuses-native-serialization", true,
+                        "Live tracked helper with its passenger mounted, on its entity owner, before and after exact native calls. " + checks);
+                state("save-probed", "native-serialization-refused");
+            } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+        }}));
+    }
+    private void activeSaveSeat(Object ride, Entity seat, Object nativeSeat) throws ReflectiveOperationException {
+        Class<?> bridge = Class.forName("dev.eyecrasher.tandemount.NativeSeat", false, tandem.getClass().getClassLoader());
+        Map<?, ?> nativeRides = (Map<?, ?>)Probe.get(bridge.getDeclaredField("RIDES"), null);
+        if (!"save".equals(currentPhase) || !owns(seat) || !owns(rider) || !owns(horse) || !owns(driver)
+                || countSeats() != 1 || !seat.isValid() || seat.isDead() || !rider.isOnline() || rider.isDead()
+                || !horse.isValid() || horse.isDead() || !driver.isOnline() || driver.isDead()
+                || rider.getVehicle() != seat || driver.getVehicle() != horse || !helperIds.contains(seat.getUniqueId())
+                || field(ride, "seat") != seat || field(ride, "nativeSeat") != nativeSeat
+                || field(ride, "rider") != rider || field(ride, "driver") != driver || field(ride, "horse") != horse
+                || (Boolean)field(ride, "closed") || (Boolean)field(ride, "closing")
+                || ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId()) != ride
+                || ((Map<?, ?>)field(tandem, "riders")).get(rider.getUniqueId()) != ride || nativeRides.get(nativeSeat) != ride)
+            throw new IllegalStateException("Native save proof requires the same live, tracked, mounted helper on its entity owner");
+    }
+    private Object nativeSaveOutput(Class<?> type, Object nativeSeat) throws ReflectiveOperationException {
+        if (!type.getSimpleName().equals("ValueOutput")) return type.getConstructor().newInstance();
+        Class<?> reporter = Class.forName("net.minecraft.util.ProblemReporter", true, type.getClassLoader());
+        Class<?> output = Class.forName("net.minecraft.world.level.storage.TagValueOutput", true, type.getClassLoader());
+        Object discarding = reporter.getField("DISCARDING").get(null);
+        Object registries = Probe.call(nativeSeat, "registryAccess");
+        for (Method factory : output.getMethods()) if (factory.getName().equals("createWithContext")
+                && Modifier.isStatic(factory.getModifiers()) && type.isAssignableFrom(factory.getReturnType())
+                && Probe.compatible(factory.getParameterTypes(), new Object[] {discarding, registries}))
+            return Probe.call(factory, (Object)null, discarding, registries);
+        throw new NoSuchMethodException("Native TagValueOutput.createWithContext(ProblemReporter, HolderLookup.Provider)");
+    }
+    private boolean emptySaveOutput(Object output) throws ReflectiveOperationException {
+        try { if (!Boolean.TRUE.equals(Probe.call(output, "isEmpty"))) return false; }
+        catch (NoSuchMethodException mappedNbt) {
+            // Older obfuscated NBT has no isEmpty name. Inspect its real tag
+            // map, requiring one unambiguous native backing map.
+            int maps = 0;
+            for (Field tags : Probe.fields(output.getClass())) if (!Modifier.isStatic(tags.getModifiers())
+                    && Map.class.isAssignableFrom(tags.getType())) {
+                maps++;
+                if (!((Map<?, ?>)Probe.get(tags, output)).isEmpty()) return false;
+            }
+            if (maps != 1) throw new NoSuchFieldException("Unambiguous native NBT tag map");
+        }
+        if (output.getClass().getSimpleName().equals("TagValueOutput"))
+            return Boolean.TRUE.equals(Probe.call(Probe.call(output, "buildResult"), "isEmpty"));
+        return true;
+    }
     private void finish() {
+        if (!"save-probed".equals(currentPhase)) throw new IllegalStateException("Native serialization must be proved before disabling the plugin");
         getServer().getPluginManager().disablePlugin(tandem);
         next(rider, new Runnable() { public void run() {
             later(6, new Runnable() { public void run() {
@@ -669,6 +786,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         try {
             Writer out = new OutputStreamWriter(new FileOutputStream(new File(getDataFolder(), "phase.json")), "UTF-8");
             out.write("{\"phase\":\"" + escape(phase) + "\",\"value\":\"" + escape(value) + "\",\"failures\":" + failures + "}"); out.close();
+            currentPhase = phase;
         } catch (IOException e) { throw new RuntimeException(e); }
     }
     private static String escape(String s) { return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r"); }

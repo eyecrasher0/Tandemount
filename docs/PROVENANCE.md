@@ -219,3 +219,93 @@ constructor. The inspected 1.20.1 and 1.20.2 SDKs use the same `e` alias;
 mapping names only with the exact three-double, void, nonstatic, nonfinal
 signature required by its generated native subclass. The existing falling-block
 tick and passenger movement entry points already match the 1.19.4 SDK.
+
+A complete 1.19.4 initialization audit found that `Block.n()` returns a
+`BlockStateList`, while `Block.o()` returns the actual `IBlockData`. The
+adapter now derives the state type from the existing vanilla
+`EntityFallingBlock(World, double, double, double, IBlockData)` constructor and
+selects the zero-argument getter by that exact return type. The registry-and-world
+constructor remains upstream-owned; the five-argument vanilla constructor uses
+its existing `EntityTypes` falling-block entry. No custom registry type is
+created. The old CraftWorld custom spawn method is
+`addEntityToWorld(Entity, SpawnReason)`, which calls
+`WorldServer.addFreshEntity`; the adapter recognizes that upstream entry point
+and still verifies the final entity validity after cancellation handling.
+
+The same audit confirmed `Entity.l()` as the falling-block tick,
+`Entity.a(Entity, Entity.MoveFunction)` as passenger positioning, the mutable
+instance bounds field `aG` separately from static bounds `k`, the six-double
+`AxisAlignedBB` constructor, boolean save entry points `d/e(NBTTagCompound)`,
+and boolean damage entry points with `DamageSource`. The generated seat also
+rejects the upstream `serializeEntity(NBTTagCompound)` entry point. Existing
+native teleport and mount packet constructors both accept the native `Entity`.
+
+Folia 1.19.4 additionally requires spawn retention and spawn-location setup on
+the global scheduler. The disposable fixture uses that scheduler for world
+settings and the owning region scheduler for block work. Its old public
+`CraftEntity.teleportAsync(Location, TeleportCause)` uses native flags `5`
+(load and unmount); it can accept a mounted passenger without emitting a
+cancellable teleport event. Later Folia's public API can reject a mounted
+passenger instead. The fixture binds its assertions to the returned future and
+whether an actual cancellation event fired, separately recording accepted
+old-API cleanup and rejected-API ride preservation. It never labels a
+nonexistent event as a successful cancellation test.
+
+The repaired source was packaged in the immutable local `v11` snapshot and run
+on the exact Folia 1.19.4 build 39 and 1.20.6 build 6 distributions listed
+above. Each completed 58 native state assertions, 10 loopback packet assertions,
+and the native stop/restart helper check with process exit code zero. The
+fixture JAR SHA-256 was
+`c1fd3806dd3aa3cbf210d5533db7b1868a23e99304fb299eb8bc0afcd2298490`.
+The tested 1.19.4 plugin JAR SHA-256 was
+`e2c64db9fedada993b819b8143767423756309e3f21f6501ad71bdc97c2a1386`;
+the tested 1.20.6 plugin JAR SHA-256 was
+`bcde95da1fd0378a63449b5a9e36a9c695b3368c3df2036c9015dad076a3dac2`.
+These are native/protocol checks, without a real-client visual review.
+
+The 1.20.6 server rejected the runner's `save-all flush` command. Its existing
+active-phase file scan is therefore only a snapshot inspection, not proof that
+the manual save command executed. The final shutdown save and restart check
+did complete. This distinction must remain visible until the runner obtains
+separate evidence of an accepted active save on that platform.
+
+For the subsequent fixture-only `v12` save probe, the exact patched SDKs were
+inspected directly for native serialization signatures and output factories:
+
+| Official distribution | Patched native SDK SHA-256 |
+| --- | --- |
+| [Folia 1.20.6 build 6](https://fill-data.papermc.io/v1/objects/a30625d8824b03aae64898b001b46bdc4424b0e5caee1a370af7b444d8ec361a/folia-1.20.6-6.jar) | `9e5ba28c5dd8c67412fe818ca0be06d18b8632ac2b73cafccef24a07d4b69ca0` |
+| [Folia 26.3 build 6](https://fill-data.papermc.io/v1/objects/3d0a694905ddd9ec956af52259d555274ab8d3191871296d7094c290b686920d/folia-26.3-6.jar) | `4268a906fe28842ee8566a908c8486e656f6baf9d5947f512791c2a635cd3df6` |
+| [Paper 26.3 build 249](https://fill-data.papermc.io/v1/objects/4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a/paper-26.3-249.jar) | `dadd84d1697efa8a29bcad6c81e503efdbaaa2dac85dbd4662c8243c97f0b8a4` |
+
+Folia 1.20.6 exposes boolean `save(CompoundTag)`,
+`serializeEntity(CompoundTag)`, and both one- and two-argument
+`saveAsPassenger` entry points. The exact Paper and Folia 26.3 SDKs instead
+expose boolean `save(ValueOutput)` and `saveAsPassenger(ValueOutput)`, plus a
+passenger-save overload with three additional boolean arguments. Their
+`TagValueOutput.createWithContext(ProblemReporter, HolderLookup.Provider)`
+factory creates a real native compound using the supplied registry's
+serialization context. `TagValueOutput.isEmpty()` and `buildResult()` inspect
+that same backing compound. The fixture uses the native `ProblemReporter`
+constant and the active helper's actual `registryAccess()`; no replacement
+serialization interface, mock output, or textual proxy is used.
+
+The probe runs on the seat's entity scheduler only in the active `save` phase.
+It verifies the same live helper, mounted rider and driver, plugin ride maps,
+and native-seat registry before and after the native calls. It passes true for
+additional boolean save flags, requires every boolean entry point to refuse,
+and checks every fresh output remains empty. Its canonical
+`active-seat-refuses-native-serialization` assertion gates `save-probed` and
+plugin disable. This supplies direct active serialization evidence without
+treating the earlier rejected manual-save command or an old file snapshot as
+an accepted flush. Final shutdown world-file and native restart checks remain
+separate.
+
+The fixture and all available exact plugin targets compile against the normal
+real Paper 1.12.2 SDK. All 37 runtime plugin JAR hashes and all main-source
+hashes remain identical to `v11`; only the fixture and its documentation changed.
+The `v12` fixture JAR SHA-256 is
+`e8ba2a9feed2bc8dff37958fb61e15a7d6107a6f891fe1c6271470db658a3e4b`.
+Exact class descriptors, class hashes, and distribution metadata are retained
+in the ignored save-probe audit. Native execution reports remain distinct from
+this API inspection and compilation evidence.
