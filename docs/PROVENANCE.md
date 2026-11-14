@@ -1,7 +1,7 @@
 # Implementation provenance
 
-Status: independent implementation started after the owner's instruction to
-continue. No release has been published.
+Tandemount was implemented independently after the owner's instruction to
+continue. Publication status is recorded in [PUBLICATION.md](PUBLICATION.md).
 
 The specification author read the predecessor's user documentation and handoff,
 which included internal design descriptions. That material is excluded from
@@ -89,10 +89,10 @@ application, and its infinite-duration sentinel skips natural expiry. The
 implementation sets radius/duration adjustments to zero and disables gravity
 and physics. Class-file hashes and the complete model analysis are in the ignored
 `.agents/modern-renderer-audit.json` and `docs/MODERN_PROVENANCE.md`. This is
-source-level renderer evidence, not a human visual check. Native runtime checks
-were not run during this targeted compile-only repair; the owner has since
-confirmed EULA acceptance, and the coordinator will resume them after the
-mapping fixes.
+source-level renderer evidence, not a human visual check. The owner subsequently
+accepted the EULA for isolated tests. All 90 modern loader/game targets have
+completed artifact-bound native, vanilla-protocol login, and restart checks;
+the release verification report records their exact hashes and evidence limits.
 
 GPL-3.0-only text: <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
@@ -103,9 +103,11 @@ teleport ID; earlier releases acknowledge the ID alone. The runner's wire
 regression tests exercise both layouts. This is protocol-fixture behavior,
 not rendered-client verification.
 
-Implementation attestations and the final source inventory will be recorded
-here before release. Runtime behavior and real-client visuals require separate
-verification; availability metadata establishes neither.
+The implementation and repair attestations below identify the clean-room inputs
+and official upstream evidence. The matching complete source archive preserves
+the committed source inventory. Native behavior, renderer bytecode analysis,
+and human visual review remain separate evidence categories; availability
+metadata establishes none of them.
 
 ## Plugin native portability audit
 

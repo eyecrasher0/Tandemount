@@ -1,6 +1,6 @@
 # Legacy rider renderer audit
 
-Status: static renderer audit **passed** for 1.7.10, 1.8.9 and 1.12.2. The final legacy artifacts and their native-test fixtures compile against the exact Forge APIs. Final native behavior remains **open** pending explicit Minecraft EULA acceptance; human visual confirmation is **unverified**.
+Status: static renderer audit and artifact-bound native lifecycle, vanilla-protocol, and restart tests **passed** for 1.7.10, 1.8.9 and 1.12.2. The owner accepted the Minecraft EULA for isolated disposable tests. Human visual confirmation is **unverified**.
 
 ## Finding
 
@@ -10,7 +10,7 @@ The seat now uses vanilla `EntityFallingBlock` with the vanilla air block state.
 
 The vanilla falling-block renderer has no model to draw for air. In 1.7.10 and 1.8.9, `BlockAir#getRenderType()` returns `-1`, and `RenderFallingBlock` skips the matching world state or sends that render type through the no-model path. In 1.12.2, `BlockAir#getRenderType()` returns `EnumBlockRenderType.INVISIBLE`; `RenderFallingBlock` only continues for `MODEL`. The seat remains a built-in vanilla entity and does not add a registry entry.
 
-This is an audit of renderer bytecode and seat class inheritance. It is not human visual confirmation and does not replace the pending native lifecycle test.
+This renderer audit establishes bytecode behavior and seat class inheritance. The separate native suite establishes server behavior; neither is human visual confirmation.
 
 ## Exact client and mapping evidence
 
@@ -34,12 +34,12 @@ Forge describes [MCPConfig](https://github.com/MinecraftForge/MCPConfig) as its 
 
 ## Build and test status
 
-The final artifacts were rebuilt with OpenJDK 8u504b01 against the exact Forge APIs. The native-test runner's `--compile-only` mode compiled each fixture, including the air-placement check, without starting a server or writing EULA acceptance.
+The final artifacts were rebuilt with OpenJDK 8u504b01 against the exact Forge APIs. Each final fixture then ran in an isolated native server with ordinary vanilla-protocol clients and a separate stop/restart check. The hashes below identify the executed files.
 
-| Version | Forge API artifact SHA-256 | Tandemount artifact SHA-256 | Test fixture jar SHA-256 | Compile status |
+| Version | Forge API artifact SHA-256 | Tandemount artifact SHA-256 | Test fixture jar SHA-256 | Native status |
 |---|---|---|---|---|
-| 1.7.10 | `e9ef6b96625c96628533aee0528dd5f08a8a1b0f48ddfa188e7ba0d51f13f492` | `52f5adc7b314e5ab8ddb18f3168238362fe517765a3f15e0b969c40244fbbbcd` | `993ff9a7da05bb7d5244b3aa88c9e16c5fddbdb9c522f8c463dc0c606c28b1e5` | passed |
-| 1.8.9 | `6b392af4bdbb88fdcdfb69e1fb4c52ca46ef1ef686f624a373c6e0a470989a00` | `4a0d68a3eca436b5b8c20b2f929fe53a3f680c6f6b4487a6fe3b636c1f632bc8` | `4c641244ad574b1d4e5fc1b85eeef7402d7a5bf1c9c08bc3d73ce47e7fa9be38` | passed |
-| 1.12.2 | `ff578d670d2c720a72f8fff31ea3d6868595c7e980ecdecba3254f307ef2c2a9` | `c4c8dfe551dcd4e7076c3f07060bff4801bb7874c58152e987e8f04dc06b45d4` | `2f0cb836f3ea5976d0a33110776e30c7e44580f334334671e9ec88a93b295a76` | passed |
+| 1.7.10 | `e9ef6b96625c96628533aee0528dd5f08a8a1b0f48ddfa188e7ba0d51f13f492` | `52f5adc7b314e5ab8ddb18f3168238362fe517765a3f15e0b969c40244fbbbcd` | `6a127a63c9f7dcc26a2a96950d430b2ce0e82698d9acd801228423c6ebd1b0ea` | passed |
+| 1.8.9 | `6b392af4bdbb88fdcdfb69e1fb4c52ca46ef1ef686f624a373c6e0a470989a00` | `4a0d68a3eca436b5b8c20b2f929fe53a3f680c6f6b4487a6fe3b636c1f632bc8` | `86e38159260943672782999cfdb3729e41e1da5c2aa8a5629d973addb9a681fd` | passed |
+| 1.12.2 | `ff578d670d2c720a72f8fff31ea3d6868595c7e980ecdecba3254f307ef2c2a9` | `c4c8dfe551dcd4e7076c3f07060bff4801bb7874c58152e987e8f04dc06b45d4` | `8746b2404a37a3f64dfff9492df2ec7a7d1cc061cdb4f44cbfce0cc29b0ecf8d` | passed |
 
-Final native lifecycle and vanilla-protocol runs are **open** pending owner confirmation to accept the Minecraft EULA. The pending suite checks that repeated falling-block updates leave the world block as air, the seat stays alive and mounted, the seat rejects NBT saving, server stop removes it, and restart does not load it. One earlier isolated 1.7.10 experiment used the superseded `EntityItem` seat and failed because Forge rejects an air item stack; it is not evidence about the final falling-block strategy. Human visual confirmation remains **unverified**.
+The final suite confirms repeated falling-block updates leave the world block as air, the seat stays alive and mounted, native NBT saving is refused, server stop removes it, and restart does not load it. Existing and late vanilla-protocol observers receive the native seat, position updates, and correct mount relationships. Actual native player dimension transfers and the separate mapped-state guard probes are described in `LEGACY.md`. Forge 1.7.10 has no cancellable `EntityMountEvent`; that specific capability is disclosed rather than counted as a passing cancellation test. The release verification report identifies the exact artifacts and named checks. Human visual confirmation remains **unverified**.

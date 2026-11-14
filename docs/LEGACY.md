@@ -138,11 +138,10 @@ work with vanilla clients.
 
 The final seat uses vanilla `EntityFallingBlock` with the air block state on all
 three versions. It is nonliving, and the exact client renderer has no model to
-draw for air; the legacy renderer audit records the bytecode evidence. The
-transformer also blocks falling-block updates. Native lifecycle checks still
-need to confirm the entity never places a block, remains attached during a
-ride, and is absent after shutdown/restart. Actual vanilla-client testing is
-also needed for interpolation, late-observer pose, and natural seated
-appearance. Until those checks are complete, these requirements remain
-unverified and these targets must not be described as fully
-behavior-compatible.
+draw for air; the [legacy renderer audit](LEGACY-RENDERER.md) records the bytecode
+evidence. The transformer also blocks falling-block updates. Final artifact-bound
+native tests confirm the seat never places a block, remains attached during a
+ride, refuses saving, and is absent after shutdown/restart. Existing and late
+vanilla-protocol observers receive its native spawn, mount relationships, and
+position updates. Rendered interpolation, natural seated appearance, and
+smoothness still require human visual confirmation.

@@ -281,11 +281,10 @@ and [NeoForge 21.7.25-beta userdev SDK](https://maven.neoforged.net/releases/net
 
 These corrections affect exact build descriptors and opt-in native evidence
 fixtures. They do not change production ride behavior or exempt any required
-native check. Fresh artifact-bound native, connected-client, and restart runs
-remain necessary after applying them. A separate Forge 1.21.9 run completed
-its native and connected-client checks and saved every dimension, but exceeded
-the runner's shutdown deadline before restart testing; that operational retry
-candidate is not evidence for an implementation change.
+native check. Subsequent artifact-bound native, vanilla-protocol login, and
+restart runs completed for all 90 modern targets. The first Forge 1.21.9 run
+saved every dimension but exceeded the shutdown deadline; the separate
+investigation and exact SDK correction below resolved that failure.
 
 
 ## Exact Forge 1.21.9 shutdown compatibility (14 November 2026)
@@ -329,3 +328,18 @@ SDK bytecode listings, JFR thread creation records, controls, dependency hashes,
 and private boundary rebuilds proving byte-identical Forge 1.21.8 and 1.21.10
 artifacts. The normal corrected server, with an exercised COMMON config reload,
 exits naturally with code 0 and records COMMON watcher shutdown.
+
+## Final native matrix
+
+All 90 available modern loader/game targets passed the final native matrix on
+14 November 2026. Every final JAR was rebuilt. The narrow Forge 1.21.9 correction
+passed a new full native, vanilla-protocol login, and restart run with natural
+JVM exit. The other 89 rebuilt JARs were byte-identical to the files from their
+successful native executions. Their evidence was retained only after checking
+the independent runner fingerprint, artifact hash, and raw native-report hash.
+The matrix records this identical-rebuild reuse explicitly.
+
+The release verification report contains the exact server identities, artifact
+hashes, named behavioral checks, raw-report hashes, and narrow cancellation
+capability exceptions. Synthetic native-object/tracker probes and real socket
+logins remain distinct. No human visual review has been performed.
