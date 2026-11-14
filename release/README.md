@@ -57,6 +57,14 @@ an invisible renderer alone cannot prove client survival: vanilla removes an
 AIR falling block before its client/server side check. The client-lifetime
 probe remains distinct from human review of rendered appearance.
 
+The Paper 26.3 attachment revision requires both server and received-client
+horse-root relationships, first-rider control, a late observer's complete
+attachment graph, and absence of periodic position-follow packets for the
+attached helpers. A smooth independent follower does not establish this contract.
+Configuration checks must separately execute fresh defaults, missing-key
+fallback, reset to the owner's values, and preservation of existing saved
+settings.
+
 An unavailable cancellable dismount API is disclosed as `not-applicable`, with
 a reason, only for Forge 1.7.10 and Fabric Loader-only installations. Ordinary
 dismount still requires native evidence. No lifecycle check can use this

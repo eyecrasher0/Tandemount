@@ -41,7 +41,9 @@ PLUGIN = {
     "cancelled-dismount": ("cancelled-dismount-keeps-ride", "cancelled-driver-dismount-keeps-ride"),
     "permissions": ("non-op-admin-denied",),
     "settings": ("vertical-independent-step", "rearward-independent-step", "nonfinite-setting-rejected", "active-rider-height", "active-rider-rearward",
-                 "command-chat-has-color-and-style", "command-chat-has-clickable-adjustments", "command-click-adjustment-applies"),
+                 "command-chat-has-color-and-style", "command-chat-has-clickable-adjustments", "command-click-adjustment-applies",
+                 "missing-settings-use-owner-defaults", "saved-settings-remain-preserved",
+                 "fresh-config-uses-owner-defaults", "reset-restores-owner-defaults"),
     "late-observer": ("late-observer-requires-no-remount", "tmthird-passenger-seat-edge-received", "tmlate-passenger-seat-edge-received", "tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"),
     "multiple-rides": ("two-simultaneous-rides-independent", "secondary-removal-preserves-primary-ride"),
     "disconnect": ("real-disconnect-cleans-seat", "reconnected-player-can-retry"),
@@ -50,6 +52,15 @@ PLUGIN = {
     "teleport": ("passenger-teleport-cleans-seat", "retry-after-teleport"),
     "chunk-unload": ("native-chunk-unload-after-evacuation", "retry-after-native-chunk-unload"),
     "restart-cleanup": ("plugin-disable-cleans-seat", "native-restart-does-not-restore-helper", "active-seat-refuses-native-serialization", "native-saved-world-contains-no-helper-uuid"),
+}
+PLUGIN_26_3_ATTACHMENT = {
+    "mount": ("server-native-attachment-shares-horse-root",
+              "server-native-horse-keeps-first-driver-control",
+              "tmthird-received-native-attachment-shares-horse-root"),
+    "late-observer": ("tmthird-received-native-attachment-shares-horse-root",
+                      "tmlate-received-native-attachment-shares-horse-root",
+                      "tmthird-attachment-has-no-periodic-position-follow-packets",
+                      "tmlate-attachment-has-no-periodic-position-follow-packets"),
 }
 LEGACY = {
     "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
@@ -98,7 +109,10 @@ def normalize(raw, family):
         good = (raw.get("status") == "passed" and raw.get("kind") == "native-runtime"
                 and raw.get("restart") == "passed" and raw.get("exit_code") == 0
                 and bool(items) and all(observed.values()))
-        groups = PLUGIN
+        groups = dict(PLUGIN)
+        if raw["minecraft"] == "26.3":
+            for name, required in PLUGIN_26_3_ATTACHMENT.items():
+                groups[name] += required
     elif family == "legacy":
         items = (raw.get("native_checks", []) + raw.get("synthetic_behavior", {}).get("checks", [])
                  + raw.get("restart", {}).get("checks", []))

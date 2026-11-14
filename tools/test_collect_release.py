@@ -2,7 +2,7 @@
 
 import unittest
 
-from collect_release import MODERN, PLUGIN, normalize
+from collect_release import MODERN, PLUGIN, PLUGIN_26_3_ATTACHMENT, normalize
 
 
 class NativeCollectionTest(unittest.TestCase):
@@ -62,7 +62,7 @@ class NativeCollectionTest(unittest.TestCase):
                 "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                 "restart": "passed", "exit_code": 0,
                 "assertions": [{"assertion": name, "status": "passed"}
-                               for name in sorted({name for required in PLUGIN.values() for name in required})]}
+                               for name in sorted({name for required in [*PLUGIN.values(), *PLUGIN_26_3_ATTACHMENT.values()] for name in required})]}
 
     def test_server_event_alone_cannot_prove_real_client_mounting(self):
         raw = self.plugin()
@@ -91,6 +91,31 @@ class NativeCollectionTest(unittest.TestCase):
         report = normalize(raw, "plugin")
         self.assertEqual(report["result"], "fail")
         self.assertIn("mount", report["incomplete_checks"])
+
+    def test_independent_follower_cannot_pass_the_26_3_native_attachment_contract(self):
+        raw = self.plugin()
+        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required}
+        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
+        report = normalize(raw, "plugin")
+        self.assertEqual(report["result"], "fail")
+        self.assertIn("mount", report["incomplete_checks"])
+        self.assertIn("late-observer", report["incomplete_checks"])
+
+    def test_26_3_attachment_requirements_do_not_claim_older_platform_implementation(self):
+        raw = self.plugin()
+        raw["minecraft"] = "1.12.2"
+        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required}
+        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
+        self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+
+    def test_numeric_offsets_alone_cannot_prove_new_default_and_preservation_contract(self):
+        raw = self.plugin()
+        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in {
+            "missing-settings-use-owner-defaults", "saved-settings-remain-preserved",
+            "fresh-config-uses-owner-defaults", "reset-restores-owner-defaults"}]
+        report = normalize(raw, "plugin")
+        self.assertEqual(report["result"], "fail")
+        self.assertIn("settings", report["incomplete_checks"])
 
 
 if __name__ == "__main__":
