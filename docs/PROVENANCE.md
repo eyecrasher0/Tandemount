@@ -411,3 +411,45 @@ All 37 exact runtime packages compile against the real Paper 1.12.2 SDK with Jav
 The fixture retains its initial home only through setup, removes that ticket on its owner before creating a ride, and then proves actual evacuation and chunk unloading. Earlier failed attempts remain retained, including the early Paper 1.18 platform-neighbor physics error, one nonreproduced Spigot 1.18.2 eligibility result, and Spigot 1.21.5 setup-home unloading. Every original failed baseline report is preserved byte-for-byte with its baseline hash. No failed guard is exempted.
 
 This is targeted native and protocol evidence for the combined fix. The full 113-target plugin matrix remains a separate coordinator run, and no real-client visual confirmation is claimed.
+
+### Spigot 1.21–1.21.4 protocol-fixture audit
+
+A separate fresh clean-room conversation inspected only the independent
+Tandemount sources, specification, failed native reports, and these exact
+official Spigot BuildTools SDKs and Mojang server mappings. No predecessor or
+global project-memory material was consulted. This repair changes only the
+disposable protocol exporter; the runtime plugin sources and JAR bytes remain
+unchanged.
+
+| Spigot target / BuildTools revision | Native SDK SHA-256 | Official Mojang server mappings |
+| --- | --- | --- |
+| 1.21 / `4219` | `57146c6dcbb74fe9d33860c00feea2345d1ba22e7be93e718d476eddc3d72df1` | [1.21 mappings](https://piston-data.mojang.com/v1/objects/31c77994d96f05ba25a870ada70f47f315330437/server.txt) |
+| 1.21.1 / `4344` | `05423d6841f8ce4de271dcd7a2ec930dfbebdf162651b380eb1752837e26fa30` | [1.21.1 mappings](https://piston-data.mojang.com/v1/objects/03f8985492bda0afc0898465341eb0acef35f570/server.txt) |
+| 1.21.2 / `4347` | `83043639e0ae6a64330c18ba0ede4895b14437157ea36bdf3303bc4edaf393c9` | [1.21.2 mappings](https://piston-data.mojang.com/v1/objects/ce1d4ab050af87c41fc3d51050ef6862385da784/server.txt) |
+| 1.21.3 / `4398` | `83e479f5693198c335368b77c34850079942f16d1c8064664e965f63966c2f5e` | [1.21.3 mappings](https://piston-data.mojang.com/v1/objects/c70e10f72ea65bb97e156143fd97c852dc958325/server.txt) |
+| 1.21.4 / `4458` | `1af9f1e120421efad091f782f96f61bbadf5061e81274fa738996ca7b22ad6c4` | [1.21.4 mappings](https://piston-data.mojang.com/v1/objects/0b1e60cc509cfb0172573ae56b436c29febbc187/server.txt) |
+
+The native SDK is the nested `META-INF/versions/spigot-<version>-R0.1-SNAPSHOT.jar`
+from each hash-verified official BuildTools distribution. The ignored isolated
+`.agents/spigot-protocol-fix/.agents/sdk/audit.json` retains distribution hashes,
+all pinned upstream revisions, class hashes, `javap -p -c` listings, and mapping
+hashes verified against the official URLs in `BuildData/info.json`.
+
+In all five SDKs, `ProtocolInfo.Unbound.listPackets(PacketVisitor)` is exposed
+as `ProtocolInfo$a.a(ProtocolInfo$a$a)`. Its anonymous
+`ProtocolInfoBuilder$1` implementation visits the native codec-entry list and
+passes each entry's actual `PacketType` and list index to `accept(PacketType,
+int)`. The zero-argument `a()` returns the connection protocol ID; it does not
+return separate packet details. The fixture now locates the native visitor on
+the unbound template before trying the newer separate-details API. Packet
+resource identifiers still come from the verified `PacketType.b()` accessor,
+and no packet IDs or registry entries are synthesized.
+
+All five exact isolated servers then passed 59 native assertions and 10 real
+loopback packet assertions each, direct live-seat serialization refusal, the
+final saved-world helper UUID scan, and native stop/restart, with exit code zero.
+Their fixture JAR SHA-256 is
+`d19a668f44197d3e525edd3b1e18a0b63f31edf3302f5be072886fbf698247f2`.
+The ignored isolated `final-validation.json` binds the unchanged runtime JARs,
+fixture source, SDKs, exported packet registries, and complete native reports
+to exact hashes. These are native/protocol checks without human visual review.

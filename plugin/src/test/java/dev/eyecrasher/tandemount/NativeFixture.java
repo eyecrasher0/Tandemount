@@ -864,10 +864,14 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     final String prefix = stage + "." + flow.toLowerCase(Locale.ROOT) + ".";
                     Object unbound = protocolTemplate(protocols, flow);
                     try {
-                        Object details;
-                        try { details = Probe.call(unbound, "details"); }
-                        catch (NoSuchMethodException spigot) { details = Probe.call(unbound, "a"); }
-                        Method visit = protocolVisitor(details.getClass());
+                        Object details = unbound;
+                        Method visit;
+                        try { visit = protocolVisitor(details.getClass()); }
+                        catch (NoSuchMethodException separateDetails) {
+                            try { details = Probe.call(unbound, "details"); }
+                            catch (NoSuchMethodException spigot) { details = Probe.call(unbound, "a"); }
+                            visit = protocolVisitor(details.getClass());
+                        }
                         Class<?> visitorType = visit.getParameterTypes()[0];
                         Object visitor = Proxy.newProxyInstance(visitorType.getClassLoader(), new Class<?>[] {visitorType}, new InvocationHandler() {
                             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
