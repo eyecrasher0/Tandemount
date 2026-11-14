@@ -33,6 +33,42 @@ def sources(mode):
     return hasher.hexdigest()
 
 
+def runner_sources(mode):
+    names = (["modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py", "cache_servers.py"]
+             if mode == "modern" else ["plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
+    hasher = hashlib.sha256()
+    for path in sorted([ROOT / "tools" / name for name in names] + [ROOT / "platforms.json"]):
+        hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return hasher.hexdigest()
+
+
+def matching_native(previous, artifact, native_path, fixture=None):
+    if (previous.get("result") != "pass" or not artifact.is_file() or not native_path.is_file()
+            or previous.get("artifact_sha256") != sha(artifact)
+            or previous.get("native_report_sha256") != sha(native_path)):
+        return False
+    native = json.loads(native_path.read_text())
+    if native.get("artifact_sha256", native.get("sha256")) != previous["artifact_sha256"]:
+        return False
+    if fixture is not None and (not fixture.is_file() or native.get("fixture_sha256") != sha(fixture)):
+        return False
+    return True
+
+
+def rebuilt_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None):
+    """Reuse execution only after a rebuild produced the same exact bytes.
+
+    A build-only compatibility fix for another target can change source inputs
+    while leaving this target's JAR unchanged. The real native report, runner
+    inputs, and any separate fixture must all still match independently.
+    """
+    if previous.get("runner_fingerprint") != runner_fingerprint or not matching_native(previous, artifact, native_path, fixture):
+        return None
+    return {**previous, "source_fingerprint": fingerprint,
+            "previous_source_fingerprint": previous["source_fingerprint"],
+            "cached": True, "native_reused_after_identical_rebuild": True}
+
+
 def run_process(command, log, env, timeout):
     with log.open("wb") as output:
         try:
@@ -87,6 +123,7 @@ def main():
 
     def one(item, slot):
         target_fingerprint = sources(args.mode)
+        runner_fingerprint = runner_sources(args.mode)
         version, platform = item
         key = platform + "-" + version
         record_path = output / (key + ".json")
@@ -96,14 +133,17 @@ def main():
         else:
             artifact = ROOT / ".agents/plugin-build" / f"tandemount-1.0.0-{version}-plugin.jar"
             native_path = ROOT / ".agents/plugin-evidence" / (key + ".json")
+        fixture = ROOT / ".agents/plugin-build/tandemount-1.0.0-fixture.jar" if args.mode == "plugins" else None
+        previous = None
         if args.resume and record_path.is_file() and artifact.is_file():
             previous = json.loads(record_path.read_text())
             if (previous.get("result") == "pass" and previous.get("source_fingerprint") == target_fingerprint
-                    and previous.get("artifact_sha256") == sha(artifact)
-                    and native_path.is_file()
-                    and previous.get("native_report_sha256") == sha(native_path)):
-                return {**previous, "cached": True}
+                    and matching_native(previous, artifact, native_path, fixture)):
+                cached = {**previous, "cached": True, "runner_fingerprint": runner_fingerprint}
+                record_path.write_text(json.dumps(cached, indent=2) + "\n")
+                return cached
         result = {"minecraft": version, "platform": platform, "source_fingerprint": target_fingerprint,
+                  "runner_fingerprint": runner_fingerprint,
                   "artifact": str(artifact.relative_to(ROOT)), "result": "fail"}
         if args.mode == "modern":
             code = run_process([sys.executable, "tools/modern-build.py", "--minecraft", version, "--platform", platform],
@@ -112,6 +152,11 @@ def main():
                 result["build_exit_code"] = code
                 record_path.write_text(json.dumps(result, indent=2) + "\n")
                 return result
+        if previous and sources(args.mode) == target_fingerprint:
+            cached = rebuilt_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
+            if cached is not None:
+                record_path.write_text(json.dumps(cached, indent=2) + "\n")
+                return cached
         result["artifact_sha256"] = sha(artifact)
         if args.mode == "modern":
             command = [sys.executable, "tools/modern-native.py", "--minecraft", version, "--platform", platform,

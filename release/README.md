@@ -30,6 +30,13 @@ The audit verifies the artifact and metadata contracts, evidence hashes and
 coverage. The native runners supply behavioral evidence; the audit does not
 replace those runners or a review of their tests.
 
+If a target-specific build change leaves another target's rebuilt JAR byte for
+byte identical, the matrix may retain that exact artifact's earlier native
+execution. This requires an independently matching runner fingerprint, unchanged
+raw-report hash, and identical separate fixture when present. The matrix records
+the previous source fingerprint and the identical-rebuild reuse explicitly.
+A changed JAR, runner, fixture, or report requires new native execution.
+
 The collector also emits `verification.json`, a portable public report with
 exact artifact hashes, native check names and outcomes, server identities,
 capability exceptions, and raw-report hashes. It excludes workstation paths,
