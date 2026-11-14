@@ -60,6 +60,9 @@ final class SeatClass extends ClassLoader {
         Class<?> tickOwner = base;
         // The exact 26.3 native block display inherits its tick from Display.
         if (base.getName().equals("net.minecraft.world.entity.Display$BlockDisplay")) tickOwner = base.getSuperclass();
+        if (base.getName().equals("net.minecraft.world.entity.animal.equine.Llama")) try {
+            tickOwner = base.getMethod("tick").getDeclaringClass();
+        } catch (NoSuchMethodException absent) { throw new IOException("Audited native llama tick unavailable", absent); }
         for (String name : new String[] {"tick", "B_", "l", "h", "k", "g"}) {
             // The falling-block class itself declares the tick in every audited
             // SDK. Do not mistake an unrelated inherited alias for that tick.

@@ -1,10 +1,38 @@
 # Plugin seat and passenger rendering
 
-The helper seat is a native vanilla nonliving entity. Exact 26.3 uses a block
-display with the BARRIER state; older adapters use a falling block. A passenger is
-mounted on this seat while the driver remains mounted on the horse. The client
-receives the native seat entity and its mount edge; no custom client entity is
-created.
+The helper seat is a native vanilla nonliving entity. Exact 26.3 uses a BARRIER
+block display in the same native vehicle graph on the server and vanilla client,
+with the ordinary horse as its shared root:
+
+```text
+horse ─ first player (ordinary driver)
+      └ zero-width Interaction anchor
+        └ invisible NoAI llama for rear offset
+          └ invisible NoAI opposing llama for the zero-offset baseline
+            └ zero-width Interaction lift
+              └ BARRIER block display ─ second player
+```
+
+The helper count is fixed at five. Original native mount methods position every
+edge. This path does not hide an edge or broadcast recurring absolute world
+positions for a follower. The first player remains the horse's controlling
+passenger. The second player's direct vehicle remains nonliving.
+
+Vanilla horse attachments alone place the player's feet about 0.84375 blocks
+above the horse with no rear offset. Real synchronized llama scale attributes
+provide rear distance, with two opposing carriers supporting the entire 0–2
+range. The lift's signed synchronized height supplies the independent vertical
+setting. Both scales remain inside the native attribute bounds.
+
+An invisible living carrier still has a client pick box. The anchor places
+both carriers 64 blocks below the horse, and the lift restores the display
+beside the player. This keeps ordinary interaction rays away from their boxes.
+The final display is separate from the lift because vanilla dismount searches
+near the direct vehicle's origin. Neither Interaction spacer has width. All
+helpers have no gravity, empty server bounds and refused native save entry
+points. The carrier server ticks run only the ride validator; AI, collision,
+sound and persistence are disabled. No entity type is created or registered.
+Older adapters use a native falling block and retain their separate evidence.
 
 For exact 26.3, the seat carries the vanilla BARRIER block state. AIR is not a
 safe invisible state: the unchanged vanilla client removes an AIR falling block
@@ -15,22 +43,13 @@ BARRIER remains non-AIR and its render shape is `INVISIBLE`. Its official
 block-display model contains only a particle texture, with no elements or
 parent geometry. The existing no-gravity metadata is retained.
 
-The 26.3 client falling block inherits the base entity's no-op interpolation
-handler. Position packets therefore move it immediately, while an observed
-horse follows its native stepped interpolation. The 26.3 helper now uses the
-already registered vanilla `minecraft:block_display` type with its original
-linear position interpolation and a three-tick teleport duration. Only the
-server subclass has a custom tick; client entities and their movement methods
-are unchanged. Position interpolation and visual transformation interpolation
-are separate native display settings; this repair changes the former.
-
-The local-passenger path also matters. The original 26.3 packet handler calls
-`positionRider(localPlayer)` and resets the player's old position when the
-vehicle is not interpolating. The falling-block helper enters this immediate
-snap branch. The interpolating display skips it, leaving native passenger ticks
-and the original partial-tick eye-position interpolation to advance the rider.
-The display has no controlling passenger, so mounting it does not make its
-motion locally authoritative.
+The earlier 26.3 follower repair used three-tick display interpolation to avoid
+the falling block's no-op interpolation and the local-passenger packet snap
+branch. The current graph instead advances attached passengers through native
+`commonTick` and `rideTick` calls from the horse root. It sets no independent
+display interpolation delay. Client entities and their movement methods are
+unchanged. The display has no controlling passenger, so the second player does
+not gain horse control.
 
 This correction currently selects only the exact 26.3 game and its upstream
 `26.3.build.*` Bukkit API labels. Other exact targets require their own client
@@ -164,14 +183,14 @@ packets through loopback clients, including repeated main/off-hand clicks. It
 observes an ordinary non-operator passenger across ticks and movement, checks a
 cancelled packet interaction, and decodes the observer's actual seat spawn with
 the native packet codec. Its observed native block-display metadata must match
-the helper's BARRIER state, no-gravity flag, and three-tick interpolation duration.
+the helper's BARRIER state, no-gravity flag, and attached zero-delay metadata.
 The command check decodes the actual clientbound chat component, requires color
 and style plus all four adjustment click actions, then submits an observed click
 command through the client's command packet and verifies independent settings.
 These checks are separate from executing a vanilla client entity tick and from
 human visual review.
 
-For the 26.3 movement repair, an actual curved ordinary-driver capture includes
+For the earlier 26.3 follower repair, an actual curved ordinary-driver capture includes
 native player-look, steering and vehicle-movement packets. Replaying 467
 received observer frames through original vanilla packet codecs and native
 entity movement, common-tick and tick methods measured at most 0.02917 blocks

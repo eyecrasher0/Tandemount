@@ -274,6 +274,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("three-real-loopback-players", driver != null && rider != null && third != null);
                 if (driver == null || rider == null || third == null) { state("failed", "players"); return; }
                 require("players-owned-by-region", owns(driver) && owns(rider) && owns(third));
+                verifyDefaults();
                 // The real connected players now retain this chunk normally.
                 // Drop the setup ticket before any ride or lifecycle check so
                 // native evacuation and the actual unload stay observable.
@@ -328,6 +329,22 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private boolean mount(Entity vehicle, Entity passenger) { return (Boolean)invoke(field(tandem, "nativeAccess"), "mount", vehicle, passenger); }
     private Snapshot settings() { return new Snapshot(field(tandem, "settings")); }
+    private void verifyDefaults() throws ReflectiveOperationException {
+        Class<?> type = Class.forName("dev.eyecrasher.tandemount.Settings", true, tandem.getClass().getClassLoader());
+        Method read = type.getDeclaredMethod("read", org.bukkit.configuration.file.FileConfiguration.class);
+        org.bukkit.configuration.file.YamlConfiguration missing = new org.bukkit.configuration.file.YamlConfiguration();
+        missing.set("supported-horse-types", Collections.singletonList("HORSE"));
+        Snapshot fallback = new Snapshot(Probe.call(read, (Object)null, missing));
+        require("missing-settings-use-owner-defaults", fallback.vertical == 0.8125 && fallback.rearward == 0.5);
+        missing.set("vertical", 1.375); missing.set("rearward", 0.6875);
+        Snapshot saved = new Snapshot(Probe.call(read, (Object)null, missing));
+        require("saved-settings-remain-preserved", saved.vertical == 1.375 && saved.rearward == 0.6875);
+        require("fresh-config-uses-owner-defaults", settings().vertical == 0.8125 && settings().rearward == 0.5);
+        configure(getServer().getConsoleSender(), "vertical 1.5");
+        configure(getServer().getConsoleSender(), "rearward 1.0");
+        configure(getServer().getConsoleSender(), "reset");
+        require("reset-restores-owner-defaults", settings().vertical == 0.8125 && settings().rearward == 0.5);
+    }
     private void configure(CommandSender sender, String text) {
         tandem.onCommand(sender, tandem.getCommand("tandemount"), "tandemount", text.split(" "));
     }
@@ -367,10 +384,28 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     rider.getVehicle().getType().name().equals(display ? "BLOCK_DISPLAY" : "FALLING_BLOCK")
                     && !(rider.getVehicle() instanceof LivingEntity));
             if (display) {
-                Object state = Probe.call(nativeSeat, "getBlockState");
-                require("seat-block-remains-native-invisible", Probe.call(state, "getRenderShape").toString().equals("INVISIBLE"));
                 require("seat-gravity-remains-disabled", (Boolean)Probe.call(nativeSeat, "isNoGravity"));
-                require("seat-native-position-interpolation-enabled", ((Number)Probe.call(rider.getVehicle(), "getTeleportDuration")).intValue() == 3);
+                require("seat-block-remains-native-invisible", Probe.call(Probe.call(nativeSeat, "getBlockState"), "getRenderShape").toString().equals("INVISIBLE"));
+                require("attachment-spacer-native-width-is-zero", ((Number)Probe.call(rider.getVehicle().getVehicle(), "getInteractionWidth")).floatValue() == 0);
+                Object tracked = ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId());
+                Entity[] helpers = (Entity[])field(tracked, "helpers");
+                boolean protectedHelpers = helpers.length == 5;
+                for (Entity helper : helpers) {
+                    Object handle = Probe.handle(helper), box = Probe.call(handle, "getBoundingBox");
+                    protectedHelpers &= (Boolean)Probe.call(handle, "isNoGravity")
+                            && ((Number)Probe.call(box, "getXsize")).doubleValue() == 0
+                            && ((Number)Probe.call(box, "getYsize")).doubleValue() == 0
+                            && ((Number)Probe.call(box, "getZsize")).doubleValue() == 0;
+                    if (helper.getType().name().equals("LLAMA"))
+                        protectedHelpers &= (Boolean)Probe.call(handle, "isInvisible") && (Boolean)Probe.call(handle, "isNoAi")
+                                && helper.getLocation().getY() < horse.getLocation().getY() - 40;
+                    if (helper.getType().name().equals("INTERACTION"))
+                        protectedHelpers &= ((Number)Probe.call(helper, "getInteractionWidth")).floatValue() == 0;
+                }
+                require("native-attachment-helpers-bounded-invisible-no-ai-and-empty-bounds", protectedHelpers);
+                require("server-native-attachment-shares-horse-root", Probe.call(nativeSeat, "getRootVehicle") == Probe.handle(horse)
+                        && Probe.call(Probe.handle(rider), "getRootVehicle") == Probe.handle(horse));
+                require("server-native-horse-keeps-first-driver-control", Probe.call(Probe.handle(horse), "getControllingPassenger") == Probe.handle(driver));
             }
             interact(third);
             later(3, new Runnable() { public void run() {
@@ -438,7 +473,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private void trackSeat() {
         if (rider.getVehicle() == null) return;
-        helperIds.add(rider.getVehicle().getUniqueId());
+        for (Entity playerSeat : new Entity[] {rider.getVehicle(), Bukkit.getPlayerExact("TmLate") == null ? null : Bukkit.getPlayerExact("TmLate").getVehicle()})
+            for (Entity helper = playerSeat; helper != null && helper != horse && !(helper instanceof Player) && !(helper instanceof Horse); helper = helper.getVehicle())
+                helperIds.add(helper.getUniqueId());
         try {
             Writer out = new OutputStreamWriter(new FileOutputStream(new File(getDataFolder(), "seat-uuids.txt")), "UTF-8");
             for (UUID id : helperIds) out.write(id.toString() + "\n"); out.close();
@@ -449,6 +486,14 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             graph.setProperty("seat", Integer.toString(rider.getVehicle().getEntityId()));
             graph.setProperty("seat_falling_block", rider.getVehicle().getType() == EntityType.FALLING_BLOCK ? "1" : "0");
             graph.setProperty("seat_block_display", rider.getVehicle().getType().name().equals("BLOCK_DISPLAY") ? "1" : "0");
+            graph.setProperty("seat_interaction", rider.getVehicle().getType().name().equals("INTERACTION") ? "1" : "0");
+            if ((Boolean)field(field(tandem, "nativeAccess"), "interpolatedSeat")) {
+                Entity lift = rider.getVehicle().getVehicle(), forward = lift.getVehicle(), rear = forward.getVehicle();
+                graph.setProperty("anchor", Integer.toString(rear.getVehicle().getEntityId()));
+                graph.setProperty("lift", Integer.toString(lift.getEntityId()));
+                graph.setProperty("rear_carrier", Integer.toString(rear.getEntityId()));
+                graph.setProperty("forward_carrier", Integer.toString(forward.getEntityId()));
+            }
             graph.setProperty("seat_nonliving", rider.getVehicle() instanceof LivingEntity ? "0" : "1");
             File initial = new File(getDataFolder(), "initial-graph.properties");
             if (!initial.exists()) { Writer writer = new FileWriter(initial); graph.store(writer, "Native IDs for loopback packet graph assertions"); writer.close(); }
@@ -709,8 +754,11 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             try {
                 Object nativeSeat = Probe.handle(seat);
                 activeSaveSeat(ride, seat, nativeSeat);
-                Class<?> base = (Class<?>)field(field(tandem, "nativeAccess"), "seatBase");
                 StringBuilder checks = new StringBuilder();
+                for (Entity helper : (Entity[])field(ride, "helpers")) {
+                Object nativeHelper = Probe.handle(helper);
+                Class<?> base = nativeHelper.getClass().getSuperclass();
+                if (!helper.isValid() || !helperIds.contains(helper.getUniqueId())) throw new IllegalStateException("Untracked native attachment save probe");
                 boolean entryPoint = false;
                 for (Method method : Probe.methods(base)) {
                     Class<?>[] parameters = method.getParameterTypes();
@@ -726,13 +774,13 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     boolean supported = true;
                     for (int i = 1; i < parameters.length; i++) if (parameters[i] != boolean.class) supported = false;
                     if (!supported) continue;
-                    Object output = nativeSaveOutput(parameters[0], nativeSeat);
+                    Object output = nativeSaveOutput(parameters[0], nativeHelper);
                     if (!emptySaveOutput(output)) throw new IllegalStateException("Native serialization output was not initially empty");
                     Object[] arguments = new Object[parameters.length]; arguments[0] = output;
                     // Exercise upstream force-save flags as well as the ordinary
                     // entry points; the helper must refuse either request.
                     for (int i = 1; i < arguments.length; i++) arguments[i] = Boolean.TRUE;
-                    Object saved = Probe.call(method, nativeSeat, arguments);
+                    Object saved = Probe.call(method, nativeHelper, arguments);
                     boolean empty = emptySaveOutput(output);
                     if (!Boolean.FALSE.equals(saved) || !empty)
                         throw new IllegalStateException(method.toGenericString() + " returned " + saved + ", empty=" + empty);
@@ -741,6 +789,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     if (parameters.length == 1 && !name.equals("saveAsPassenger")) entryPoint = true;
                 }
                 if (!entryPoint) throw new NoSuchMethodException("Exact native boolean save/serializeEntity entry point");
+                }
                 activeSaveSeat(ride, seat, nativeSeat);
                 record("active-seat-refuses-native-serialization", true,
                         "Live tracked helper with its passenger mounted, on its entity owner, before and after exact native calls. " + checks);

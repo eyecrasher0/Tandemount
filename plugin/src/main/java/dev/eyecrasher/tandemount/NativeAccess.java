@@ -14,6 +14,7 @@ import java.util.*;
 final class NativeAccess {
     final boolean oldest;
     final boolean interpolatedSeat;
+    final NativeAttachment attachment;
     final Class<?> entityClass, seatBase;
     final Constructor<?> seatConstructor;
     private final Constructor<?> vehicleWrapper;
@@ -201,6 +202,7 @@ final class NativeAccess {
         if (factory == null && constructor == null) throw new NoSuchMethodException("Native seat position synchronization packet");
         positionPacketFactory = factory;
         positionPacketConstructor = constructor;
+        attachment = interpolatedSeat ? new NativeAttachment(this) : null;
     }
 
     Entity createSeat(Horse horse) throws ReflectiveOperationException {
@@ -227,7 +229,7 @@ final class NativeAccess {
             bukkit.remove();
             throw new IllegalStateException("The shared seat must be the audited nonliving vanilla type");
         }
-        if (interpolatedSeat) Reflect.call(bukkit, "setTeleportDuration", 3);
+        if (interpolatedSeat) Reflect.call(bukkit, "setTeleportDuration", 0);
         Reflect.optional(bukkit, "setPersistent", false);
         Reflect.optional(bukkit, "setInvulnerable", true);
         Reflect.optional(bukkit, "setSilent", true);
@@ -376,7 +378,7 @@ final class NativeAccess {
         for (Entity rider : passengers) positionRider(nativeSeat, Reflect.handle(rider));
     }
 
-    private void positionRider(Object seat, Object rider) throws ReflectiveOperationException {
+    void positionRider(Object seat, Object rider) throws ReflectiveOperationException {
         if (oldest) {
             // Entity.ac(): vanilla 1.7 passenger position update.
             Method m = entityClass.getMethod("ac"); Reflect.call(m, seat); return;

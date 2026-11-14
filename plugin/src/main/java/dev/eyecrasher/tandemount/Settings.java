@@ -6,8 +6,8 @@ import java.util.List;
 
 final class Settings {
     static final double STEP = 1.0 / 16.0;
-    static final double DEFAULT_VERTICAL = 1.375;
-    static final double DEFAULT_REARWARD = 0.6875;
+    static final double DEFAULT_VERTICAL = 0.8125;
+    static final double DEFAULT_REARWARD = 0.5;
     final boolean enabled, debug;
     final double vertical, rearward;
 
@@ -22,12 +22,13 @@ final class Settings {
         List<String> types = config.getStringList("supported-horse-types");
         if (types.isEmpty() || types.size() != 1 || !"HORSE".equals(types.get(0)))
             throw new IllegalArgumentException("supported-horse-types must contain only HORSE");
-        return new Settings(config.getBoolean("enabled", true), number(config, "vertical"),
-                number(config, "rearward"), config.getBoolean("debug", false));
+        return new Settings(config.getBoolean("enabled", true), number(config, "vertical", DEFAULT_VERTICAL),
+                number(config, "rearward", DEFAULT_REARWARD), config.getBoolean("debug", false));
     }
 
-    private static double number(FileConfiguration config, String name) {
+    private static double number(FileConfiguration config, String name, double fallback) {
         Object value = config.get(name);
+        if (value == null) return fallback;
         if (!(value instanceof Number)) throw new IllegalArgumentException(name + " must be a number");
         return ((Number) value).doubleValue();
     }

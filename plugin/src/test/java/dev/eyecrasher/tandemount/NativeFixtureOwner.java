@@ -86,12 +86,29 @@ public final class NativeFixtureOwner implements Listener {
         Entity seat = rider.getVehicle();
         boolean mounted = seat != null && seat != horse && driver.getVehicle() == horse;
         int blockStateId = -1; boolean noGravity = false;
+        String helpers = "[]"; int root = -1, riderRoot = -1, controller = -1;
         if (mounted) {
             Object nativeSeat=call(seat,"getHandle"), blockState=call(nativeSeat,"getBlockState");
             Class<?> blockClass=Class.forName("net.minecraft.world.level.block.Block");
             for(Method method:blockClass.getMethods())if(method.getName().equals("getId")&&method.getParameterTypes().length==1)
                 blockStateId=((Number)method.invoke(null,blockState)).intValue();
             noGravity=Boolean.TRUE.equals(call(nativeSeat,"isNoGravity"));
+            root=((Number)call(call(nativeSeat,"getRootVehicle"),"getId")).intValue();
+            riderRoot=((Number)call(call(call(rider,"getHandle"),"getRootVehicle"),"getId")).intValue();
+            controller=((Number)call(call(call(horse,"getHandle"),"getControllingPassenger"),"getId")).intValue();
+            Object ride=((Map<?,?>)field(tandem,"horses")).get(horse.getUniqueId());
+            StringBuilder chain=new StringBuilder("[");
+            for(Entity helper:(Entity[])field(ride,"helpers")) {
+                Object handle=call(helper,"getHandle");
+                if(chain.length()>1)chain.append(',');
+                chain.append("{\"id\":").append(helper.getEntityId()).append(",\"type\":\"").append(helper.getType().name()).append("\",\"x\":").append(helper.getLocation().getX())
+                    .append(",\"y\":").append(helper.getLocation().getY()).append(",\"z\":").append(helper.getLocation().getZ())
+                    .append(",\"noGravity\":").append(call(handle,"isNoGravity"));
+                if(helper.getType().name().equals("LLAMA"))chain.append(",\"scale\":").append(call(handle,"getScale")).append(",\"invisible\":").append(call(handle,"isInvisible"));
+                if(helper.getType().name().equals("INTERACTION"))chain.append(",\"height\":").append(call(helper,"getInteractionHeight")).append(",\"width\":").append(call(helper,"getInteractionWidth"));
+                chain.append('}');
+            }
+            helpers=chain.append(']').toString();
         }
         String record = "{\"tick\":" + tick + ",\"nanoTime\":" + System.nanoTime() + ",\"mounted\":" + mounted + ",\"riderVehicle\":" + (seat == null ? -1 : seat.getEntityId())
                 + ",\"horse\":" + horse.getEntityId() + ",\"driverVehicle\":" + (driver.getVehicle() == null ? -1 : driver.getVehicle().getEntityId())
@@ -100,6 +117,8 @@ public final class NativeFixtureOwner implements Listener {
                 + ",\"riderX\":" + rider.getLocation().getX() + ",\"riderY\":" + rider.getLocation().getY() + ",\"riderZ\":" + rider.getLocation().getZ()
                 + ",\"seatX\":" + (seat == null ? 0 : seat.getLocation().getX()) + ",\"seatY\":" + (seat == null ? 0 : seat.getLocation().getY()) + ",\"seatZ\":" + (seat == null ? 0 : seat.getLocation().getZ())
                 + ",\"seatBlockStateId\":"+blockStateId+",\"seatNoGravity\":"+noGravity
+                + ",\"seatRoot\":"+root+",\"riderRoot\":"+riderRoot+",\"horseController\":"+controller+",\"helpers\":"+helpers
+                + ",\"thirdVehicle\":"+(admin.getVehicle()==null?-1:admin.getVehicle().getEntityId())
                 + ",\"seatType\":\"" + (seat == null ? "NONE" : seat.getType().name()) + "\""
                 + ",\"nonOpRiders\":" + (!driver.isOp() && !rider.isOp()) + ",\"vertical\":" + field(field(tandem,"settings"),"vertical") + ",\"rearward\":" + field(field(tandem,"settings"),"rearward") + "}";
         try (Writer output = new FileWriter(new File(fixture.getDataFolder(), "owner-state.json"))) { output.write(record); }

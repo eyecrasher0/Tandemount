@@ -1,9 +1,9 @@
 # Tandemount 1.0.0. Server only; vanilla clients need no installation.
 enabled: true
 # Player feet above the horse's feet, in blocks. Range: 0.25 to 3.0.
-vertical: 1.375
+vertical: 0.8125
 # Distance behind the horse's centre, in blocks. Range: 0.0 to 2.0.
-rearward: 0.6875
+rearward: 0.5
 # Only ordinary horses have been implemented. Unknown entries are rejected.
 supported-horse-types:
   - HORSE

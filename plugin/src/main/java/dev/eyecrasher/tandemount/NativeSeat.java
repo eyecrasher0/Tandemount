@@ -13,6 +13,7 @@ public final class NativeSeat {
     public static double[] position(Object seat, double x, double y, double z) {
         Ride ride = RIDES.get(seat);
         if (ride == null || ride.closed) return new double[] {x, y, z};
+        if (ride.plugin.nativeAccess.attachment != null) return new double[] {x, y, z};
         Location at = ride.horse.getLocation();
         Settings settings = ride.plugin.settings;
         double yaw = Math.toRadians(at.getYaw());

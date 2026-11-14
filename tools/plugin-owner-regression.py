@@ -138,6 +138,14 @@ def main():
         console('tmfixture owner-allow');time.sleep(.1);click(clients[1]);time.sleep(.5)
         observations['initial']=state();time.sleep(2)
         observations['persisted']=state();check('real-client-right-click-mount-persists',state()['mounted'] and state()['nonOpRiders'],observations)
+        initial=state()
+        check('real-client-defaults-match-owner-position', initial['vertical']==.8125 and initial['rearward']==.5
+              and abs(initial['riderY']-initial['horseY']-.8125)<.002
+              and abs(initial['riderZ']-initial['horseZ']+.5)<.002, initial)
+        check('server-native-attachment-root-and-first-driver', initial['seatRoot']==initial['horse'] and initial['riderRoot']==initial['horse']
+              and initial['horseController']==int(values['driver']) and len(initial['helpers'])==5, initial)
+        click(clients[2]);time.sleep(.3)
+        check('real-client-third-rider-rejected',state()['thirdVehicle']==-1 and state()['mounted'],state())
         for _ in range(3):click(clients[1]);click(clients[1],'OFF_HAND');time.sleep(.15)
         observations['repeated']=state();check('real-client-repeated-click-keeps-ride',state()['mounted'],observations['repeated'])
         start=state()
@@ -175,7 +183,7 @@ def main():
         else:raise RuntimeError('Observer did not receive native seat metadata')
         console('tmfixture owner-decodemetadata')
         result['received_metadata']=json.loads(await_file(fixture/'owner-metadata-decoded.json'))
-        check('real-client-seat-block-state-and-interpolation-match-native',result['received_metadata']['blockStateId']==state()['seatBlockStateId'] and result['received_metadata']['teleportDuration']==3,{'wire':result['received_metadata'],'native':state()})
+        check('real-client-attached-seat-state-matches-native',result['received_metadata']['blockStateId']==state()['seatBlockStateId'] and result['received_metadata']['teleportDuration'] in (0,None),{'wire':result['received_metadata'],'native':state()})
         check('real-client-seat-no-gravity-matches-native',result['received_metadata']['entityId']==state()['riderVehicle'] and result['received_metadata']['noGravity'] is True and state()['seatNoGravity'] is True and result['received_metadata']['remainingBytes']==0,{'wire':result['received_metadata'],'native':state()})
         console('tmfixture owner-admin');time.sleep(.1);send_command(clients[2],'tandemount');time.sleep(.5)
         chat_id=clients[2].identifier('game','clientbound','minecraft:system_chat','ClientboundSystemChatPacket')
@@ -196,6 +204,15 @@ def main():
         previous=state();chosen=next((v for v in clickable if v=='/tandemount vertical +'),None)
         if chosen:send_command(clients[2],chosen);time.sleep(.4)
         check('command-click-adjustment-applies',chosen is not None and abs(state()['vertical']-previous['vertical']-1/16)<1e-9 and state()['rearward']==previous['rearward'],{'before':previous,'after':state(),'clicked':chosen})
+        send_command(clients[2],'tandemount reset');time.sleep(.4)
+        check('real-client-reset-restores-owner-defaults',state()['vertical']==.8125 and state()['rearward']==.5,state())
+        geometry=[]
+        for vertical,rearward in ((.25,0),(3,2),(.8125,.5)):
+            send_command(clients[2],'tandemount vertical '+str(vertical));send_command(clients[2],'tandemount rearward '+str(rearward));time.sleep(.4)
+            current=state();yaw=math.radians(current['horseYaw'])
+            expected=(current['horseX']+math.sin(yaw)*rearward,current['horseY']+vertical,current['horseZ']-math.cos(yaw)*rearward)
+            error=math.dist(expected,(current['riderX'],current['riderY'],current['riderZ']));geometry.append({'vertical':vertical,'rearward':rearward,'error':error,'native':current})
+        check('real-client-independent-native-attachment-offsets',all(row['error']<.002 for row in geometry),geometry)
         result['observations']=observations;result['decoded_chat']=chat
         result['status']='passed' if all(r['status']=='passed' for r in checks) else 'failed'
     except Exception as error:result['error']=str(error)

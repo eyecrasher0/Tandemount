@@ -472,6 +472,53 @@ The fixture retains its initial home only through setup, removes that ticket on 
 
 This is targeted native and protocol evidence for the combined fix. The full 113-target plugin matrix remains a separate coordinator run, and no real-client visual confirmation is claimed.
 
+## Exact 26.3 native attachment revision
+
+The same fresh clean-room implementation conversation continued from the
+independent 26.3 repair for the owner's explicit native-attachment request.
+Inputs remained the independent Tandemount specification, current code and test
+evidence, plus original official Minecraft client classes and the exact Paper
+26.3 build 249 SDK. No predecessor source, archives, binaries, design material,
+tests or global project memory were consulted. The official client and patched
+server SHA-256 values remain those recorded in the 26.3 movement audit above.
+
+Original native `Entity.positionRider`, passenger/vehicle attachment points,
+horse control, llama dimensions and scale attributes, Interaction height/width,
+client passenger ticks, ray picking and dismount behavior were inspected and
+executed. A plain horse → block display → player graph has the correct root,
+but native default feet height is about 0.84375 blocks and rear distance is zero.
+Display rendering transformations do not supply native passenger offsets.
+
+The bounded five-helper graph uses registered Interaction, llama and block
+display types. Two opposite llama attachment points, with scales
+`rearward / (double)0.3f + 1/16` and `1/16`, provide the full independent rear
+range including zero. Both scales stay within the native 0.0625–16 bounds.
+The original synchronized Interaction height supports signed finite values;
+its CraftBukkit setter writes that native accessor without adding a positivity
+constraint. Zero width avoids a spacer hit box. An anchor height of −64 keeps
+both invisible, NoAI living carriers below ordinary client interaction rays;
+the lift compensates their native heights and restores the final BARRIER
+display beside the rider. That final vehicle's nearby origin preserves the
+ordinary native dismount search. Every helper remains in the same horse-rooted
+passenger graph on both sides, and no recurring follower position packet is
+broadcast. Normal input packets and protection events are unchanged.
+
+The earlier three-helper client geometry probe established offsets but exposed
+large invisible client pick boxes. A four-helper lowered-carrier server
+prototype then exposed distant dismount-origin behavior. Both failed attempts
+remain retained; neither is labeled a passing release. The final five-helper
+fixture separately checks native roots and first-driver control, exact helper
+count, no-gravity, invisibility, NoAI, empty server bounds, native client graph
+packets, independent settings, third-rider rejection, final cancellation,
+cleanup, native serialization refusal for every helper, saved-world UUID scans
+and restart. Original-client picking remains separate from server bounds.
+
+Plugin defaults are now height 0.8125 and rearward 0.5. Resource configuration,
+missing numeric values and reset agree. Existing saved values are read without
+replacement. Native fixture checks cover each path, while real command packets
+exercise reset and independent offset controls. Human visual review remains a
+separate owner acceptance step.
+
 ### Paper 26.3 owner regression: client lifetime and command controls
 
 The owner reported immediate rider ejection and unformatted settings chat with

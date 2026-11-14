@@ -36,6 +36,10 @@ established by the Loader-only tests. Forge 1.7.10 has no `EntityMountEvent`.
 commands work from the console. Changes save immediately and apply to active
 rides; `+` and `-` move an offset by 1/16 block.
 
+Plugin defaults are height `0.8125` blocks and rearward `0.5` blocks. New
+configuration, missing numeric values and `/tandemount reset` use those values.
+Existing saved values are preserved until an administrator changes or resets them.
+
 | Action | Plugins | Forge 1.7.10–1.12.2 | Modern mods |
 | --- | --- | --- | --- |
 | Vertical offset | `/tandemount vertical <+\|-\|number>` | `/tandemount vertical <+\|-\|number>` | `/tandemount height <+\|-\|number>` |

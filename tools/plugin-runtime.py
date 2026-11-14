@@ -290,9 +290,18 @@ def packet_checks(clients, graph, minecraft):
               graph.get('seat_block_display' if display else 'seat_falling_block') == 1 and graph.get('seat_nonliving') == 1
               and graph['seat'] in spawned, 'Native fixture confirms the exact nonliving vanilla seat type; loopback client received the same seat entity ID')
         check(prefix + 'passenger-seat-edge-received', any(v == graph['seat'] and p == [graph['rider']] for v, p in mounts), 'Actual clientbound mount graph')
-        check(prefix + 'horse-has-only-driver-on-client', any(v == graph['horse'] and p == [graph['driver']] for v, p in mounts)
-              and not any(v == graph['horse'] and graph['seat'] in p for v, p in mounts), 'Actual clientbound graph preserves native horse control and separate seat position')
-        check(prefix + 'seat-position-updates-received', len(poses) >= 3, 'Native absolute position updates observed in socket frames; no human visual claim')
+        if display:
+            chain = [(graph['horse'], [graph['driver'], graph['anchor']]),
+                     (graph['anchor'], [graph['rear_carrier']]),
+                     (graph['rear_carrier'], [graph['forward_carrier']]),
+                     (graph['forward_carrier'], [graph['lift']]), (graph['lift'], [graph['seat']])]
+            check(prefix + 'received-native-attachment-shares-horse-root', all(any(v == parent and p == children for v,p in mounts) for parent,children in chain)
+                  and all(entity in spawned for entity in (graph['anchor'],graph['rear_carrier'],graph['forward_carrier'],graph['lift'])), 'Actual received native passenger graph: horse(driver first,anchor)->rear carrier->forward carrier->lift->nonliving seat->rider')
+            check(prefix + 'attachment-has-no-periodic-position-follow-packets', len(poses) < 3, {'absolute_seat_packets':len(poses),'scope':'Native attached tracking; no independent recurring seat position broadcasts'})
+        else:
+            check(prefix + 'horse-has-only-driver-on-client', any(v == graph['horse'] and p == [graph['driver']] for v, p in mounts)
+                  and not any(v == graph['horse'] and graph['seat'] in p for v, p in mounts), 'Actual clientbound graph preserves native horse control and separate seat position')
+            check(prefix + 'seat-position-updates-received', len(poses) >= 3, 'Native absolute position updates observed in socket frames; no human visual claim')
     return checks
 
 

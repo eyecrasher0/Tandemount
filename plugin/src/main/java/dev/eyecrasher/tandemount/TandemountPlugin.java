@@ -190,16 +190,21 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             riders.put(driver.getUniqueId(), ride); riders.put(player.getUniqueId(), ride);
             NativeSeat.RIDES.put(ride.nativeSeat, ride);
             packets.addSeat(seat.getEntityId(), nativeAccess.legacySeatType);
-            nativeAccess.addSeat(horse, seat);
-            if (!nativeAccess.oldest) {
-                packets.add(horse.getEntityId(), seat.getEntityId());
-                if (!nativeAccess.mount(horse, seat)) { close(ride); return; }
+            if (nativeAccess.attachment != null) {
+                nativeAccess.attachment.create(ride);
+                nativeAccess.attachment.mount(ride);
+            } else {
+                nativeAccess.addSeat(horse, seat);
+                if (!nativeAccess.oldest) {
+                    packets.add(horse.getEntityId(), seat.getEntityId());
+                    if (!nativeAccess.mount(horse, seat)) { close(ride); return; }
+                }
+                if (!nativeAccess.mount(seat, player) || player.getVehicle() != seat) { close(ride); return; }
+                nativeAccess.place(seat);
+                ride.passengerOffset = player.getLocation().getY() - seat.getLocation().getY();
+                nativeAccess.place(seat);
+                nativeAccess.broadcast(seat, nativeAccess.positionPacket(seat));
             }
-            if (!nativeAccess.mount(seat, player) || player.getVehicle() != seat) { close(ride); return; }
-            nativeAccess.place(seat);
-            ride.passengerOffset = player.getLocation().getY() - seat.getLocation().getY();
-            nativeAccess.place(seat);
-            nativeAccess.broadcast(seat, nativeAccess.positionPacket(seat));
             follow(ride);
             debug("Started a shared ride", null);
         } catch (Throwable failure) {
@@ -230,9 +235,13 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
                     || ride.horse.isDead() || !ride.seat.isValid() || !ride.driver.isOnline() || !ride.rider.isOnline()
                     || ride.driver.isDead() || ride.rider.isDead() || ride.driver.getVehicle() != ride.horse
                     || ride.rider.getVehicle() != ride.seat || !ride.horse.getWorld().equals(ride.rider.getWorld())
-                    || (!nativeAccess.oldest && ride.seat.getVehicle() != ride.horse)) { close(ride); return; }
-            nativeAccess.place(ride.seat);
-            nativeAccess.broadcast(ride.seat, nativeAccess.positionPacket(ride.seat));
+                    || (nativeAccess.attachment != null ? !nativeAccess.attachment.valid(ride)
+                        : !nativeAccess.oldest && ride.seat.getVehicle() != ride.horse)) { close(ride); return; }
+            if (nativeAccess.attachment != null) nativeAccess.attachment.place(ride);
+            else {
+                nativeAccess.place(ride.seat);
+                nativeAccess.broadcast(ride.seat, nativeAccess.positionPacket(ride.seat));
+            }
             ride.ticks++;
         } catch (Throwable failure) {
             debug("A shared ride ended because native validation failed", failure);
@@ -243,12 +252,17 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     private void close(Ride ride) {
         if (ride.closed) return;
         ride.closed = true;
-        try { if (ride.seat.isValid()) ride.seat.remove(); }
+        try {
+            for (int i = ride.helpers.length - 1; i >= 0; i--)
+                if (ride.helpers[i].isValid()) ride.helpers[i].remove();
+        }
         catch (RuntimeException failure) { debug("Native seat removal details", failure); }
         finally {
             horses.remove(ride.horse.getUniqueId(), ride);
             riders.remove(ride.driver.getUniqueId(), ride); riders.remove(ride.rider.getUniqueId(), ride);
             NativeSeat.RIDES.remove(ride.nativeSeat, ride);
+            for (Entity helper : ride.helpers) try { NativeSeat.RIDES.remove(Reflect.handle(helper), ride); }
+            catch (ReflectiveOperationException failure) { debug("Native attachment retirement details", failure); }
             if (packets != null) {
                 packets.remove(ride.horse.getEntityId(), ride.seat.getEntityId());
             }
