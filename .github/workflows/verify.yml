@@ -148,7 +148,7 @@ jobs:
           python3 - <<'PY'
           import json, os, subprocess
           from pathlib import Path
-          selected = {'1.16.5','1.17.1','1.18.2','1.19.4','1.20.4','1.20.5','1.21.1','1.21.11','26.1','26.3'}
+          selected = {'1.16.5','1.17.1','1.18.2','1.19.4','1.20.4','1.20.5','1.21.1','1.21.9','1.21.11','26.1','26.3'}
           platform = os.environ['TEST_PLATFORM']
           for target in json.loads(Path('platforms.json').read_text())['targets']:
               mc = target['minecraft']
