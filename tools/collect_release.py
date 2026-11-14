@@ -57,7 +57,9 @@ PLUGIN_26_3_ATTACHMENT = {
     "mount": ("server-native-attachment-shares-horse-root",
               "server-native-horse-keeps-first-driver-control",
               "tmthird-received-native-attachment-shares-horse-root"),
-    "late-observer": ("tmthird-received-native-attachment-shares-horse-root",
+    "late-observer": ("late-observer-requires-no-remount",
+                      "tmthird-passenger-seat-edge-received", "tmlate-passenger-seat-edge-received",
+                      "tmthird-received-native-attachment-shares-horse-root",
                       "tmlate-received-native-attachment-shares-horse-root",
                       "tmthird-attachment-has-no-periodic-position-follow-packets",
                       "tmlate-attachment-has-no-periodic-position-follow-packets"),
@@ -112,7 +114,10 @@ def normalize(raw, family):
         groups = dict(PLUGIN)
         if raw["minecraft"] == "26.3":
             for name, required in PLUGIN_26_3_ATTACHMENT.items():
-                groups[name] += required
+                # The attached client graph includes the horse's anchor and
+                # requires no independent position-follow packets. Older
+                # targets retain their existing follower-specific contract.
+                groups[name] = required if name == "late-observer" else groups[name] + required
     elif family == "legacy":
         items = (raw.get("native_checks", []) + raw.get("synthetic_behavior", {}).get("checks", [])
                  + raw.get("restart", {}).get("checks", []))

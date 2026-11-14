@@ -117,6 +117,14 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["result"], "fail")
         self.assertIn("settings", report["incomplete_checks"])
 
+    def test_attached_26_3_graph_does_not_require_world_follower_packets_or_driver_only_graph(self):
+        raw = self.plugin()
+        old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
+        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
+        self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+        raw["minecraft"] = "1.12.2"
+        self.assertIn("late-observer", normalize(raw, "plugin")["incomplete_checks"])
+
 
 if __name__ == "__main__":
     unittest.main()
