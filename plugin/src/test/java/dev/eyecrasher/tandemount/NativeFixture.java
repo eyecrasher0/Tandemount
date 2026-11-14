@@ -115,6 +115,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         if (!command.getName().equals("tmfixture")) return false;
         if (args.length == 0) return true;
         try {
+            if (args[0].startsWith("owner-")) { NativeFixtureOwner.command(this, args[0]); return true; }
             if (args[0].equals("prepare")) prepare();
             if (args[0].equals("start")) start();
             if (args[0].equals("late")) late();

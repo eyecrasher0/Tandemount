@@ -17,7 +17,7 @@ final class NativeAccess {
     final Constructor<?> seatConstructor;
     private final Constructor<?> vehicleWrapper;
     private final Object craftServer;
-    private final Object airBlock, airState;
+    private final Object seatBlock, seatState;
     private final Object vanillaSeatType;
     private final Field bounds;
     private final Constructor<?> boxConstructor;
@@ -53,24 +53,30 @@ final class NativeAccess {
             }
         }
         Class<?> magic = Class.forName(craft + ".util.CraftMagicNumbers");
-        airBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, org.bukkit.Material.AIR);
+        // Vanilla clients discard an AIR falling block in their first entity
+        // tick. BARRIER has invisible render shape while remaining non-AIR.
+        // Keep this owner regression repair tied to its exact audited client.
+        String bukkitVersion = org.bukkit.Bukkit.getBukkitVersion();
+        org.bukkit.Material material = (bukkitVersion.equals("26.3") || bukkitVersion.startsWith("26.3-") || bukkitVersion.startsWith("26.3.build."))
+                ? org.bukkit.Material.valueOf("BARRIER") : org.bukkit.Material.AIR;
+        seatBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, material);
         Object state = null;
         if (stateType != null) {
             Method stateGetter = null;
-            for (Method m : airBlock.getClass().getMethods())
+            for (Method m : seatBlock.getClass().getMethods())
                 if (!Modifier.isStatic(m.getModifiers()) && m.getParameterTypes().length == 0
                         && stateType.isAssignableFrom(m.getReturnType())) {
-                    if (stateGetter != null) throw new NoSuchMethodException("Unambiguous native AIR block state getter");
+                    if (stateGetter != null) throw new NoSuchMethodException("Unambiguous native seat block state getter");
                     stateGetter = m;
                 }
-            if (stateGetter != null) state = Reflect.call(stateGetter, airBlock);
+            if (stateGetter != null) state = Reflect.call(stateGetter, seatBlock);
         }
-        if (state == null && stateType != null) for (Field f : Reflect.fields(airBlock.getClass()))
+        if (state == null && stateType != null) for (Field f : Reflect.fields(seatBlock.getClass()))
             if (!Modifier.isStatic(f.getModifiers()) && stateType.isAssignableFrom(f.getType())) {
-                state = Reflect.get(f, airBlock); break;
+                state = Reflect.get(f, seatBlock); break;
             }
-        if (stateType != null && !stateType.isInstance(state)) throw new NoSuchFieldException("Native AIR block state");
-        airState = state;
+        if (stateType != null && !stateType.isInstance(state)) throw new NoSuchFieldException("Native seat block state");
+        seatState = state;
         Class<?> root = seatBase;
         while (root.getSuperclass() != Object.class) root = root.getSuperclass();
         entityClass = root;
@@ -150,7 +156,7 @@ final class NativeAccess {
             Class<?>[] p = c.getParameterTypes();
             if (!Modifier.isPublic(c.getModifiers()) && !Modifier.isProtected(c.getModifiers())) continue;
             if (((p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level")))
-                    || (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class && airState != null && p[4].isInstance(airState)))) {
+                    || (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class && seatState != null && p[4].isInstance(seatState)))) {
                 parentConstructor = c; break;
             }
             if (p.length == 2 && (p[0].getSimpleName().equals("EntityTypes") || p[0].getSimpleName().equals("EntityType"))
@@ -200,10 +206,10 @@ final class NativeAccess {
         int arguments = seatConstructor.getParameterTypes().length;
         Object seat = arguments == 1 ? seatConstructor.newInstance(world)
                 : arguments == 2 ? seatConstructor.newInstance(vanillaSeatType, world)
-                : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), airState);
+                : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), seatState);
         for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
-            if (airState != null && f.getType().isInstance(airState)) { f.setAccessible(true); f.set(seat, airState); }
-            else if (oldest && f.getType().isInstance(airBlock)) { f.setAccessible(true); f.set(seat, airBlock); }
+            if (seatState != null && f.getType().isInstance(seatState)) { f.setAccessible(true); f.set(seat, seatState); }
+            else if (oldest && f.getType().isInstance(seatBlock)) { f.setAccessible(true); f.set(seat, seatBlock); }
         }
         if (vehicleWrapper != null) for (Field f : Reflect.fields(entityClass)) if (f.getName().equals("bukkitEntity")) {
             f.setAccessible(true); f.set(seat, vehicleWrapper.newInstance(craftServer, seat)); break;

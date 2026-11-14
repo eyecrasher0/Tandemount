@@ -412,6 +412,78 @@ The fixture retains its initial home only through setup, removes that ticket on 
 
 This is targeted native and protocol evidence for the combined fix. The full 113-target plugin matrix remains a separate coordinator run, and no real-client visual confirmation is claimed.
 
+### Paper 26.3 owner regression: client lifetime and command controls
+
+The owner reported immediate rider ejection and unformatted settings chat with
+the independently implemented delivered 26.3 JAR, SHA-256
+`f814a04ab2d14a3bc02a41f7126896f4ecce0d6d966753c19a7016efb4cec6c2`.
+The repair was developed in an isolated worktree without changing the delivered
+file or the coordinator's full matrix. No predecessor material was consulted.
+
+The exact official Mojang client JAR SHA-256 is
+`4508d006323f24fa02876310c192d739af56516eb259000ac50f0909a68c9a2d`,
+obtained from the official metadata described above. Its unchanged
+`FallingBlockEntity.tick()` first tests `blockState.isAir()` and calls `discard()`
+before any world-side branch. `BarrierBlock.getRenderShape()` returns
+`RenderShape.INVISIBLE`. `FallingBlockRenderer.submit()` returns immediately
+unless the render shape is `MODEL`. These observations establish why an AIR
+helper can disappear on a vanilla client despite remaining registered on the
+server, and why BARRIER is a non-AIR invisible state for exact 26.3.
+
+The real-packet regression on the original delivered JAR retained its server
+mount across ticks, repeated main/off-hand clicks, and movement. It reproduced
+the unformatted chat component: the actual clientbound component contained no
+color or text style, although its four run-command actions existed. That
+server-only observation does not refute the client disappearance path and is
+recorded separately from vanilla client-tick execution.
+
+The official Paper 26.3 build 249 SDK, native JAR SHA-256
+`dadd84d1697efa8a29bcad6c81e503efdbaaa2dac85dbd4662c8243c97f0b8a4`,
+provides the actual `ServerboundInteractPacket` record and `STREAM_CODEC` used
+to encode the test's main/off-hand interactions. In 26.3 its fields are entity
+ID, interaction hand, hit location vector, and secondary-action boolean. The
+network handler emits `PlayerInteractAtEntityEvent`; the platform's inherited
+handler dispatch reaches the existing interaction listener. No speculative
+second listener or cancellation bypass was added. The client sends the native
+loaded notification before interacting.
+
+The fixture decodes an actual observer socket spawn body using the upstream
+`ClientboundAddEntityPacket.STREAM_CODEC`, requiring its entity and block-state
+IDs to match the tracked helper and requiring the entire body to be consumed.
+The candidate's observed state is `14381`, with native no-gravity true. Its
+decoded command component contains aqua/green bold controls, four exact
+`/tandemount` run-command actions, and a successful independently verified
+1/16-block vertical change submitted through the actual command packet.
+
+Official class bytes, hashes, `javap` listings, original/candidate wire captures,
+decoded components, per-tick states, and event records are retained under the
+isolated worktree's ignored `.agents/owner/` and the task-specific
+`paper263-owner-runs` cache namespace. None of those official class files are
+included in runtime artifacts. These protocol checks do not claim human
+graphical confirmation.
+
+The independent standalone client harness then loaded that exact untouched
+official client JAR and 66 metadata-bound official dependencies. It constructs
+the vanilla falling-block entity normally, applies the spawn through
+`recreateFromPacket`, and calls its original `tick()` in a controlled empty
+client-side `Level`. It does not subclass the entity, replace its tick, use
+Unsafe, or load the plugin. AIR state ID 0 is removed on tick 1. The actual
+candidate state ID 14381 with no-gravity true survives 200 ticks at unchanged
+height and reports `INVISIBLE` render shape. The independent harness source is
+`plugin/src/test/client/OfficialClientSeatProbe.java`. This is executed vanilla
+entity-lifetime evidence, separate from human graphical review.
+
+The candidate runtime JAR SHA-256 is
+`f4fc6db3e72f13de9a7e60cfa1fdc1404586a1bb1106a2fde35acd88c5cd5c23`.
+On the exact official Paper build above it passes 59 native state assertions,
+10 observer packet assertions, direct live-seat serialization refusal, a final
+scan of 2653 native saved chunks containing none of the 13 observed helper UUIDs,
+and a native restart. Its real-client owner regression separately passes
+cancelled interaction, persistent ordinary-rider mounting, repeated hand clicks,
+movement, observed spawn state, formatted chat, four clickable controls, and
+an actual clicked setting change. No running community server or owner world
+was modified, and the original delivered JAR remains unchanged.
+
 ### Spigot 1.21–1.21.4 protocol-fixture audit
 
 A separate fresh clean-room conversation inspected only the independent

@@ -5,6 +5,19 @@ mounted on this seat while the driver remains mounted on the horse. The client
 receives the native seat entity and its mount edge; no custom client entity is
 created.
 
+For exact 26.3, the seat carries the vanilla BARRIER block state. AIR is not a
+safe invisible state: the unchanged vanilla client removes an AIR falling block
+at the beginning of its first entity tick, before checking whether the world is
+client-side. The server's generated subclass replaces only the server tick, so
+server ride maps and mount packets alone cannot establish client survival.
+BARRIER remains non-AIR and its render shape is `INVISIBLE`; the official
+falling-block renderer returns before submitting block geometry for that shape.
+The existing no-gravity metadata and native position updates are retained.
+
+This correction currently selects only the exact 26.3 game and its upstream
+`26.3.build.*` Bukkit API labels. Other exact targets require their own client
+lifetime evidence before the same release claim is made.
+
 This seat type avoids the living-vehicle branch in the vanilla player renderer.
 Official client bytecode for 1.20.6, 1.21.11, and 26.3 shows that
 `LivingEntityRenderer` gets the rendered living entity's vehicle and only uses
@@ -123,6 +136,17 @@ command; Folia 1.20.6 exposed that earlier runner limitation. The current probe
 does not depend on a manual save command being available.
 
 ## Evidence limits
+
+The 26.3 owner regression fixture now sends real native-encoded interaction
+packets through loopback clients, including repeated main/off-hand clicks. It
+observes an ordinary non-operator passenger across ticks and movement, checks a
+cancelled packet interaction, and decodes the observer's actual seat spawn with
+the native packet codec. The observed state ID must match the native helper.
+The command check decodes the actual clientbound chat component, requires color
+and style plus all four adjustment click actions, then submits an observed click
+command through the client's command packet and verifies independent settings.
+These checks are separate from executing a vanilla client entity tick and from
+human visual review.
 
 The official client bytecode establishes the renderer's type check and the
 vanilla seat class hierarchy. The updated native fixture and loopback protocol

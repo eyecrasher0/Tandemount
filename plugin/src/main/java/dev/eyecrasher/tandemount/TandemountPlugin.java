@@ -311,23 +311,31 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         } finally { Files.deleteIfExists(temporary); }
     }
     private void status(CommandSender sender) {
-        sender.sendMessage("Tandemount: " + (settings.enabled ? "enabled" : "disabled") + "; vertical " + settings.vertical
-                + "; rearward " + settings.rearward + "; types HORSE; debug " + settings.debug + ".");
+        sender.sendMessage(ChatColor.GOLD + "Tandemount " + ChatColor.DARK_GRAY + "| "
+                + (settings.enabled ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled")
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Height: " + ChatColor.WHITE + settings.vertical
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Back: " + ChatColor.WHITE + settings.rearward);
+        sender.sendMessage(ChatColor.GRAY + "Horse types: " + ChatColor.WHITE + "HORSE" + ChatColor.DARK_GRAY + " | "
+                + ChatColor.GRAY + "Debug: " + ChatColor.WHITE + (settings.debug ? "on" : "off"));
     }
     private void help(CommandSender sender) {
-        sender.sendMessage("Tandemount: right-click an adult, tamed, saddled horse carrying one player to share it. Use normal dismount to leave.");
-        sender.sendMessage("The first rider keeps ordinary horse controls. Maximum: two riders.");
+        sender.sendMessage(ChatColor.GOLD.toString() + ChatColor.BOLD + "Tandemount" + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Share the ride");
+        sender.sendMessage(ChatColor.GRAY + "Right-click an adult, tamed, saddled horse with a driver to join.");
+        sender.sendMessage(ChatColor.GRAY + "The driver keeps control. Use normal dismount to leave. Maximum: two riders.");
         if (!sender.hasPermission("tandemount.admin")) return;
         status(sender);
-        sender.sendMessage("/tandemount vertical <+|-|number> (0.25–3.0); rearward <+|-|number> (0.0–2.0). +/- changes 1/16 block.");
-        sender.sendMessage("/tandemount enable | disable | reload | reset | debug <on|off>");
+        sender.sendMessage(ChatColor.YELLOW + "Seat adjustments " + ChatColor.GRAY + "(1/16 block per click)");
         if (sender instanceof Player) clickable((Player)sender);
+        sender.sendMessage(ChatColor.AQUA + "/tandemount vertical <+|-|number> " + ChatColor.GRAY + "(0.25–3.0)");
+        sender.sendMessage(ChatColor.AQUA + "/tandemount rearward <+|-|number> " + ChatColor.GRAY + "(0.0–2.0)");
+        sender.sendMessage(ChatColor.GRAY + "/tandemount enable | disable | reload | reset | debug <on|off>");
     }
     @SuppressWarnings({"unchecked", "rawtypes"}) private void clickable(Player player) {
         try {
             Class<?> text = Class.forName("net.md_5.bungee.api.chat.TextComponent");
             Class<?> base = Class.forName("net.md_5.bungee.api.chat.BaseComponent");
             Class<?> click = Class.forName("net.md_5.bungee.api.chat.ClickEvent");
+            Class<?> color = Class.forName("net.md_5.bungee.api.ChatColor");
             Class<? extends Enum> action = (Class<? extends Enum>)Class.forName("net.md_5.bungee.api.chat.ClickEvent$Action");
             Object run = Enum.valueOf(action, "RUN_COMMAND");
             Object array = Array.newInstance(base, 4);
@@ -335,6 +343,8 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             String[] commands = {"vertical +", "vertical -", "rearward +", "rearward -"};
             for (int i = 0; i < 4; i++) {
                 Object component = text.getConstructor(String.class).newInstance(captions[i]);
+                Reflect.call(component, "setColor", color.getField(i < 2 ? "AQUA" : "GREEN").get(null));
+                Reflect.call(component, "setBold", Boolean.TRUE);
                 Reflect.call(component, "setClickEvent", click.getConstructor(action, String.class).newInstance(run, "/tandemount " + commands[i]));
                 Array.set(array, i, component);
             }
