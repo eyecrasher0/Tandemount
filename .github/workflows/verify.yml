@@ -66,7 +66,22 @@ jobs:
       - name: Build exact release and separate fixture
         run: python3 tools/plugin-build.py --all --fixture
       - name: Run actual native server and vanilla clients
-        run: python3 tools/plugin-runtime.py --minecraft '${{ matrix.minecraft }}' --platform '${{ matrix.platform }}' --accept-eula --timeout 240
+        env:
+          TEST_MINECRAFT: ${{ matrix.minecraft }}
+          TEST_PLATFORM: ${{ matrix.platform }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, 'tools')
+          from cache_servers import java_for
+          mc = os.environ['TEST_MINECRAFT']
+          target = next(t for t in json.loads(Path('platforms.json').read_text())['targets'] if t['minecraft'] == mc)
+          java_home = Path(java_for(target['java'])).parent.parent
+          subprocess.run(['python3', 'tools/plugin-runtime.py', '--minecraft', mc,
+                          '--platform', os.environ['TEST_PLATFORM'], '--java-home', str(java_home),
+                          '--accept-eula', '--timeout', '240'], check=True)
+          PY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
