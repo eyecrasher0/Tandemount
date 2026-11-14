@@ -46,14 +46,38 @@ public final class NativeHooks implements IMixinConfigPlugin, Opcodes {
         return new MethodInsnNode(INVOKESTATIC, RUNTIME, method, descriptor, false);
     }
     private static void patch(MethodNode method, String kind) {
-        if (kind.equals("save") || kind.equals("savePassenger") || kind.equals("shouldSave") || kind.equals("hurt")) {
+        if (kind.equals("helperInteract")) {
+            InsnList guard = new InsnList();
+            LabelNode ordinary = new LabelNode();
+            guard.add(new VarInsnNode(ALOAD, 1));
+            guard.add(call("isSeat", "(Ljava/lang/Object;)Z"));
+            guard.add(new JumpInsnNode(IFEQ, ordinary));
+            guard.add(call("pass", "()Ljava/lang/Object;"));
+            guard.add(new TypeInsnNode(CHECKCAST, Type.getReturnType(method.desc).getInternalName()));
+            guard.add(new InsnNode(ARETURN));
+            guard.add(ordinary);
+            guard.add(new FrameNode(F_SAME, 0, null, 0, null));
+            method.instructions.insert(guard);
+        } else if (kind.equals("capacity")) {
+            InsnList guard = new InsnList();
+            LabelNode ordinary = new LabelNode();
+            guard.add(new VarInsnNode(ALOAD, 0));
+            guard.add(new VarInsnNode(ALOAD, 1));
+            guard.add(call("allowHelperPassenger", "(Ljava/lang/Object;Ljava/lang/Object;)Z"));
+            guard.add(new JumpInsnNode(IFEQ, ordinary));
+            guard.add(new InsnNode(ICONST_1));
+            guard.add(new InsnNode(IRETURN));
+            guard.add(ordinary);
+            guard.add(new FrameNode(F_SAME, 0, null, 0, null));
+            method.instructions.insert(guard);
+        } else if (kind.equals("save") || kind.equals("savePassenger") || kind.equals("shouldSave") || kind.startsWith("hurt") || kind.startsWith("pickable")) {
             InsnList guard = new InsnList();
             LabelNode ordinary = new LabelNode();
             guard.add(new VarInsnNode(ALOAD, 0));
             guard.add(call("isSeat", "(Ljava/lang/Object;)Z"));
             guard.add(new JumpInsnNode(IFEQ, ordinary));
-            guard.add(new InsnNode(ICONST_0));
-            guard.add(new InsnNode(IRETURN));
+            if (Type.getReturnType(method.desc).getSort() == Type.VOID) guard.add(new InsnNode(RETURN));
+            else { guard.add(new InsnNode(ICONST_0)); guard.add(new InsnNode(IRETURN)); }
             guard.add(ordinary);
             guard.add(new FrameNode(F_SAME, 0, null, 0, null));
             method.instructions.insert(guard);
@@ -96,6 +120,16 @@ public final class NativeHooks implements IMixinConfigPlugin, Opcodes {
                             slot += arg.getSize();
                         }
                         code.add(call("tracker", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
+                    } else if (kind.equals("pairing")) {
+                        code.add(new VarInsnNode(ALOAD, 0));
+                        Type[] parameters = Type.getArgumentTypes(method.desc);
+                        int slot = 1;
+                        for (int index = 0; index < parameters.length - 1; index++) slot += parameters[index].getSize();
+                        code.add(new VarInsnNode(ALOAD, slot));
+                        code.add(call("pairingTail", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
+                    } else if (kind.equals("dirtyData")) {
+                        code.add(new VarInsnNode(ALOAD, 0));
+                        code.add(call("dirtyMetadataTail", "(Ljava/lang/Object;)V"));
                     }
                     method.instructions.insertBefore(instruction, code);
                 }

@@ -1,6 +1,5 @@
 package dev.eyecrasher.tandemount.modern;
 
-import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -13,6 +12,8 @@ public final class TandemRuntime {
     private static final Map<Object, Ride> RIDES = new IdentityHashMap<Object, Ride>();
     private static final Set<Object> SEATS = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
     private static final Set<Object> SERVERS = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
+    private static final Set<Object> DIMENSIONS_DIRTY = Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
+    private static final Map<Object, Object> TRACKERS = new IdentityHashMap<Object, Object>();
     public static final Settings SETTINGS = new Settings();
     private static boolean initialized;
     private static boolean failed;
@@ -25,6 +26,34 @@ public final class TandemRuntime {
         catch (Exception exception) { failed = true; log("Configuration rejected; riding disabled. " + exception.getClass().getSimpleName()); }
     }
     public static boolean isSeat(Object entity) { return SEATS.contains(entity); }
+    static void dimensionsChanged(Object entity) { if (isSeat(entity)) DIMENSIONS_DIRTY.add(entity); }
+    private static Object posePacket(Object entity) throws Exception {
+        Object value = Names.call("data.value", null, Names.field("Entity.DATA_POSE", null), Names.call("entity.getPose", entity));
+        return Names.type("EntityDataPacket").getConstructor(int.class, List.class)
+                .newInstance(((Number)Names.call("entity.id", entity)).intValue(), Collections.singletonList(value));
+    }
+    @SuppressWarnings("unchecked") public static void pairingTail(Object tracker, Object collector) {
+        try {
+            Object entity = Names.field("ServerEntity.entity", tracker);
+            if (!isSeat(entity) || !Names.TABLE.containsKey("c.Interaction") || !Names.type("Interaction").isInstance(entity)) return;
+            Object packet = posePacket(entity);
+            if (collector instanceof java.util.function.Consumer) ((java.util.function.Consumer<Object>)collector).accept(packet);
+            else Names.call("pairing.accept", collector, packet);
+        } catch (Exception failure) { error("Native pairing dimensions", failure); }
+    }
+    public static void dirtyMetadataTail(Object tracker) {
+        try {
+            Object entity = Names.field("ServerEntity.entity", tracker);
+            if (!DIMENSIONS_DIRTY.remove(entity)) return;
+            Object packet = posePacket(entity);
+            if (Names.has("tracker.broadcast")) Names.call("tracker.broadcast", tracker, packet);
+            else Names.call("synchronizer.broadcast", Names.field("ServerEntity.synchronizer", tracker), packet);
+        } catch (Exception failure) { error("Native tracked dimensions", failure); }
+    }
+    static void flushHelperMetadata(Object entity) throws Exception {
+        Object tracker = TRACKERS.get(entity);
+        if (tracker != null) Names.call("tracker.flushMetadata", tracker);
+    }
     public static Object pass() {
         try { return Names.field("InteractionResult.PASS", null); }
         catch (Exception exception) { throw new IllegalStateException(exception); }
@@ -44,50 +73,36 @@ public final class TandemRuntime {
             if (horse.getClass() != Names.type("Horse") || Names.call("entity.level", horse) != Names.call("entity.level", player)) return original;
             if (!(Boolean) Names.call("horse.tamed", horse) || !(Boolean) Names.call("horse.saddled", horse) || (Boolean) Names.call("horse.baby", horse)) return original;
             if (!(Boolean) Names.call("entity.alive", horse) || !(Boolean) Names.call("entity.alive", player) || Names.call("entity.vehicle", player) != null) return original;
-            List<?> passengers = (List<?>) Names.call("entity.passengers", horse);
-            if (passengers.size() != 1 || !Names.type("ServerPlayer").isInstance(passengers.get(0))) return original;
             // A stale slot may be reclaimed synchronously, never on a deferred retry.
             Ride prior = RIDES.get(horse);
             if (prior != null) {
                 if (valid(prior)) return original;
                 remove(prior);
             }
+            List<?> passengers = (List<?>) Names.call("entity.passengers", horse);
+            if (passengers.size() != 1 || !Names.type("ServerPlayer").isInstance(passengers.get(0))) return original;
             for (Ride ride : RIDES.values()) if (ride.rider == player || ride.driver == player) return original;
             Object level = Names.call("entity.level", horse);
             if (!loaded(level, Names.call("entity.blockPosition", horse))) return original;
-            Constructor<?> constructor = Names.type("AreaEffectCloud").getConstructor(Names.type("Level"), double.class, double.class, double.class);
-            Object seat = constructor.newInstance(level, number("entity.x", horse), number("entity.y", horse), number("entity.z", horse));
-            SEATS.add(seat); // Before addFreshEntity: saving/tracking hooks recognize it immediately.
+            if (!NativeAttachment.available()) {
+                // This capability difference is explicit; an independent follower
+                // is never substituted for a native passenger attachment.
+                debug("Native attachment unavailable: pre-Interaction height capability unresolved");
+                return original;
+            }
+            if (!destinationLoaded(horse, level)) return original;
+            NativeAttachment attachment = new NativeAttachment(horse, player, level);
+            Ride ride = new Ride(horse, passengers.get(0), player, attachment, level);
+            for (Object helper : attachment.helpers) SEATS.add(helper);
+            RIDES.put(horse, ride); // Only this ride's registered anchor receives capacity.
             try {
-                Names.call("entity.invisible", seat, true);
-                Names.call("entity.gravity", seat, true);
-                Names.call("entity.invulnerable", seat, true);
-                if (Names.hasField("Entity.noPhysics")) Names.field("Entity.noPhysics", seat, true);
-                Names.call("cloud.radius", seat, 0.0f);
-                Names.call("cloud.waitTime", seat, 0);
-                Names.call("cloud.waiting", seat, false);
-                Names.call("cloud.radiusOnUse", seat, 0.0f);
-                Names.call("cloud.radiusPerTick", seat, 0.0f);
-                // Vanilla initializes this adjustment to zero. Some exact
-                // loader namespaces do not expose a callable mapped setter.
-                Names.callIfPresent("cloud.durationOnUse", seat, 0);
-                int duration = Names.hasField("AreaEffectCloud.INFINITE_DURATION")
-                        ? ((Number) Names.field("AreaEffectCloud.INFINITE_DURATION", null)).intValue()
-                        : Integer.MAX_VALUE;
-                Names.call("cloud.duration", seat, duration);
-                Ride ride = new Ride(horse, passengers.get(0), player, seat, level);
-                if (!update(ride)) { discardSeat(seat); return original; }
-                if (!Boolean.TRUE.equals(Names.call("level.add", level, seat))) { if (Boolean.getBoolean("tandemount.selftest")) log("Native seat insertion refused"); discardSeat(seat); return original; }
-                // false retains normal native mount vetoes; it never overrides them.
-                if (!Names.mount(player, seat)) { discardSeat(seat); return original; }
-                Names.call("entity.positionRider", seat, player);
-                ride.riderOffset = number("entity.y", player) - number("entity.y", seat);
-                if (!update(ride)) { discardSeat(seat); return original; }
-                RIDES.put(horse, ride);
+                if (!destinationLoaded(ride)) { remove(ride); return original; }
+                attachment.mount(level);
+                if (!valid(ride)) { remove(ride); return original; }
                 debug("Ride opened");
                 return Names.field("InteractionResult.SUCCESS", null);
             } catch (Exception exception) {
-                discardSeat(seat);
+                remove(ride);
                 throw exception;
             }
         } catch (Exception exception) { error("Mount rejected", exception); return original; }
@@ -108,26 +123,53 @@ public final class TandemRuntime {
         if (!((List<?>) Names.call("entity.passengers", ride.horse)).contains(ride.driver)) return false;
         if (!((List<?>) Names.call("entity.passengers", ride.seat)).contains(ride.rider)) return false;
         if (!loaded(ride.level, Names.call("entity.blockPosition", ride.horse))) return false;
+        return ride.attachment.valid();
+    }
+    private static boolean destinationLoaded(Ride ride) throws Exception {
+        return destinationLoaded(ride.horse, ride.level);
+    }
+    private static boolean destinationLoaded(Object horse, Object level) throws Exception {
+        // Guard every possible native helper destination before native position
+        // calls. Fixed-size carriers span at most 2.4 blocks in either horizontal
+        // direction; scaled carriers span at most rear + .04. Native 1.16.5
+        // setters can load chunks, so no graph primitive bypasses this check.
+        double x = number("entity.x", horse), y = number("entity.y", horse), z = number("entity.z", horse);
+        double yaw = Math.toRadians(number("entity.yaw", horse));
+        double rearX = x + Math.sin(yaw) * SETTINGS.rear;
+        double rearZ = z - Math.cos(yaw) * SETTINGS.rear;
+        if (!loaded(level, blockPosition(rearX, y + SETTINGS.height, rearZ))) return false;
+        if (Names.hasField("Attributes.SCALE")) {
+            double reach = SETTINGS.rear + (double)0.3F / 16;
+            if (!loaded(level, blockPosition(x + Math.sin(yaw)*reach, y, z-Math.cos(yaw)*reach))) return false;
+        }
+        if (!Names.hasField("Attributes.SCALE")) {
+            // A paired angular chain has a bounded temporary lateral excursion.
+            double spread = Math.acos(SETTINGS.rear / (8 * (double) 0.3F));
+            double dx = Math.sin(yaw + spread) * (double) 0.3F;
+            double dz = -Math.cos(yaw + spread) * (double) 0.3F;
+            for (int pair = 0; pair < 4; pair++) {
+                double fraction = pair / 4.0;
+                if (!loaded(level, blockPosition(x + (rearX-x)*fraction + dx, y, z + (rearZ-z)*fraction + dz))) return false;
+            }
+        }
         return true;
     }
-    private static boolean update(Ride ride) throws Exception {
-        double yaw;
-        if (Names.hasField("LivingEntity.yBodyRot")) yaw = ((Number) Names.field("LivingEntity.yBodyRot", ride.horse)).doubleValue();
-        else yaw = number("entity.yaw", ride.horse);
-        double radians = Math.toRadians(yaw);
-        double x = number("entity.x", ride.horse) + Math.sin(radians) * SETTINGS.rear;
-        double z = number("entity.z", ride.horse) - Math.cos(radians) * SETTINGS.rear;
-        double y = number("entity.y", ride.horse) + SETTINGS.height - ride.riderOffset;
-        // Forge 1.16.5's native position setter loads the target chunk for added
-        // entities. Check the offset seat's chunk as well as the horse's before
-        // any native position, rider-position, or world-insertion operation.
-        Object destination = Names.type("BlockPos").getConstructor(int.class, int.class, int.class)
+    private static Object blockPosition(double x, double y, double z) throws Exception {
+        return Names.type("BlockPos").getConstructor(int.class, int.class, int.class)
                 .newInstance((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
-        if (!loaded(ride.level, destination)) return false;
-        Names.call("entity.position", ride.seat, x, y, z);
-        Names.call("entity.rotation", ride.seat, (float) yaw);
-        if (Names.call("entity.vehicle", ride.rider) == ride.seat) Names.call("entity.positionRider", ride.seat, ride.rider);
+    }
+    private static boolean update(Ride ride) throws Exception {
+        if (!destinationLoaded(ride)) return false;
+        ride.attachment.update(false);
         return true;
+    }
+    public static boolean allowHelperPassenger(Object horse, Object passenger) {
+        Ride ride = RIDES.get(horse);
+        if (ride == null || ride.attachment.anchor != passenger) return false;
+        try {
+            List<?> occupants = (List<?>) Names.call("entity.passengers", horse);
+            return occupants.size() == 1 && occupants.get(0) == ride.driver;
+        } catch (Exception failure) { return false; }
     }
     public static void entityTick(Object entity) {
         Ride ride = RIDES.get(entity);
@@ -137,7 +179,10 @@ public final class TandemRuntime {
     }
     public static void tracker(Object tracker, Object entity) {
         if (!isSeat(entity)) return;
-        try { Names.field("ServerEntity.updateInterval", tracker, Names.fieldType("ServerEntity.updateInterval") == int.class ? 1 : Names.call("update.periodic", null, 1)); }
+        try {
+            TRACKERS.put(entity, tracker);
+            Names.field("ServerEntity.updateInterval", tracker, Names.fieldType("ServerEntity.updateInterval") == int.class ? 1 : Names.call("update.periodic", null, 1));
+        }
         catch (Exception exception) { error("Seat tracking interval", exception); }
     }
     public static void tick(Object server) {
@@ -153,6 +198,7 @@ public final class TandemRuntime {
         }
         if (Boolean.getBoolean("tandemount.networktest")) ProtocolEvidence.tick(server, ticks);
         if (Boolean.getBoolean("tandemount.selftest")) NativeTests.tick(server, ticks);
+        if (Boolean.getBoolean("tandemount.networktest")) ModernWireTests.tick(server, ticks);
     }
     public static void stop(Object server) {
         for (Ride ride : new ArrayList<Ride>(RIDES.values())) remove(ride);
@@ -160,7 +206,7 @@ public final class TandemRuntime {
     }
     private static void remove(Ride ride) {
         RIDES.remove(ride.horse);
-        discardSeat(ride.seat);
+        for (int index = ride.attachment.helpers.length - 1; index >= 0; index--) discardSeat(ride.attachment.helpers[index]);
         debug("Ride closed");
     }
     private static void discardSeat(Object seat) {
@@ -171,10 +217,12 @@ public final class TandemRuntime {
             Names.call("entity.discard", seat);
         }
         catch (Exception exception) { error("Seat removal", exception); }
-        finally { SEATS.remove(seat); }
+        finally { SEATS.remove(seat); DIMENSIONS_DIRTY.remove(seat); TRACKERS.remove(seat); }
     }
     public static int rideCount() { return RIDES.size(); }
-    public static int seatCount() { return SEATS.size(); }
+    public static int seatCount() { return RIDES.size(); }
+    public static int helperCount() { return SEATS.size(); }
+    static Object[] helpersFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? new Object[0] : ride.attachment.helpers.clone(); }
     static Object seatFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? null : ride.seat; }
     public static void applySettings() {
         failed = false;
@@ -192,7 +240,7 @@ public final class TandemRuntime {
     }
     private static final class Ride {
         final Object horse, driver, rider, seat, level;
-        double riderOffset;
-        Ride(Object horse, Object driver, Object rider, Object seat, Object level) { this.horse=horse; this.driver=driver; this.rider=rider; this.seat=seat; this.level=level; }
+        final NativeAttachment attachment;
+        Ride(Object horse, Object driver, Object rider, NativeAttachment attachment, Object level) { this.horse=horse; this.driver=driver; this.rider=rider; this.attachment=attachment; this.seat=attachment.seat; this.level=level; }
     }
 }

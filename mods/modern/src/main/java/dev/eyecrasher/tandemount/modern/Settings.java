@@ -10,16 +10,21 @@ import java.util.Properties;
 
 /** Bounded, immediately saved settings. Unknown keys survive updates. */
 public final class Settings {
-    public static final double DEFAULT_HEIGHT = 1.125;
-    public static final double DEFAULT_REAR = 0.6875;
+    public static final double DEFAULT_HEIGHT = 0.8125;
+    public static final double DEFAULT_REAR = 0.5;
     public boolean enabled = true;
     public boolean debug = false;
     public double height = DEFAULT_HEIGHT;
     public double rear = DEFAULT_REAR;
-    public final Path file = Paths.get(System.getProperty("tandemount.config", "config/tandemount.properties"));
+    public final Path file;
     private Properties properties = new Properties();
+    public Settings() { this(Paths.get(System.getProperty("tandemount.config", "config/tandemount.properties"))); }
+    Settings(Path file) { this.file = file; }
     public void load() throws Exception {
-        if (!Files.exists(file)) { save(); return; }
+        if (!Files.exists(file)) {
+            enabled = true; debug = false; height = DEFAULT_HEIGHT; rear = DEFAULT_REAR;
+            properties = new Properties(); save(); return;
+        }
         Properties fresh = new Properties();
         try (InputStream input = Files.newInputStream(file)) { fresh.load(input); }
         boolean nextEnabled = bool(fresh, "enabled", true);

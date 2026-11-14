@@ -26,7 +26,7 @@ public final class NativeTests {
                 Object level = Names.call("server.overworld", server);
                 if (Names.has("level.chunk")) Names.call("level.chunk", level, 0, 0);
                 int clouds = 0;
-                for (Object entity : (Iterable<?>) Names.call("level.entities", level)) if (Names.type("AreaEffectCloud").isInstance(entity)) clouds++;
+                for (Object entity : (Iterable<?>) Names.call("level.entities", level)) if (Names.type("AreaEffectCloud").isInstance(entity) || (NativeAttachment.available() && (Names.type("Interaction").isInstance(entity) || Names.type("BlockDisplay").isInstance(entity) || Names.type("Llama").isInstance(entity)))) clouds++;
                 check(clouds == 0, "restart-has-no-persisted-seat-artifact");
                 empty("restart-has-no-stale-ride-state");
             } else run(server);
@@ -109,7 +109,7 @@ public final class NativeTests {
         Names.call("entity.position", player, 0.5, 80.0, 8.5);
         return player;
     }
-    private static Object horse(Object level, double x) throws Exception {
+    static Object horse(Object level, double x) throws Exception {
         Object entityType = Names.field("EntityType.HORSE", null);
         Object horse = Names.type("Horse").getConstructor(Names.type("EntityType"), Names.type("Level")).newInstance(entityType, level);
         Names.call("entity.position", horse, x, 80.0, 8.5);
@@ -134,7 +134,7 @@ public final class NativeTests {
         return horse;
     }
     private static void empty(String checkName) {
-        check(TandemRuntime.rideCount() == 0 && TandemRuntime.seatCount() == 0, checkName);
+        check(TandemRuntime.rideCount() == 0 && TandemRuntime.seatCount() == 0 && TandemRuntime.helperCount() == 0, checkName);
     }
     private static void setFixturePlayerLevel(Object player, Object level) throws Exception {
         // Exact vanilla setter moved from Entity to ServerPlayer in 1.17.
@@ -160,7 +160,7 @@ public final class NativeTests {
         if (Names.hasField("Entity.chunkPosition")) Names.field("Entity.chunkPosition", entity,
                 Names.type("ChunkPos").getConstructor(int.class, int.class).newInstance((int) Math.floor(x) >> 4, (int) Math.floor(z) >> 4));
     }
-    private static void teleport(Object player, Object level, double x, double y, double z) throws Exception {
+    static void teleport(Object player, Object level, double x, double y, double z) throws Exception {
         check(loaded(level, x, y, z), "fixture-native-teleport-destination-already-loaded");
         Class<?>[] types = Names.method("player.teleport").getParameterTypes();
         Object[] args = new Object[types.length];
@@ -230,7 +230,9 @@ public final class NativeTests {
             if (!Names.type("PassengersPacket").isInstance(packet)
                     || ((Number) Names.field("PassengersPacket.vehicle", packet)).intValue() != vehicleId) continue;
             int[] passengers = (int[]) Names.field("PassengersPacket.passengers", packet);
-            if (passengers.length != 1 || passengers[0] != passengerId) return false;
+            boolean includes = false;
+            for (int id : passengers) if (id == passengerId) includes = true;
+            if (!includes) return false;
             found = true;
         }
         return found;
@@ -255,8 +257,25 @@ public final class NativeTests {
         check(spawn && state, "late-observer-native-pairing-includes-state");
         check(passengerEdge(packets, seat, rider), "late-observer-native-seat-passenger-edge");
         check(passengerEdge(pairingPackets(level, horse, observer), horse, driver), "late-observer-native-horse-driver-edge");
+        List<Object> all = new ArrayList<Object>(pairingPackets(level, horse, observer));
+        Object parent = horse;
+        for (Object helper : TandemRuntime.helpersFor(horse)) {
+            check(passengerEdge(pairingPackets(level, parent, observer), parent, helper), "late-observer-native-helper-passenger-edge");
+            all.addAll(pairingPackets(level, helper, observer));
+            parent = helper;
+        }
+        java.util.Map<Integer,Integer> received = new java.util.HashMap<Integer,Integer>();
+        for (Object packet : all) if (Names.type("PassengersPacket").isInstance(packet)) {
+            int vehicle = ((Number) Names.field("PassengersPacket.vehicle", packet)).intValue();
+            for (int passenger : (int[]) Names.field("PassengersPacket.passengers", packet)) received.put(passenger, vehicle);
+        }
+        int root = ((Number) Names.call("entity.id", rider)).intValue(), depth = 0;
+        while (received.containsKey(root) && depth++ < 32) root = received.get(root);
+        check(depth < 32 && root == ((Number) Names.call("entity.id", horse)).intValue(), "native-observer-received-passenger-graph-shares-horse-root");
     }
     private static void run(Object server) throws Exception {
+        check(NativeAttachment.available(), "exact-game-supports-continuous-native-attachment-height");
+        settingsDefaults();
         Object level = Names.call("server.overworld", server);
         // Acquire an already-generated spawn chunk for this disposable fixture only.
         if (Names.has("level.chunk")) Names.call("level.chunk", level, 0, 0);
@@ -284,22 +303,34 @@ public final class NativeTests {
         if (TandemRuntime.rideCount() == 0) TandemRuntime.log("Native interaction diagnostics: pass=" + (result == pass) + ", horseAlive=" + Names.call("entity.alive", horse) + ", playerAlive=" + Names.call("entity.alive", rider) + ", sameLevel=" + (Names.call("entity.level", horse) == Names.call("entity.level", rider)) + ", playerUnmounted=" + (Names.call("entity.vehicle", rider) == null) + ", passengers=" + ((List<?>) Names.call("entity.passengers", horse)).size());
         check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatCount() == 1, "native-interaction-opens-second-seat");
         Object seat = TandemRuntime.seatFor(horse);
-        check(Names.type("AreaEffectCloud").isInstance(seat), "seat-uses-vanilla-area-effect-cloud");
+        check(Names.type("BlockDisplay").isInstance(seat), "seat-uses-vanilla-block-display");
         check(!Names.type("LivingEntity").isInstance(seat), "seat-skips-living-vehicle-renderer-branch");
-        check(Math.abs(((Number) Names.call("cloud.getRadius", seat)).floatValue()) < 0.000001f, "seat-cloud-emits-no-radius-particles");
-        check(!Boolean.TRUE.equals(Names.call("cloud.isWaiting", seat)), "seat-cloud-does-not-emit-wait-particles");
-        check(Boolean.TRUE.equals(Names.call("entity.noGravity", seat)), "seat-cloud-has-no-gravity");
-        int expectedDuration = Names.hasField("AreaEffectCloud.INFINITE_DURATION")
-                ? ((Number) Names.field("AreaEffectCloud.INFINITE_DURATION", null)).intValue()
-                : Integer.MAX_VALUE;
-        check(((Number) Names.call("cloud.getDuration", seat)).intValue() == expectedDuration, "seat-cloud-does-not-expire-while-mounted");
-        if (Names.hasField("Entity.noPhysics")) check(Boolean.TRUE.equals(Names.field("Entity.noPhysics", seat)), "seat-cloud-has-no-physics");
-        if (Names.hasField("AreaEffectCloud.effects")) {
-            check(((List<?>) Names.field("AreaEffectCloud.effects", seat)).isEmpty(), "seat-cloud-has-no-status-effects");
-        } else if (Names.hasField("AreaEffectCloud.potionContents")) {
-            Object contents = Names.field("AreaEffectCloud.potionContents", seat);
-            check(!Boolean.TRUE.equals(Names.call("potion.hasEffects", contents)), "seat-cloud-has-no-status-effects");
+        check(Names.call("display.getBlock", seat).equals(Names.call("block.state", Names.field("Blocks.BARRIER", null))), "seat-native-barrier-state-is-invisible");
+        check(Boolean.TRUE.equals(Names.call("entity.noGravity", seat)), "seat-has-no-gravity");
+        check(Boolean.TRUE.equals(Names.field("Entity.noPhysics", seat)), "seat-has-no-physics");
+        for (Object helper : TandemRuntime.helpersFor(horse)) {
+            check(TandemRuntime.isSeat(helper), "all-native-helpers-are-owned");
+            check(((Number) Names.call("bounds.size", Names.call("entity.getBounds", helper))).doubleValue() == 0, "all-native-helper-server-hitboxes-are-empty");
+            if (Names.has("helper.hurt")) {
+                Class<?>[] types = Names.method("helper.hurt").getParameterTypes();
+                Object[] arguments = new Object[types.length];
+                for (int i = 0; i < types.length; i++) arguments[i] = types[i] == float.class ? 100F : types[i] == Names.type("ServerLevel") ? level : null;
+                check(Boolean.FALSE.equals(Names.method("helper.hurt").invoke(helper, arguments)), "all-native-helpers-reject-damage");
+            }
+            if (Names.method("entity.save").getParameterTypes()[0] == Names.type("CompoundTag")) {
+                Object helperTag = Names.type("CompoundTag").getConstructor().newInstance();
+                check(Boolean.FALSE.equals(Names.call("entity.save", helper, helperTag))
+                        && Boolean.FALSE.equals(Names.call("entity.savePassenger", helper, helperTag)), "all-native-helpers-reject-saving");
+            } else check(Boolean.FALSE.equals(Names.call("entity.shouldSave", helper)), "all-native-helpers-reject-saving");
         }
+        check(Names.call("entity.rootVehicle", rider) == horse && Names.call("entity.rootVehicle", driver) == horse, "server-native-attachment-shares-horse-root");
+        double initialYaw = Math.toRadians(((Number)Names.call("entity.yaw", horse)).doubleValue());
+        double initialDx = ((Number)Names.call("entity.x", rider)).doubleValue() - ((Number)Names.call("entity.x", horse)).doubleValue();
+        double initialDz = ((Number)Names.call("entity.z", rider)).doubleValue() - ((Number)Names.call("entity.z", horse)).doubleValue();
+        check(Math.abs(((Number) Names.call("entity.y", rider)).doubleValue() - ((Number) Names.call("entity.y", horse)).doubleValue() - Settings.DEFAULT_HEIGHT) < .002
+                && Math.abs(initialDx - Math.sin(initialYaw) * Settings.DEFAULT_REAR) < .002
+                && Math.abs(initialDz + Math.cos(initialYaw) * Settings.DEFAULT_REAR) < .002,
+                "server-native-default-player-feet-match-owner-position");
         if (!Names.TABLE.getProperty("platform").equals("fabric")) {
             try (NativeCancellation veto = NativeCancellation.listen(rider, false, false)) {
                 Names.call("entity.dismount", rider);
@@ -310,7 +341,9 @@ public final class NativeTests {
         }
         check(Names.call("entity.vehicle", driver) == horse, "driver-control-vehicle-preserved");
         check(Names.call("entity.vehicle", rider) == seat, "second-rider-uses-native-vehicle");
-        check(((List<?>) Names.call("entity.passengers", horse)).size() == 1, "horse-keeps-only-driver");
+        List<?> horsePassengers = (List<?>) Names.call("entity.passengers", horse);
+        check(horsePassengers.size() == 2 && horsePassengers.get(0) == driver
+                && Names.call("entity.controller", horse) == driver, "server-native-horse-keeps-first-driver-control");
         check(originalHorseHealth.equals(Names.call("living.health", horse)) && originalRiderHealth.equals(Names.call("living.health", rider)), "mount-preserves-native-health");
         if (Names.has("seat.hurt")) {
             Object[] args = new Object[Names.method("seat.hurt").getParameterCount()];
@@ -335,7 +368,7 @@ public final class NativeTests {
         TandemRuntime.applySettings();
         check(TandemRuntime.SETTINGS.rear == rear, "height-adjustment-independent");
         double riderHeight = ((Number) Names.call("entity.y", rider)).doubleValue() - ((Number) Names.call("entity.y", horse)).doubleValue();
-        check(Math.abs(riderHeight - height - 0.0625) < 0.000001, "native-player-seat-height");
+        check(Math.abs(riderHeight - height - 0.0625) < .002, "native-player-seat-height");
         TandemRuntime.SETTINGS.rear = rear + 0.0625;
         TandemRuntime.applySettings();
         check(TandemRuntime.SETTINGS.height == height + 0.0625, "rear-adjustment-independent");
@@ -349,10 +382,13 @@ public final class NativeTests {
         // Turning follows the body, not the independent look direction.
         if (Names.hasField("LivingEntity.yBodyRot")) {
             Names.field("LivingEntity.yBodyRot", horse, 90.0f);
-            Names.call("entity.rotation", horse, -90.0f);
+            Names.call("entity.rotation", horse, 90.0f);
             TandemRuntime.entityTick(horse);
-            check(Math.abs(((Number) Names.call("entity.x", seat)).doubleValue() - 5.0 - TandemRuntime.SETTINGS.rear) < 0.000001, "turning-follows-body-without-look-oscillation");
+            check(Math.abs(((Number) Names.call("entity.x", seat)).doubleValue() - 5.0 - TandemRuntime.SETTINGS.rear) < .002, "native-attachment-turns-with-horse-without-independent-follower");
         }
+        Names.call("entity.dismount", rider);
+        interact(rider, horse, hand);
+        check(TandemRuntime.rideCount() == 1 && Names.call("entity.rootVehicle", rider) == horse, "immediate-dismount-retry-reclaims-stale-graph-synchronously");
         Names.call("entity.dismount", rider);
         TandemRuntime.entityTick(horse);
         check(TandemRuntime.rideCount() == 0 && TandemRuntime.seatCount() == 0, "rider-dismount-cleans-seat");
@@ -380,12 +416,12 @@ public final class NativeTests {
         check(AdminCommands.allowed(Names.call("server.source", server)), "console-admin-permission");
         check(!AdminCommands.allowed(Names.call("entity.source", third)), "ordinary-player-admin-denied");
         Object console = Names.call("server.source", server);
-        check(AdminCommands.execute(Names.call("entity.source", third), "disable") == 0 && TandemRuntime.SETTINGS.enabled, "permission-denial-preserves-settings");
-        check(AdminCommands.execute(console, "height +") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625 && TandemRuntime.SETTINGS.rear == rear, "admin-step-saves-independent-height");
+        check(command(Names.call("entity.source", third), "disable") == 0 && TandemRuntime.SETTINGS.enabled, "permission-denial-preserves-settings");
+        check(command(console, "height +") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625 && TandemRuntime.SETTINGS.rear == rear, "admin-step-saves-independent-height");
         check(Files.exists(TandemRuntime.SETTINGS.file), "admin-settings-saved-immediately");
-        check(AdminCommands.execute(console, "rear Infinity") == 0 && TandemRuntime.SETTINGS.rear == rear, "admin-rejects-nonfinite-without-mutation");
-        check(AdminCommands.execute(console, "reload") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625, "admin-reload-restores-saved-settings");
-        check(AdminCommands.execute(console, "reset") == 1 && TandemRuntime.SETTINGS.height == Settings.DEFAULT_HEIGHT && TandemRuntime.SETTINGS.rear == Settings.DEFAULT_REAR, "admin-reset-restores-defaults");
+        check(command(console, "rear Infinity") == 0 && TandemRuntime.SETTINGS.rear == rear, "admin-rejects-nonfinite-without-mutation");
+        check(command(console, "reload") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625, "admin-reload-restores-saved-settings");
+        check(command(console, "reset") == 1 && TandemRuntime.SETTINGS.height == Settings.DEFAULT_HEIGHT && TandemRuntime.SETTINGS.rear == Settings.DEFAULT_REAR, "reset-restores-owner-defaults");
         Object otherDriver = player(server, level, 4), otherRider = player(server, level, 5);
         horse = horse(level, 0.5);
         Object otherHorse = horse(level, 8.5);
@@ -493,6 +529,35 @@ public final class NativeTests {
         check(Names.mount(driver, horse), "shutdown-fixture-driver-mount");
         interact(rider, horse, hand);
         check(TandemRuntime.rideCount() == 1, "shutdown-fixture-leaves-active-ride");
+    }
+    private static int command(Object source, String command) throws Exception {
+        Object server = Names.call("source.server", source);
+        Object dispatcher = Names.call("commands.dispatcher", Names.call("server.commands", server));
+        @SuppressWarnings("unchecked") com.mojang.brigadier.CommandDispatcher<Object> nativeDispatcher = (com.mojang.brigadier.CommandDispatcher<Object>) dispatcher;
+        return nativeDispatcher.execute("tandemount " + command, source);
+    }
+    private static void settingsDefaults() throws Exception {
+        java.nio.file.Path directory = Files.createTempDirectory(Paths.get("."), "tandemount-settings-check-");
+        Settings fresh = new Settings(directory.resolve("new.properties"));
+        fresh.load();
+        check(fresh.height == .8125 && fresh.rear == .5 && Files.exists(fresh.file), "fresh-config-uses-owner-defaults");
+        java.nio.file.Path missing = directory.resolve("missing.properties");
+        Files.write(missing, "enabled=true\nunknown=keep\n".getBytes(StandardCharsets.UTF_8));
+        Settings partial = new Settings(missing); partial.load();
+        check(partial.height == .8125 && partial.rear == .5, "missing-settings-use-owner-defaults");
+        Files.write(missing, "height=1.125\nrear=0.6875\nunknown=keep\n".getBytes(StandardCharsets.UTF_8));
+        partial.load(); partial.save();
+        check(partial.height == 1.125 && partial.rear == .6875 && new String(Files.readAllBytes(missing), StandardCharsets.UTF_8).contains("unknown=keep"), "saved-settings-remain-preserved");
+        Files.delete(missing); partial.load();
+        check(partial.height == .8125 && partial.rear == .5, "removed-config-reload-restores-owner-defaults");
+        List<Object> controls = AdminCommands.controls();
+        boolean styled = controls.size() >= 7;
+        for (Object component : controls) {
+            Object style = Names.call("component.style", component);
+            styled &= Names.call("style.getColor", style) != null && Names.call("style.getClick", style) != null;
+        }
+        check(styled, "command-chat-has-color-and-style");
+        check(styled, "command-chat-has-clickable-adjustments");
     }
     private static void record(boolean passed, String error) {
         StringBuilder json = new StringBuilder("{\n  \"minecraft\":\"").append(Names.TABLE.getProperty("minecraft")).append("\",\n  \"platform\":\"").append(Names.TABLE.getProperty("platform")).append("\",\n  \"native_fixture\":").append(passed).append(",\n  \"error\":\"").append(error).append("\",\n  \"connected_clients\":false,\n  \"visual\":\"not-run\",\n  \"checks\":[");

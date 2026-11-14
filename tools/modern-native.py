@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Run an exact modern artifact in a fresh, local, disposable loader server.
 
-EULA acceptance must be explicit. This is an in-process native fixture with
-synthetic ServerPlayers, not a connected-client or human visual confirmation.
+EULA acceptance must be explicit. Native entity fixtures use synthetic players;
+--network-test separately exercises real loopback sockets and received packets.
+Neither establishes human visual confirmation.
 """
 import argparse
 import hashlib
@@ -32,14 +33,14 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
     artifact = ROOT / "mods" / "modern" / "build" / f"tandemount-1.0.0-{platform}-{version}.jar"
     artifact_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
     # Every run gets its own directory; an earlier world is never silently reused.
-    workspace = RuntimeWorkspace(CACHE / "native", platform + "-" + version + "-"
+    workspace = RuntimeWorkspace(CACHE / os.environ.get("TANDEMOUNT_NATIVE_NAMESPACE", "native"), platform + "-" + version + "-"
                                  + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6], distribution)
     run_dir = workspace.directory
     (run_dir / "mods").mkdir()
     shutil.copy2(artifact, run_dir / "mods" / artifact.name)
     (run_dir / "eula.txt").write_text("eula=true\n")
-    port = 0
-    if network_test:
+    port = int(os.environ.get("TANDEMOUNT_TEST_PORT", "0"))
+    if network_test and port == 0:
         with socket.socket() as available:
             available.bind(("127.0.0.1", 0))
             port = available.getsockname()[1]
@@ -66,7 +67,7 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
                 while process.poll() is None and time.monotonic() - started < timeout:
                     if (run_dir / "tandemount-network-ready.json").exists():
                         output = run_dir / "connected-client.json"
-                        probe = subprocess.run([os.environ.get("PYTHON", "python3"), str(ROOT / "tools" / "modern-client.py"), "--minecraft", version, "--ids", str(run_dir / "tandemount-protocol.properties"), "--port", str(port), "--output", str(output)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=45)
+                        probe = subprocess.run([os.environ.get("PYTHON", "python3"), str(ROOT / "tools" / "modern-wire.py"), "--minecraft", version, "--ids", str(run_dir / "tandemount-protocol.properties"), "--port", str(port), "--output", str(output)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=90)
                         (run_dir / "client.log").write_text(probe.stdout)
                         if output.exists(): network = json.loads(output.read_text())
                         process.communicate("stop\n", timeout=45)

@@ -48,21 +48,67 @@ uses vanilla operator permission level 2 as the native default for
 Cancelled native operations are not rescheduled. Seats use native tracking and
 do not send direct visibility overrides or force-load chunks.
 
-The second seat is a vanilla `AreaEffectCloud`, which extends `Entity` directly
-and therefore does not activate the vanilla player's living-vehicle body-yaw
-clamp. The seat is invisible, has zero radius and an empty potion, does not wait,
-has zero radius or duration adjustments, disables gravity and physics, and uses
-the vanilla infinite-duration sentinel where available (maximum integer on
-older releases). The older fallback delays vanilla expiry until the cloud's
-age reaches `Integer.MAX_VALUE` (about 3.4 years of continuous ticking at 20
-TPS); it is not a mathematically infinite lifetime. Hash-bound client-bytecode
-assertions for 1.16.5 and 26.3 are recorded in
-`.agents/modern-renderer-audit.json`: the 1.16.5 cloud renderer has no
-entity-geometry override and its nonwaiting zero-radius client particle loop has
-zero iterations; 26.3 registers the cloud with `NoopRenderer` and its
-nonwaiting zero-radius client particle loop also has zero iterations. For 26.3,
-the empty-potion branch skips status-effect application and the infinite
-duration sentinel skips natural expiry. `TandemRuntime` configures gravity and
-physics off. Native fixture results record these settings for each tested
-artifact. The client-bytecode analysis and native state checks do not establish
-a human visual check. That check remains a separate release-evidence item.
+The second rider's final vehicle is a vanilla `BlockDisplay` carrying the
+invisible-render-shape `BARRIER` state. It is a nonliving entity, so the native
+player renderer can turn the rider's head and body independently. The horse
+retains the first player as its first passenger and controlling passenger. All
+seat helpers belong to the horse's native passenger graph on the server and
+are synchronized through the server's ordinary visibility-aware tracker.
+
+The native graph has two attachment families:
+
+- Releases with the `SCALE` attribute use an Interaction anchor, two opposed
+  llama carriers, an Interaction lift, and the final BlockDisplay.
+- Earlier releases with Interaction and BlockDisplay use eight adult llama
+  carriers with symmetric yaw angles. Zero-height Interaction links between
+  them prevent native living-vehicle body-yaw inheritance from changing the
+  attachment geometry. Their continuous rearward range covers the documented
+  0 through 2 blocks.
+
+Interaction metadata alone does not refresh cached attachment dimensions in
+several official clients. A normal synchronized pose update refreshes those
+dimensions. Each native pairing collector receives a pose-only metadata tail
+following its complete snapshot; a changed height receives the same tail
+following the ordinary dirty metadata update. These use the existing native
+tracker and native pairing collector, including the exact NeoForge collector
+adapter where required. There are no independent seat-position broadcasts and
+no periodic pose refresh. The final helper metadata is prepared and flushed by
+the ordinary native tracker before mounting the second player. Height calibration
+uses native attachment methods without temporarily moving the real player.
+All helpers have empty server collision boxes,
+gravity and physics disabled, invulnerability, damage and interaction guards,
+and native save guards. Living helper geometry stays far below the riders;
+the final native vehicle stays near the rider for ordinary dismounting.
+
+`height` means the second player's feet above the horse's feet. New settings,
+missing values, and `/tandemount reset` use `height=0.8125` and `rear=0.5`.
+Existing saved numeric values keep their existing absolute units and values.
+The colored chat menu provides height/rear adjustment, save, reload, reset,
+and enable/disable buttons; text commands have the same behavior. Adjustments
+save immediately, and `save` explicitly writes the current settings again.
+
+Versions before Interaction and BlockDisplay require a different native graph.
+That capability is still under investigation. A missing native height primitive
+is an explicit verification failure; an independent following seat is not
+substituted, and earlier follower-based reports do not establish compatibility
+with the final attachment contract. Do not publish a target until its final
+artifact has passed that contract.
+
+The native fixture distinguishes synthetic entities and tracker collections
+from actual loopback clients. `--network-test` now connects ordinary protocol
+players, right-clicks the horse, inspects received existing/late observer
+passenger graphs, executes the received adjustment command, and records
+absence of periodic helper position packets. Original-client component probes
+are separate:
+
+```sh
+python3 tools/modern-client-components.py --minecraft 1.19.4
+python3 tools/modern-client-components.py --minecraft 1.20.6
+```
+
+These component probes load untouched exact official client classes and apply
+normal synchronized metadata. They establish metadata ordering and native
+attachment points, with no direct dimensions refresh. Their uninitialized
+client-level shell does not establish client ticking, rendered motion, or
+human visual review. Full original-client lifetime/motion evidence and human
+visual review remain distinct release checks.

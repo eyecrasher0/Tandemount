@@ -253,6 +253,39 @@ ALIASES = {
     "entity.uuid": ("Entity", "getUUID", ""),
     "entity.server": ("Entity", "getServer", ""),
     "entity.positionRider": ("Entity", "positionRider", "net.minecraft.world.entity.Entity"),
+    "entity.rootVehicle": ("Entity", "getRootVehicle", ""),
+    "entity.passengerPoint": ("Entity", "getPassengerRidingPosition", "net.minecraft.world.entity.Entity"),
+    "entity.passengerHeight": ("Entity", "getPassengersRidingOffset", ""),
+    "entity.riderOffset": ("Entity", "getMyRidingOffset", ""),
+    "entity.vehiclePoint": ("Entity", "getVehicleAttachmentPoint", "net.minecraft.world.entity.Entity"),
+    "entity.pose": ("Entity", "setPose", "net.minecraft.world.entity.Pose"),
+    "entity.getPose": ("Entity", "getPose", ""),
+    "entity.data": ("Entity", "getEntityData", ""),
+    "data.value": ("DataValue", "create", "net.minecraft.network.syncher.EntityDataAccessor,java.lang.Object"),
+    "tracker.broadcast": ("ServerEntity", "broadcastAndSend", "net.minecraft.network.protocol.Packet"),
+    "tracker.flushMetadata": ("ServerEntity", "sendDirtyEntityData", ""),
+    "synchronizer.broadcast": ("Synchronizer", "sendToTrackingPlayers", "net.minecraft.network.protocol.Packet"),
+    "entity.controller": ("AbstractHorse", "getControllingPassenger", ""),
+    "entity.silent": ("Entity", "setSilent", "boolean"),
+    "entity.headRotation": ("Entity", "setYHeadRot", "float"),
+    "entity.bodyRotation": ("Entity", "setYBodyRot", "float"),
+    "entity.refreshDimensions": ("Entity", "refreshDimensions", ""),
+    "entity.bounds": ("Entity", "setBoundingBox", "net.minecraft.world.phys.AABB"),
+    "entity.getBounds": ("Entity", "getBoundingBox", ""),
+    "helper.hurt": ("Entity", "hurtServer", "net.minecraft.server.level.ServerLevel,net.minecraft.world.damagesource.DamageSource,float"),
+    "mob.noAi": ("Mob", "setNoAi", "boolean"),
+    "interaction.width": ("Interaction", "setWidth", "float"),
+    "interaction.height": ("Interaction", "setHeight", "float"),
+    "interaction.getWidth": ("Interaction", "getWidth", ""),
+    "interaction.getHeight": ("Interaction", "getHeight", ""),
+    "interaction.response": ("Interaction", "setResponse", "boolean"),
+    "living.attribute": ("LivingEntity", "getAttribute", "net.minecraft.core.Holder"),
+    "living.scale": ("LivingEntity", "getScale", ""),
+    "attribute.base": ("AttributeInstance", "setBaseValue", "double"),
+    "display.block": ("BlockDisplay", "setBlockState", "net.minecraft.world.level.block.state.BlockState"),
+    "display.getBlock": ("BlockDisplay", "getBlockState", ""),
+    "block.state": ("Block", "defaultBlockState", ""),
+    "bounds.size": ("AABB", "getSize", ""),
     "horse.tamed": ("AbstractHorse", "isTamed", ""),
     "horse.saddled": ("AbstractHorse", "isSaddled", ""),
     "horse.baby": ("AgeableMob", "isBaby", ""),
@@ -272,6 +305,8 @@ ALIASES = {
     "cloud.getDuration": ("AreaEffectCloud", "getDuration", ""),
     "cloud.isWaiting": ("AreaEffectCloud", "isWaiting", ""),
     "entity.noGravity": ("Entity", "isNoGravity", ""),
+    "entity.name": ("Entity", "getName", ""),
+    "component.string": ("Component", "getString", ""),
     "potion.hasEffects": ("PotionContents", "hasEffects", ""),
     "level.add": ("ServerLevel", "addFreshEntity", "net.minecraft.world.entity.Entity"),
     "level.loaded": ("Level", "hasChunkAt", "net.minecraft.core.BlockPos"),
@@ -279,6 +314,7 @@ ALIASES = {
     "server.commands": ("MinecraftServer", "getCommands", ""),
     "commands.dispatcher": ("Commands", "getDispatcher", ""),
     "source.permission": ("CommandSourceStack", "hasPermission", "int"),
+    "source.server": ("CommandSourceStack", "getServer", ""),
     "source.message": ("CommandSourceStack", "sendSystemMessage", "net.minecraft.network.chat.Component"),
     "server.overworld": ("MinecraftServer", "overworld", ""),
     "server.stop": ("MinecraftServer", "halt", "boolean"),
@@ -291,6 +327,11 @@ ALIASES = {
     "component.style": ("Component", "getStyle", ""),
     "component.setStyle": ("MutableComponent", "setStyle", "net.minecraft.network.chat.Style"),
     "style.click": ("Style", "withClickEvent", "net.minecraft.network.chat.ClickEvent"),
+    "style.color": ("Style", "withColor", "int"),
+    "style.getColor": ("Style", "getColor", ""),
+    "style.getClick": ("Style", "getClickEvent", ""),
+    "click.command": ("ClickEvent", "getValue", ""),
+    "run.command": ("RunCommand", "command", ""),
     "client.default": ("ClientInformation", "createDefault", ""),
     "cookie.initial": ("CommonListenerCookie", "createInitial", "com.mojang.authlib.GameProfile,boolean"),
     "level.chunk": ("Level", "getChunk", "int,int"),
@@ -336,6 +377,19 @@ CLASSES = {
     "Horse": "net.minecraft.world.entity.animal.horse.Horse",
     "AbstractHorse": "net.minecraft.world.entity.animal.horse.AbstractHorse",
     "AreaEffectCloud": "net.minecraft.world.entity.AreaEffectCloud",
+    "Interaction": "net.minecraft.world.entity.Interaction",
+    "Display": "net.minecraft.world.entity.Display",
+    "BlockDisplay": "net.minecraft.world.entity.Display$BlockDisplay",
+    "Llama": "net.minecraft.world.entity.animal.horse.Llama",
+    "Attributes": "net.minecraft.world.entity.ai.attributes.Attributes",
+    "AttributeInstance": "net.minecraft.world.entity.ai.attributes.AttributeInstance",
+    "Block": "net.minecraft.world.level.block.Block",
+    "Blocks": "net.minecraft.world.level.block.Blocks",
+    "AABB": "net.minecraft.world.phys.AABB",
+    "Pose": "net.minecraft.world.entity.Pose",
+    "DataValue": "net.minecraft.network.syncher.SynchedEntityData$DataValue",
+    "Packet": "net.minecraft.network.protocol.Packet",
+    "Synchronizer": "net.minecraft.server.level.ServerEntity$Synchronizer",
     "PotionContents": "net.minecraft.world.item.alchemy.PotionContents",
     "Player": "net.minecraft.world.entity.player.Player",
     "ServerPlayer": "net.minecraft.server.level.ServerPlayer",
@@ -420,7 +474,7 @@ def mapped_table(target, platform):
         names, methods, fields = identity_mappings(declared)
         # Mojang's un-obfuscated 26.x game relocated the equine package.
     CLASSES["AgeableMob"] = "net.minecraft.world.entity.AgableMob" if "net.minecraft.world.entity.AgableMob" in names else "net.minecraft.world.entity.AgeableMob"
-    for short in ("Horse", "AbstractHorse"):
+    for short in ("Horse", "AbstractHorse", "Llama"):
         relocated = "net.minecraft.world.entity.animal.equine." + short
         if relocated in names: CLASSES[short] = relocated
         else: CLASSES[short] = "net.minecraft.world.entity.animal.horse." + short
@@ -478,6 +532,8 @@ def mapped_table(target, platform):
         "level.chunk": [("LevelReader", "getChunk", "int,int")],
         "entity.mount": [("Entity", "startRiding", "net.minecraft.world.entity.Entity")],
         "entity.invulnerable": [("Entity", "setPermanentlyInvulnerable", "boolean")],
+        "helper.hurt": [("Entity", "hurt", "net.minecraft.world.damagesource.DamageSource,float")],
+        "entity.riderOffset": [("Entity", "getMyRidingOffset", "net.minecraft.world.entity.Entity")],
         "entity.source": [("ServerPlayer", "createCommandSourceStack", "")],
         "player.interact": [("Player", "interactOn", "net.minecraft.world.entity.Entity,net.minecraft.world.InteractionHand,net.minecraft.world.phys.Vec3")],
         "entity.yaw": [("Entity", "getYHeadRot", "")],
@@ -527,6 +583,10 @@ def mapped_table(target, platform):
             if pairing[2] != expected:
                 raise ValueError("Unexpected vanilla pairing descriptor for NeoForge: " + version)
             table["c.PairingAcceptor"] = acceptor
+            accepts = [(name, desc) for name, desc, access in acceptor_declaration[2]
+                       if name == "accept" and desc == "(Lnet/minecraft/network/protocol/Packet;)V" and access & 1]
+            if accepts:
+                table["m.pairing.accept"] = acceptor + "#accept#" + accepts[0][1]
             pairing[2] = expected.replace("Ljava/util/function/Consumer;", "L" + acceptor.replace(".", "/") + ";")
             table["m.tracker.pairing"] = "#".join(pairing)
     for owner, fields_wanted in {"Entity": ["noPhysics", "level", "yRot", "removed", "position", "blockPosition", "chunkPosition"], "Level": ["isClientSide"], "LivingEntity": ["yBodyRot"], "InteractionResult": ["PASS", "SUCCESS"], "EntityType": ["HORSE"], "InteractionHand": ["MAIN_HAND"], "PacketFlow": ["SERVERBOUND"], "ServerPlayer": ["connection"], "ServerEntity": ["updateInterval", "entity"], "Connection": ["channel"], "ClickAction": ["RUN_COMMAND"], "SoundSource": ["PLAYERS"], "Items": ["SADDLE"], "EquipmentSlot": ["SADDLE"], "Permissions": ["COMMANDS_GAMEMASTER"], "ConnectionProtocol": ["LOGIN", "CONFIGURATION", "PLAY", "flows"], "PacketFlow": ["CLIENTBOUND", "SERVERBOUND"], "ProtocolPacketSet": ["classToId"], "IdDispatchCodec": ["toId", "byId"], "LoginProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "ConfigurationProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "GameProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"]}.items():
@@ -536,6 +596,15 @@ def mapped_table(target, platform):
             if member is None and owner == "EntityType": member = fields.get((CLASSES["EntityTypes"], name))
             if member:
                 table["f." + owner + "." + name] = mapped_member(member, True)
+    for owner, wanted in {"EntityType": ("LLAMA", "INTERACTION", "BLOCK_DISPLAY"),
+                          "Attributes": ("SCALE",), "Blocks": ("BARRIER",),
+                          "Pose": ("STANDING", "SITTING"), "Entity": ("DATA_POSE",),
+                          "Vec3": ("x", "y", "z"),
+                          "ServerEntity": ("synchronizer",)}.items():
+        for name in wanted:
+            member = fields.get((CLASSES[owner], name))
+            if member is None and owner == "EntityType": member = fields.get((CLASSES["EntityTypes"], name))
+            if member: table["f." + owner + "." + name] = mapped_member(member, True)
     for name in ("INFINITE_DURATION", "effects", "potionContents"):
         member = fields.get((CLASSES["AreaEffectCloud"], name))
         if member:
@@ -577,6 +646,30 @@ def mapped_table(target, platform):
             if key == "hurt": table["m.seat.hurt"] = mapped_member(member)
         elif key not in ("hurt", "shouldSave"):
             raise ValueError("Exact vanilla hook unavailable: " + key + " " + version)
+    # Every native helper is damage guarded at each relevant override. The
+    # native mount still runs normally, including the loader's cancellation bus;
+    # only the horse's one-passenger capacity admits the registered anchor.
+    for owner in ("Entity", "LivingEntity", "AbstractHorse", "Interaction", "Display"):
+        for (declaring, name, params), member in methods.items():
+            if declaring == CLASSES[owner] and name in ("hurt", "hurtServer", "isPickable"):
+                if not any(native_name == member[1] and native_desc == member[2] and not access & 0x0400
+                           for native_name, native_desc, access in declared[member[0].replace(".", "/")][2]):
+                    continue
+                kind = "pickable" if name == "isPickable" else "hurt"
+                table["h." + kind + owner + "_" + name] = mapped_member(member)
+                if owner == "Display" and kind == "hurt": table["m.seat.hurt"] = mapped_member(member)
+                if owner == "Entity" and name in ("hurt", "hurtServer") and member[2].endswith(")Z"):
+                    table["m.helper.hurt"] = mapped_member(member)
+    member = methods.get((CLASSES["Entity"], "canAddPassenger", CLASSES["Entity"]))
+    if member is None: raise ValueError("Exact native capacity hook unavailable: " + version)
+    table["h.capacity"] = mapped_member(member)
+    table["h.helperInteract"] = table["m.player.interact"]
+    table["h.pairing"] = table["m.tracker.pairing"]
+    dirty = methods.get((CLASSES["ServerEntity"], "sendDirtyEntityData", ""))
+    if dirty is not None: table["h.dirtyData"] = mapped_member(dirty)
+    table["attachment"] = ("scaled-native-chain" if "f.Attributes.SCALE" in table
+                           else "angular-native-chain" if "c.Interaction" in table
+                           else "unresolved-pre-interaction-height")
     # Select only a complete, known constructor signature that is actually
     # declared in this exact official server. Parameter count is insufficient:
     # 1.19's nullable profile key shares arity with game mode and client info.
@@ -752,7 +845,7 @@ config="tandemount.mixins.json"
         license_file = ROOT / "LICENSE"
         if license_file.exists():
             write_entry("LICENSE", license_file.read_bytes())
-    record = {"minecraft": version, "platform": platform, "artifact": str(out.relative_to(ROOT)), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(), "evidence": "compiled-against-real-loader-sdk", "native": "not-run", "visual": "not-run"}
+    record = {"minecraft": version, "platform": platform, "artifact": str(out.relative_to(ROOT)), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(), "evidence": "compiled-against-real-loader-sdk", "attachment_capability": table["attachment"], "native": "not-run", "visual": "not-run"}
     (work / "artifact.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(record), flush=True)
     return record

@@ -343,3 +343,50 @@ The release verification report contains the exact server identities, artifact
 hashes, named behavioral checks, raw-report hashes, and narrow cancellation
 capability exceptions. Synthetic native-object/tracker probes and real socket
 logins remain distinct. No human visual review has been performed.
+
+
+## Final native attachment revision (14 November 2026)
+
+This revision supersedes the earlier independent AreaEffectCloud follower.
+The earlier 90-target native reports predate the final native-attachment,
+settings-menu, defaults, and client-metadata requirements. They must not be
+reused to assert this revision's behavior.
+
+The fresh implementer read only the independent Tandemount contract, its
+current sources/tooling, and official SDK/mapping/client artifacts. No
+predecessor source, test, patch, binary, archive, global memory, or another
+owner project was consulted.
+
+Exact official Minecraft declarations and native runtime behavior establish:
+Interaction and BlockDisplay begin at 1.19.4; the SCALE attribute begins at
+1.20.5. The implementation uses the existing native llama passenger attachment
+point, signed Interaction height, ordinary native pose metadata callbacks,
+and a BARRIER BlockDisplay. The current independent Tandemount 26.3 plugin
+attachment was also an allowed implementation input. Earlier unscaled games
+use symmetric angular llama carriers. Nonliving zero-height links avoid
+1.20.2-era native living-passenger body-yaw inheritance.
+
+The original official 1.19.4 and 1.20.6 client component probes demonstrated
+that full sorted metadata can refresh pose before assigning height, leaving
+cached dimensions incorrect. A subsequent native pose-only DataValue, even
+with the same pose, invokes the normal original-client metadata callback and
+repairs the attachment point. No direct refreshDimensions call is made by
+these probes. Their level shell is intentionally limited to metadata and
+attachment components; they do not tick entities or establish visuals.
+
+The exact native ServerEntity pairing collector receives a pose-only metadata
+tail after its ordinary snapshot, preserving upstream visibility decisions.
+The exact dirty-data hook emits the same metadata tail only when a helper's
+height changes. Native tracking remains responsible for movement. The
+NeoForge alternate collector adapter is derived from the selected official
+SDK declarations and patch. The narrow Forge 1.21.9-59.0.5 COMMON-config
+shutdown correction documented above is retained unchanged.
+
+Fresh artifact-bound native and actual loopback-wire probes are recorded
+separately under the ignored modern final verification directories. The wire
+probe connects ordinary players, exercises native right-clicks and commands,
+records full packet bytes for existing and late observers, reconstructs the
+received horse-root passenger graph, and checks for independent helper
+position packets. Hash-bound original-client lifetime/motion checks and human
+visual review are separate gates. Before 1.19.4 the native height capability
+remains unresolved and is not reported as successful behavior.

@@ -4,9 +4,9 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Vanilla Brigadier commands; admin uses native operator permission level 2. */
 public final class AdminCommands {
@@ -24,13 +24,11 @@ public final class AdminCommands {
         String[] args = command.trim().split("\\s+");
         try {
             if (args.length == 0 || args[0].equals("help")) {
-                message(source, "Tandemount: right-click an occupied adult, tamed, saddled horse to join. Use the normal dismount key to leave.");
-                message(source, "Admin: /tandemount height <0..3> | rear <0..2> | height +/- | rear +/- | enable | disable | reload | reset | debug <true|false>");
+                send(source, styled("Tandemount — shared horse riding", 0x55FFFF));
+                message(source, "Right-click an occupied adult, tamed, saddled horse to join. Use the normal dismount key to leave.");
+                message(source, "Admin: /tandemount height <0..3> | rear <0..2> | height +/- | rear +/- | enable | disable | save | reload | reset | debug <true|false>");
                 if (allowed(source)) {
-                    clickable(source, "Height [-]", "/tandemount height -");
-                    clickable(source, "Height [+]", "/tandemount height +");
-                    clickable(source, "Rear [-]", "/tandemount rear -");
-                    clickable(source, "Rear [+]", "/tandemount rear +");
+                    for (Object control : controls()) send(source, control);
                     message(source, "Height=" + TandemRuntime.SETTINGS.height + ", rear=" + TandemRuntime.SETTINGS.rear + " blocks; step=1/16.");
                 }
                 return 1;
@@ -50,6 +48,8 @@ public final class AdminCommands {
                 settings.enabled = args[0].equals("enable"); settings.save();
             } else if (args.length == 1 && args[0].equals("reload")) {
                 settings.load();
+            } else if (args.length == 1 && args[0].equals("save")) {
+                settings.save();
             } else if (args.length == 1 && args[0].equals("reset")) {
                 settings.enabled = true; settings.debug = false; settings.height = Settings.DEFAULT_HEIGHT; settings.rear = Settings.DEFAULT_REAR; settings.save();
             } else if (args.length == 2 && args[0].equals("debug") && (args[1].equals("true") || args[1].equals("false"))) {
@@ -69,7 +69,6 @@ public final class AdminCommands {
         return Boolean.TRUE.equals(Names.call("permissions.has", Names.call("source.permissions", source), Names.field("Permissions.COMMANDS_GAMEMASTER", null)));
     }
     private static Object component(String text) throws Exception {
-        Class<?> type = Names.type("Component");
         if (Names.has("component.literal")) return Names.call("component.literal", null, text);
         Class<?> literal = Class.forName(Names.TABLE.getProperty("c.TextComponent"));
         return literal.getConstructor(String.class).newInstance(text);
@@ -80,24 +79,34 @@ public final class AdminCommands {
         if (method.getParameterCount() == 2) method.invoke(source, component, false);
         else method.invoke(source, component);
     }
-    private static void clickable(Object source, String label, String command) throws Exception {
-        Object component = component(label + " ");
-        try {
+    static Object styled(String text, int color) throws Exception {
+        Object component = component(text);
+        Object style = Names.call("component.style", component);
+        Names.call("component.setStyle", component, Names.call("style.color", style, color));
+        return component;
+    }
+    static List<Object> controls() throws Exception {
+        List<Object> controls = new ArrayList<Object>();
+        String[][] values = {{"Height [-]", "height -"}, {"Height [+]", "height +"},
+                {"Rear [-]", "rear -"}, {"Rear [+]", "rear +"},
+                {"Save current settings", "save"}, {"Reload saved settings", "reload"}, {"Reset defaults", "reset"},
+                {TandemRuntime.SETTINGS.enabled ? "Disable riding" : "Enable riding", TandemRuntime.SETTINGS.enabled ? "disable" : "enable"}};
+        for (String[] value : values) {
+            Object component = styled(value[0] + " ", value[1].equals("reset") ? 0xFFAA00 : 0x55FF55);
             // These are the exact upstream signatures emitted by the build tool.
             Object style = Names.call("component.style", component);
             Object click;
             Class<?> clickType = Names.type("ClickEvent");
             if (Names.TABLE.containsKey("c.RunCommand")) {
-                click = Names.type("RunCommand").getConstructor(String.class).newInstance(command);
+                click = Names.type("RunCommand").getConstructor(String.class).newInstance("/tandemount " + value[1]);
             } else {
                 Object action = Names.field("ClickAction.RUN_COMMAND", null);
-                click = clickType.getConstructor(Names.type("ClickAction"), String.class).newInstance(action, command);
+                click = clickType.getConstructor(Names.type("ClickAction"), String.class).newInstance(action, "/tandemount " + value[1]);
             }
             style = Names.call("style.click", style, click);
             Names.call("component.setStyle", component, style);
-            send(source, component);
-        } catch (Exception unsupported) {
-            message(source, label + ": " + command);
+            controls.add(component);
         }
+        return controls;
     }
 }
