@@ -302,8 +302,18 @@ def saved_world_checks(run, fixture_config):
             for helper in uuids:
                 if helper.bytes in body or helper.bytes[:8] in body and helper.bytes[8:] in body:
                     hits.append({'file': str(region.relative_to(run)), 'chunk': chunk, 'helper': str(helper)})
-    return [{'assertion': 'native-active-save-contains-no-helper-uuid', 'status': 'passed' if uuids and sectors and not hits else 'failed',
+    return [{'assertion': 'native-saved-world-contains-no-helper-uuid', 'status': 'passed' if uuids and sectors and not hits else 'failed',
              'detail': {'observed_helper_uuids': len(uuids), 'native_mca_chunks_inspected': sectors, 'matches': hits}}]
+
+
+def active_save_checks(fixture_config):
+    """Require the actual live native serialization probe, not pre-existing MCA files."""
+    path = fixture_config / 'assertions.jsonl'
+    assertions = [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+    matching = [entry for entry in assertions if entry.get('assertion') == 'active-seat-refuses-native-serialization']
+    passed = bool(matching) and all(entry.get('status') == 'passed' for entry in matching)
+    return [{'assertion': 'active-seat-refuses-native-serialization', 'status': 'passed' if passed else 'failed',
+             'detail': {'native_probe_records': matching, 'scope': 'Live mounted seat refuses the native serialization entry point; final world save is checked after shutdown.'}}]
 
 
 def ping(port):
@@ -448,12 +458,15 @@ def main():
                     command_line('tmfixture rejoined')
                 if current.get('phase') == 'save' and 'save' not in handled:
                     handled.add('save')
-                    command_line('save-all flush')
-                    time.sleep(2)
-                    result['active_save_assertions'] = saved_world_checks(run, fixture_config)
+                    command_line('tmfixture saveprobe')
+                if current.get('phase') == 'save-probed' and 'save-probed' not in handled:
+                    handled.add('save-probed')
+                    result['active_save_assertions'] = active_save_checks(fixture_config)
+                    if current.get('failures') != 0 or not all(a['status'] == 'passed' for a in result['active_save_assertions']):
+                        raise RuntimeError('Live native seat serialization was not proven to be refused')
                     command_line('tmfixture finish')
                 if current.get('phase') == 'complete':
-                    result['status'] = 'passed' if current['failures'] == 0 and all(a['status'] == 'passed' for a in result.get('packet_assertions', []) + result.get('active_save_assertions', [])) else 'failed'
+                    result['status'] = 'passed' if current['failures'] == 0 and 'save-probed' in handled and all(a['status'] == 'passed' for a in result.get('packet_assertions', []) + result.get('active_save_assertions', [])) else 'failed'
                     break
                 time.sleep(0.1)
             else:

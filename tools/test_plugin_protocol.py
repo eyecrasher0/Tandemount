@@ -1,6 +1,7 @@
 """Regress exact 1.7.10 wire layouts seen in native loopback evidence."""
 
 import importlib.util
+import json
 from pathlib import Path
 import struct
 import tempfile
@@ -95,6 +96,20 @@ class PluginProtocolTest(unittest.TestCase):
             check = runtime.saved_world_checks(root, fixture)[0]
             self.assertEqual(check["status"], "failed", check)
             self.assertEqual(check["detail"]["matches"][0]["helper"], str(helper))
+
+    def test_active_save_needs_native_probe_and_cannot_hide_an_earlier_failure(self):
+        with tempfile.TemporaryDirectory() as folder:
+            fixture = Path(folder)
+            file = fixture / "assertions.jsonl"
+            self.assertEqual(runtime.active_save_checks(fixture)[0]["status"], "failed")
+            file.write_text(json.dumps({"assertion": "unrelated-state", "status": "passed"}) + "\n")
+            self.assertEqual(runtime.active_save_checks(fixture)[0]["status"], "failed")
+            proof = {"assertion": "active-seat-refuses-native-serialization", "status": "passed"}
+            file.write_text(json.dumps(proof) + "\n")
+            self.assertEqual(runtime.active_save_checks(fixture)[0]["status"], "passed")
+            failure = {**proof, "status": "failed"}
+            file.write_text(json.dumps(failure) + "\n" + json.dumps(proof) + "\n")
+            self.assertEqual(runtime.active_save_checks(fixture)[0]["status"], "failed")
 
 
 if __name__ == "__main__":

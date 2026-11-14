@@ -46,7 +46,7 @@ PLUGIN = {
     "world-change": ("native-passenger-world-change-cleans-seat", "retry-after-native-world-change"),
     "teleport": ("passenger-teleport-cleans-seat", "retry-after-teleport"),
     "chunk-unload": ("native-chunk-unload-after-evacuation", "retry-after-native-chunk-unload"),
-    "restart-cleanup": ("plugin-disable-cleans-seat", "native-restart-does-not-restore-helper", "native-active-save-contains-no-helper-uuid"),
+    "restart-cleanup": ("plugin-disable-cleans-seat", "native-restart-does-not-restore-helper", "active-seat-refuses-native-serialization", "native-saved-world-contains-no-helper-uuid"),
 }
 LEGACY = {
     "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins"),
