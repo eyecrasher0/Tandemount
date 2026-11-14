@@ -18,15 +18,23 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def plugin_runner_helpers():
+    names = ("plugin-owner-regression.py", "plugin_protocol.py", "client_lifetime.py")
+    return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
+            + [path for path in (ROOT / "plugin/src/test/client").rglob("*") if path.is_file()])
+
+
 def sources(mode):
     folder = ROOT / ("mods/modern/src" if mode == "modern" else "plugin/src")
     files = [p for p in folder.rglob("*") if p.is_file()]
     names = (["modern-build.py", "modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py"]
              if mode == "modern" else ["plugin-build.py", "plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
     files += [ROOT / "tools" / name for name in names]
+    if mode == "plugins":
+        files += plugin_runner_helpers()
     files += [ROOT / "platforms.json", ROOT / "LICENSE"]
     hasher = hashlib.sha256()
-    for path in sorted(files):
+    for path in sorted(set(files)):
         hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0")
         hasher.update(path.read_bytes())
         hasher.update(b"\0")
@@ -36,8 +44,11 @@ def sources(mode):
 def runner_sources(mode):
     names = (["modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py", "cache_servers.py"]
              if mode == "modern" else ["plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
+    files = [ROOT / "tools" / name for name in names] + [ROOT / "platforms.json"]
+    if mode == "plugins":
+        files += plugin_runner_helpers()
     hasher = hashlib.sha256()
-    for path in sorted([ROOT / "tools" / name for name in names] + [ROOT / "platforms.json"]):
+    for path in sorted(set(files)):
         hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
     return hasher.hexdigest()
 
@@ -67,6 +78,14 @@ def rebuilt_cache(previous, artifact, native_path, fingerprint, runner_fingerpri
     return {**previous, "source_fingerprint": fingerprint,
             "previous_source_fingerprint": previous["source_fingerprint"],
             "cached": True, "native_reused_after_identical_rebuild": True}
+
+
+def same_source_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None):
+    if (previous.get("source_fingerprint") == fingerprint
+            and previous.get("runner_fingerprint") == runner_fingerprint
+            and matching_native(previous, artifact, native_path, fixture)):
+        return {**previous, "cached": True}
+    return None
 
 
 def run_process(command, log, env, timeout):
@@ -137,9 +156,8 @@ def main():
         previous = None
         if args.resume and record_path.is_file() and artifact.is_file():
             previous = json.loads(record_path.read_text())
-            if (previous.get("result") == "pass" and previous.get("source_fingerprint") == target_fingerprint
-                    and matching_native(previous, artifact, native_path, fixture)):
-                cached = {**previous, "cached": True, "runner_fingerprint": runner_fingerprint}
+            cached = same_source_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
+            if cached is not None:
                 record_path.write_text(json.dumps(cached, indent=2) + "\n")
                 return cached
         result = {"minecraft": version, "platform": platform, "source_fingerprint": target_fingerprint,

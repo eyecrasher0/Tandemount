@@ -4,8 +4,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from matrix_verify import rebuilt_cache, sha
+from matrix_verify import rebuilt_cache, same_source_cache, runner_sources, sources, sha
 
 
 class MatrixCacheTest(unittest.TestCase):
@@ -53,6 +54,53 @@ class MatrixCacheTest(unittest.TestCase):
         self.record['runner_fingerprint'] = 'same-runner'
         self.record['result'] = 'fail'
         self.assertIsNone(self.reuse())
+
+    def test_same_source_fast_path_requires_the_attested_runner(self):
+        for runner in ('changed-runner', None):
+            with self.subTest(runner=runner):
+                self.record['runner_fingerprint'] = runner
+                self.assertIsNone(same_source_cache(self.record, self.artifact, self.native,
+                                                    'old-source', 'same-runner', self.fixture))
+
+
+class RunnerFingerprintTest(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        names = ('plugin-build.py', 'plugin-runtime.py', 'vanilla_protocol.py', 'runtime_storage.py',
+                 'cache_servers.py', 'modern-build.py', 'modern-native.py', 'modern-client.py')
+        for name in names:
+            self.write('tools/' + name, 'initial runner input')
+        self.write('platforms.json', '{}')
+        self.write('LICENSE', 'license fixture')
+        self.write('plugin/src/test/client/ClientProbe.java', 'initial standalone client probe input')
+        self.patch = patch('matrix_verify.ROOT', self.root)
+        self.patch.start()
+        self.addCleanup(self.patch.stop)
+
+    def write(self, name, value):
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+
+    def test_changed_standalone_client_probe_changes_plugin_runner_only(self):
+        before = runner_sources('plugins'), sources('plugins'), runner_sources('modern'), sources('modern')
+        self.write('plugin/src/test/client/ClientProbe.java', 'different client lifecycle behavior')
+        after = runner_sources('plugins'), sources('plugins'), runner_sources('modern'), sources('modern')
+        self.assertNotEqual(before[0], after[0])
+        self.assertNotEqual(before[1], after[1])
+        self.assertEqual(before[2:], after[2:])
+
+    def test_added_or_changed_plugin_helpers_invalidate_plugin_proof(self):
+        for name in ('plugin-owner-regression.py', 'plugin_protocol.py', 'client_lifetime.py'):
+            with self.subTest(name=name):
+                before = runner_sources('plugins'), sources('plugins')
+                self.write('tools/' + name, 'first executable helper input')
+                added = runner_sources('plugins'), sources('plugins')
+                self.assertNotEqual(before, added)
+                self.write('tools/' + name, 'changed executable helper input')
+                self.assertNotEqual(added, (runner_sources('plugins'), sources('plugins')))
 
 
 if __name__ == '__main__':
