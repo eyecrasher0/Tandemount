@@ -41,6 +41,10 @@ reported as public until that review completes. The official [CurseForge Upload
 API](https://support.curseforge.com/support/solutions/articles/9000197321-curseforge-upload-api)
 documents the API token, game-version tags, upload request, and file ID
 response.
+The uploader uses the documented `gameVersionNames` field after checking the
+official version list. Historical Minecraft releases have different numeric
+version groups for Mods and Bukkit; equal names in those groups must not be
+resolved by choosing an arbitrary numeric ID.
 
 ## Modrinth
 

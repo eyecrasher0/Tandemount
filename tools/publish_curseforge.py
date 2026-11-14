@@ -63,44 +63,39 @@ def multipart(metadata, path):
     return body, f"multipart/form-data; boundary={boundary}"
 
 
-def metadata_for(entry, project, version_ids):
+def metadata_for(entry, project, version_names):
     family = entry["family"]
     mc = entry["minecraft"][0]
-    game_versions = [version_ids[mc]]
-    if family != "plugin":
-        game_versions.append(version_ids[family])
     platform_names = {"paper": "Paper", "spigot": "Spigot", "purpur": "Purpur", "folia": "Folia",
                       "forge": "Forge", "fabric": "Fabric", "neoforge": "NeoForge"}
+    game_versions = [mc] + ([platform_names[family]] if family != "plugin" else [])
+    if set(game_versions) - version_names:
+        raise ValueError("Unverified CurseForge game version names")
     implementation = ", ".join(platform_names[name] for name in entry["platforms"])
     return {
         "changelog": f"Tandemount {project['version']} release. Source: {project['source_url']}",
         "changelogType": "markdown",
         "displayName": f"Tandemount {project['version']} | {implementation} | Minecraft {mc}",
-        "gameVersions": game_versions,
+        # The documented names field avoids confusing equal version names
+        # across historical Mod/Bukkit gameVersionTypeID groups.
+        "gameVersionNames": game_versions,
         "releaseType": "release",
         "isMarkedForManualRelease": False,
     }
 
 
-def resolve_version_ids(records, plan):
-    canonical = {}
-    for record in records:
-        if record.get("gameVersionTypeID") == 1:
-            canonical.setdefault(record["name"], []).append(record["id"])
-    loader_matches = {}
-    for record in records:
-        if record.get("name") in {"Forge", "Fabric", "NeoForge"} and record.get("gameVersionTypeID") == 68441:
-            loader_matches.setdefault(record["name"].casefold(), []).append(record["id"])
+def validate_version_names(records, plan):
+    available = {record["name"] for record in records}
+    loader_names = {"forge": "Forge", "fabric": "Fabric", "neoforge": "NeoForge"}
     required_versions = {entry["minecraft"][0] for entry in plan["entries"]}
     required_loaders = {entry["family"] for entry in plan["entries"] if entry["family"] != "plugin"}
-    missing_versions = sorted(version for version in required_versions if len(canonical.get(version, [])) != 1)
-    missing_loaders = sorted(loader for loader in required_loaders if len(loader_matches.get(loader, [])) != 1)
+    missing_versions = sorted(required_versions - available)
+    missing_loaders = sorted(loader for loader in required_loaders if loader_names.get(loader) not in available)
     if missing_versions or missing_loaders:
         raise ValueError("CurseForge version tags are incomplete: " + json.dumps({
             "missing_versions": missing_versions, "missing_loaders": missing_loaders,
         }))
-    loaders = {name: ids[0] for name, ids in loader_matches.items() if len(ids) == 1}
-    return {**{name: ids[0] for name, ids in canonical.items() if len(ids) == 1}, **loaders}
+    return required_versions | {loader_names[loader] for loader in required_loaders}
 
 
 def write_state(path, state):
@@ -138,7 +133,7 @@ def main():
         if args.mods_project_id < 1 or args.plugins_project_id < 1 or args.mods_project_id == args.plugins_project_id:
             raise ValueError("Mods and Bukkit Plugins must be two distinct positive CurseForge project IDs")
         records = request_json("GET", BASE + "/game/versions", token)
-        version_ids = resolve_version_ids(records, plan)
+        version_names = validate_version_names(records, plan)
         state = json.loads(args.state.read_text(encoding="utf-8")) if args.state.is_file() else {"schema": 1, "files": {}}
         if state.get("schema") != 1:
             raise ValueError("Unsupported CurseForge upload-state schema")
@@ -159,7 +154,7 @@ def main():
                     raise ValueError("Unknown CurseForge ledger state for " + key)
 
             project_id = args.plugins_project_id if entry["family"] == "plugin" else args.mods_project_id
-            payload = metadata_for(entry, project, version_ids)
+            payload = metadata_for(entry, project, version_names)
             state["files"][key] = {"status": "pending", "sha256": file_hash,
                                    "project_id": project_id, "display_name": payload["displayName"]}
             write_state(args.state, state)
