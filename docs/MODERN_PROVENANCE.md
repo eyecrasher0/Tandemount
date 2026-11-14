@@ -228,3 +228,61 @@ annotations are retained in the ignored
 `.agents/modern-portability/player-constructor-inputs.json`. This correction
 is confined to the opt-in native fixture and exact build mappings; successful
 compilation does not establish that the remaining native checks pass.
+
+## Listener, protocol registry, and NeoForge pairing APIs
+
+The retained full-matrix failures on 1.20.2, 1.20.3, and 1.20.4 exposed two
+independent fixture defects. Official listener and protocol class declarations
+were audited for all 35 requested modern versions; their exact class hashes
+are recorded in the ignored
+`.agents/modern-portability/listener-protocol-inputs.json`. The fixture listener
+takes server, connection, and player through 1.20.1, and additionally takes
+`CommonListenerCookie` from 1.20.2 onward. Its `createInitial` factory takes
+`GameProfile` alone on 1.20.2 through 1.20.4, then adds a boolean argument from
+1.20.5 onward. Build tooling validates the exact public listener constructor
+and selected public static factory against that official server's actual
+declarations. The fixture supplies arguments by their complete mapped types.
+The first corrected constructor runs additionally exposed the native channel
+precondition on those three versions: `Connection.setListener` validates
+protocol data stored in Netty channel attributes. The synthetic embedded
+channel now receives the actual `PLAY.codec(PacketFlow)` value for each
+direction using `Connection.getProtocolKey(PacketFlow)` before the listener is
+constructed. Both exact methods are drawn from official mappings and class
+declarations. The private static protocol-key helper is accessed only through
+the fixture's existing exact mapped reflection path. Connection and Netty
+declaration hashes are retained in the ignored
+`.agents/modern-portability/channel-protocol-inputs.json`; actual socket login
+behavior is tested separately.
+
+The legacy protocol flow map holds `PacketSet` directly through 1.20.1 but
+holds `CodecData` wrappers on 1.20.2 through 1.20.4. The protocol export now
+uses the public native `getPacketsByIds(PacketFlow)` accessor wherever it is
+actually declared, which is every requested version from 1.18 through 1.20.4.
+It retains the direct field path for 1.16.5 through 1.17.1 and the independent
+codec and visitor APIs on newer versions. Packet IDs continue to come from
+the running native registry; no IDs are hardcoded.
+
+The official NeoForge userdev `ServerEntity.java.patch` and exact installed
+server declarations show a loader-specific pairing signature on 1.20.4
+through 1.21.6. It takes `ServerPlayer` and the concrete
+`net.neoforged.neoforge.network.bundle.PacketAndPayloadAcceptor` class in place
+of vanilla's `Consumer`. The matching universal SDK class exposes a public
+constructor taking `Consumer`; the fixture uses that native adapter to collect
+the same typed spawn, metadata, and passenger packets. Build tooling requires
+the exact patched declaration and adapter constructor from the selected SDK
+before generating that alternate descriptor. NeoForge 1.20.2 and 1.20.3 retain
+vanilla's collector, and 1.21.7 onward returns to a `Consumer` parameter.
+SDK, adapter class, and patch hashes for all 23 NeoForge targets are recorded
+in the ignored `.agents/modern-portability/neoforge-pairing-inputs.json`.
+Representative primary artifacts are the
+[NeoForge 20.4.253 userdev SDK](https://maven.neoforged.net/releases/net/neoforged/neoforge/20.4.253/neoforge-20.4.253-userdev.jar),
+[NeoForge 21.6.20-beta userdev SDK](https://maven.neoforged.net/releases/net/neoforged/neoforge/21.6.20-beta/neoforge-21.6.20-beta-userdev.jar),
+and [NeoForge 21.7.25-beta userdev SDK](https://maven.neoforged.net/releases/net/neoforged/neoforge/21.7.25-beta/neoforge-21.7.25-beta-userdev.jar).
+
+These corrections affect exact build descriptors and opt-in native evidence
+fixtures. They do not change production ride behavior or exempt any required
+native check. Fresh artifact-bound native, connected-client, and restart runs
+remain necessary after applying them. A separate Forge 1.21.9 run completed
+its native and connected-client checks and saved every dimension, but exceeded
+the runner's shutdown deadline before restart testing; that operational retry
+candidate is not evidence for an implementation change.

@@ -16,6 +16,14 @@ import java.util.function.Function;
 public final class ProtocolEvidence {
     private static boolean exported;
     private ProtocolEvidence() {}
+    private static void addClassPacket(Properties packets, String prefix, Class<?> type, Object id) {
+        String runtime = type.getName();
+        String canonical = Names.TABLE.getProperty("p." + runtime, runtime);
+        String simple = canonical.substring(canonical.lastIndexOf('.') + 1);
+        String resource = simple.replaceFirst("^(Clientbound|Serverbound)", "").replaceFirst("Packet$", "").replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
+        packets.setProperty(prefix + "class." + simple, id.toString());
+        packets.setProperty(prefix + "minecraft:" + resource, id.toString());
+    }
     public static void tick(Object server, long ticks) {
         if (exported || ticks < 20) return;
         exported = true;
@@ -59,15 +67,18 @@ public final class ProtocolEvidence {
                     Map<?, ?> flows = (Map<?, ?>) Names.field("ConnectionProtocol.flows", state);
                     for (Map.Entry<?, ?> flow : flows.entrySet()) {
                         String direction = ((Enum<?>) flow.getKey()).name().toLowerCase();
-                        Map<?, ?> ids = (Map<?, ?>) Names.field("ProtocolPacketSet.classToId", flow.getValue());
-                        for (Map.Entry<?, ?> entry : ids.entrySet()) {
-                            String runtime = ((Class<?>) entry.getKey()).getName();
-                            String canonical = Names.TABLE.getProperty("p." + runtime, runtime);
-                            String simple = canonical.substring(canonical.lastIndexOf('.') + 1);
-                            String resource = simple.replaceFirst("^(Clientbound|Serverbound)", "").replaceFirst("Packet$", "").replaceAll("([a-z0-9])([A-Z])", "$1_$2").toLowerCase();
-                            String prefix = stage + "." + direction + ".";
-                            packets.setProperty(prefix + "class." + simple, entry.getValue().toString());
-                            packets.setProperty(prefix + "minecraft:" + resource, entry.getValue().toString());
+                        String prefix = stage + "." + direction + ".";
+                        if (Names.has("protocol.flowsPackets")) {
+                            Map<?, ?> ids = (Map<?, ?>) Names.call("protocol.flowsPackets", state, flow.getKey());
+                            for (Map.Entry<?, ?> entry : ids.entrySet()) {
+                                addClassPacket(packets, prefix, (Class<?>) entry.getValue(), entry.getKey());
+                            }
+                        } else {
+                            // 1.16.5 through 1.17.1 expose only the original packet sets.
+                            Map<?, ?> ids = (Map<?, ?>) Names.field("ProtocolPacketSet.classToId", flow.getValue());
+                            for (Map.Entry<?, ?> entry : ids.entrySet()) {
+                                addClassPacket(packets, prefix, (Class<?>) entry.getKey(), entry.getValue());
+                            }
                         }
                     }
                 }

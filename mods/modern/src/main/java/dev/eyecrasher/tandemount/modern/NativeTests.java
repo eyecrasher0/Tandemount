@@ -1,6 +1,7 @@
 package dev.eyecrasher.tandemount.modern;
 
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -72,12 +73,39 @@ public final class NativeTests {
         Class<?> channelClass = Class.forName("io.netty.channel.embedded.EmbeddedChannel");
         Object channel = channelClass.getConstructor().newInstance();
         Names.field("Connection.channel", connection, channel);
-        if (Names.has("cookie.initial")) {
-            Object cookie = Names.call("cookie.initial", null, profile, false);
-            Names.type("ServerGamePacketListenerImpl").getConstructor(Names.type("MinecraftServer"), Names.type("Connection"), Names.type("ServerPlayer"), Names.type("CommonListenerCookie")).newInstance(server, connection, player, cookie);
-        } else {
-            Names.type("ServerGamePacketListenerImpl").getConstructor(Names.type("MinecraftServer"), Names.type("Connection"), Names.type("ServerPlayer")).newInstance(server, connection, player);
+        if (Names.has("protocol.flowCodec")) {
+            // 1.20.2 through 1.20.4 validate the channel's native play codec
+            // when a game listener is attached, even on this embedded fixture.
+            Method attribute = Class.forName("io.netty.util.AttributeMap").getMethod("attr", Class.forName("io.netty.util.AttributeKey"));
+            Method set = Class.forName("io.netty.util.Attribute").getMethod("set", Object.class);
+            Object play = Names.field("ConnectionProtocol.PLAY", null);
+            for (String direction : new String[]{"SERVERBOUND", "CLIENTBOUND"}) {
+                Object flow = Names.field("PacketFlow." + direction, null);
+                Object key = Names.call("connection.protocolKey", null, flow);
+                set.invoke(attribute.invoke(channel, key), Names.call("protocol.flowCodec", play, flow));
+            }
         }
+        String[] listenerDeclaration = Names.TABLE.getProperty("constructor.listener").split("#");
+        Class<?>[] listenerTypes = Names.arguments(listenerDeclaration[2]);
+        if (listenerTypes.length < 3 || listenerTypes.length > 4
+                || listenerTypes[0] != Names.type("MinecraftServer")
+                || listenerTypes[1] != Names.type("Connection") || listenerTypes[2] != Names.type("ServerPlayer")) {
+            throw new IllegalStateException("Unsupported exact native fixture listener constructor");
+        }
+        Object[] listenerArgs = new Object[listenerTypes.length];
+        listenerArgs[0] = server; listenerArgs[1] = connection; listenerArgs[2] = player;
+        if (listenerTypes.length == 4) {
+            if (listenerTypes[3] != Names.type("CommonListenerCookie")) {
+                throw new IllegalStateException("Unsupported exact native fixture listener argument " + listenerTypes[3].getName());
+            }
+            Class<?>[] cookieTypes = Names.method("cookie.initial").getParameterTypes();
+            if (cookieTypes.length == 1 && cookieTypes[0] == profileClass) {
+                listenerArgs[3] = Names.call("cookie.initial", null, profile);
+            } else if (cookieTypes.length == 2 && cookieTypes[0] == profileClass && cookieTypes[1] == boolean.class) {
+                listenerArgs[3] = Names.call("cookie.initial", null, profile, false);
+            } else throw new IllegalStateException("Unsupported exact native fixture cookie factory");
+        }
+        Names.type("ServerGamePacketListenerImpl").getConstructor(listenerTypes).newInstance(listenerArgs);
         Names.call("entity.position", player, 0.5, 80.0, 8.5);
         return player;
     }
@@ -179,8 +207,19 @@ public final class NativeTests {
         if (TandemRuntime.isSeat(entity)) check(!(interval instanceof Number) || ((Number) interval).intValue() == 1, "seat-native-tracker-updates-every-tick");
         final List<Object> packets = new ArrayList<Object>();
         Consumer<Object> collect = packet -> packets.add(packet);
-        if (Names.method("tracker.pairing").getParameterCount() == 1) Names.call("tracker.pairing", tracker, collect);
-        else Names.call("tracker.pairing", tracker, observer, collect);
+        Class<?>[] pairingTypes = Names.method("tracker.pairing").getParameterTypes();
+        if (pairingTypes.length == 1 && pairingTypes[0] == Consumer.class) {
+            Names.call("tracker.pairing", tracker, collect);
+        } else if (pairingTypes.length == 2 && pairingTypes[0] == Names.type("ServerPlayer")) {
+            Object collector = collect;
+            if (pairingTypes[1] != Consumer.class) {
+                if (!Names.TABLE.containsKey("c.PairingAcceptor") || pairingTypes[1] != Names.type("PairingAcceptor")) {
+                    throw new IllegalStateException("Unsupported exact native pairing collector " + pairingTypes[1].getName());
+                }
+                collector = pairingTypes[1].getConstructor(Consumer.class).newInstance(collect);
+            }
+            Names.call("tracker.pairing", tracker, observer, collector);
+        } else throw new IllegalStateException("Unsupported exact native pairing signature");
         return packets;
     }
     private static boolean passengerEdge(List<Object> packets, Object vehicle, Object passenger) throws Exception {

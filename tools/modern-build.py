@@ -327,6 +327,8 @@ ALIASES = {
     "codec.entryType": ("IdDispatchEntry", "type", ""),
     "protocol.flowsPackets": ("ConnectionProtocol", "getPacketsByIds", "net.minecraft.network.protocol.PacketFlow"),
     "protocol.setPackets": ("ProtocolPacketSet", "getAllPackets", ""),
+    "protocol.flowCodec": ("ConnectionProtocol", "codec", "net.minecraft.network.protocol.PacketFlow"),
+    "connection.protocolKey": ("Connection", "getProtocolKey", "net.minecraft.network.protocol.PacketFlow"),
 }
 
 CLASSES = {
@@ -477,6 +479,7 @@ def mapped_table(target, platform):
         "player.message": [("ServerPlayer", "sendMessage", "net.minecraft.network.chat.Component,java.util.UUID")],
         "horse.saddle": [("AbstractHorse", "equipSaddle", "net.minecraft.sounds.SoundSource")],
         "horse.saddled": [("Mob", "isSaddled", "")],
+        "cookie.initial": [("CommonListenerCookie", "createInitial", "com.mojang.authlib.GameProfile")],
         "tracker.pairing": [("ServerEntity", "sendPairingData", "java.util.function.Consumer")],
         "player.teleport": [("ServerPlayer", "teleportTo", "net.minecraft.server.level.ServerLevel,double,double,double,java.util.Set,float,float"), ("ServerPlayer", "teleportTo", "net.minecraft.server.level.ServerLevel,double,double,double,float,float")],
         "dimension.location": [("ResourceKey", "identifier", "")],
@@ -489,6 +492,36 @@ def mapped_table(target, platform):
             if member:
                 table["m." + key] = mapped_member(member)
                 break
+    if platform == "neoforge" and version != "1.20.1":
+        # NeoForge 1.20.4 through 1.21.6 replaces vanilla's pairing collector.
+        # Identify that exact API from this SDK, not from a version range or
+        # the mere absence of a vanilla method at runtime.
+        repository = "https://maven.neoforged.net/releases"
+        acceptor = "net.neoforged.neoforge.network.bundle.PacketAndPayloadAcceptor"
+        universal = coordinate(config["universal"], repository)
+        with zipfile.ZipFile(universal) as archive:
+            member = acceptor.replace(".", "/") + ".class"
+            acceptor_declaration = classfile(archive.read(member)) if member in archive.namelist() else None
+        if acceptor_declaration is not None:
+            constructor = "(Ljava/util/function/Consumer;)V"
+            if not any(name == "<init>" and desc == constructor and access & 1
+                       for name, desc, access in acceptor_declaration[2]):
+                raise ValueError("Unsupported exact NeoForge pairing collector constructor: " + version)
+            group, artifact = target["platforms"][platform].get("artifact", "net.neoforged:neoforge").split(":")
+            sdk = coordinate(f"{group}:{artifact}:{target['platforms'][platform]['sdk']}:userdev", repository)
+            with zipfile.ZipFile(sdk) as archive:
+                patch = archive.read("patches/net/minecraft/server/level/ServerEntity.java.patch").decode()
+            signature = (r"^\+\s+public void sendPairingData\(ServerPlayer \w+, " + re.escape(acceptor)
+                         + r"<net\.minecraft\.network\.protocol\.game\.ClientGamePacketListener> \w+\) \{$")
+            if not re.search(signature, patch, re.MULTILINE):
+                raise ValueError("Unsupported exact NeoForge pairing declaration: " + version)
+            pairing = table["m.tracker.pairing"].split("#")
+            expected = "(L" + table["c.ServerPlayer"].replace(".", "/") + ";Ljava/util/function/Consumer;)V"
+            if pairing[2] != expected:
+                raise ValueError("Unexpected vanilla pairing descriptor for NeoForge: " + version)
+            table["c.PairingAcceptor"] = acceptor
+            pairing[2] = expected.replace("Ljava/util/function/Consumer;", "L" + acceptor.replace(".", "/") + ";")
+            table["m.tracker.pairing"] = "#".join(pairing)
     for owner, fields_wanted in {"Entity": ["noPhysics", "level", "yRot", "removed", "position", "blockPosition", "chunkPosition"], "Level": ["isClientSide"], "LivingEntity": ["yBodyRot"], "InteractionResult": ["PASS", "SUCCESS"], "EntityType": ["HORSE"], "InteractionHand": ["MAIN_HAND"], "PacketFlow": ["SERVERBOUND"], "ServerPlayer": ["connection"], "ServerEntity": ["updateInterval", "entity"], "Connection": ["channel"], "ClickAction": ["RUN_COMMAND"], "SoundSource": ["PLAYERS"], "Items": ["SADDLE"], "EquipmentSlot": ["SADDLE"], "Permissions": ["COMMANDS_GAMEMASTER"], "ConnectionProtocol": ["LOGIN", "CONFIGURATION", "PLAY", "flows"], "PacketFlow": ["CLIENTBOUND", "SERVERBOUND"], "ProtocolPacketSet": ["classToId"], "IdDispatchCodec": ["toId", "byId"], "LoginProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "ConfigurationProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "GameProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"]}.items():
         canonical = CLASSES.get(owner, "net.minecraft.world.entity." + owner)
         for name in fields_wanted:
@@ -552,6 +585,27 @@ def mapped_table(target, platform):
     if len(player_constructors) != 1:
         raise ValueError("No unique supported exact fixture player constructor: " + version)
     table["constructor.player"] = mapped_member(player_constructors[0])
+    listener_base = "net.minecraft.server.MinecraftServer,net.minecraft.network.Connection,net.minecraft.server.level.ServerPlayer"
+    listener_constructors = []
+    for params in (listener_base, listener_base + "," + CLASSES["CommonListenerCookie"]):
+        member = methods.get((CLASSES["ServerGamePacketListenerImpl"], "<init>", params))
+        if member and any(name == "<init>" and desc == member[2] and access & 1
+                          for name, desc, access in declared[member[0].replace(".", "/")][2]):
+            listener_constructors.append((params, member))
+    if len(listener_constructors) != 1:
+        raise ValueError("No unique supported exact fixture listener constructor: " + version)
+    listener_params, listener = listener_constructors[0]
+    table["constructor.listener"] = mapped_member(listener)
+    if listener_params != listener_base:
+        factories = []
+        for params in ("com.mojang.authlib.GameProfile", "com.mojang.authlib.GameProfile,boolean"):
+            member = methods.get((CLASSES["CommonListenerCookie"], "createInitial", params))
+            if member and table.get("m.cookie.initial") == mapped_member(member) and any(
+                    name == member[1] and desc == member[2] and access & 9 == 9
+                    for name, desc, access in declared[member[0].replace(".", "/")][2]):
+                factories.append(member)
+        if len(factories) != 1:
+            raise ValueError("No supported exact fixture listener cookie factory: " + version)
     for (owner, name, params), member in methods.items():
         if owner == CLASSES["ServerEntity"] and name == "<init>" and "net.minecraft.world.entity.Entity" in params.split(","):
             table["h.tracker"] = mapped_member(member)
