@@ -102,6 +102,19 @@ class RunnerFingerprintTest(unittest.TestCase):
                 self.write('tools/' + name, 'changed executable helper input')
                 self.assertNotEqual(added, (runner_sources('plugins'), sources('plugins')))
 
+    def test_added_or_changed_modern_wire_and_client_probes_invalidate_modern_proof(self):
+        for name in ('tools/modern-wire.py', 'tools/modern-client-components.py',
+                     'mods/modern/src/test/client/InteractionPoseProbe.java'):
+            with self.subTest(input=name):
+                before = runner_sources('modern'), sources('modern')
+                other_before = runner_sources('plugins'), sources('plugins')
+                self.write(name, 'first executable probe input')
+                added = runner_sources('modern'), sources('modern')
+                self.assertNotEqual(before, added)
+                self.write(name, 'changed executable probe input')
+                self.assertNotEqual(added, (runner_sources('modern'), sources('modern')))
+                self.assertEqual(other_before, (runner_sources('plugins'), sources('plugins')))
+
 
 if __name__ == '__main__':
     unittest.main()

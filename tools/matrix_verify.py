@@ -24,6 +24,12 @@ def plugin_runner_helpers():
             + [path for path in (ROOT / "plugin/src/test/client").rglob("*") if path.is_file()])
 
 
+def modern_runner_helpers():
+    names = ("modern-wire.py", "modern-client-components.py")
+    return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
+            + [path for path in (ROOT / "mods/modern/src/test/client").rglob("*") if path.is_file()])
+
+
 def sources(mode):
     folder = ROOT / ("mods/modern/src" if mode == "modern" else "plugin/src")
     files = [p for p in folder.rglob("*") if p.is_file()]
@@ -32,6 +38,8 @@ def sources(mode):
     files += [ROOT / "tools" / name for name in names]
     if mode == "plugins":
         files += plugin_runner_helpers()
+    else:
+        files += modern_runner_helpers()
     files += [ROOT / "platforms.json", ROOT / "LICENSE"]
     hasher = hashlib.sha256()
     for path in sorted(set(files)):
@@ -47,6 +55,8 @@ def runner_sources(mode):
     files = [ROOT / "tools" / name for name in names] + [ROOT / "platforms.json"]
     if mode == "plugins":
         files += plugin_runner_helpers()
+    else:
+        files += modern_runner_helpers()
     hasher = hashlib.sha256()
     for path in sorted(set(files)):
         hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
