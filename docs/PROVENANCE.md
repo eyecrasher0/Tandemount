@@ -309,3 +309,103 @@ The `v12` fixture JAR SHA-256 is
 Exact class descriptors, class hashes, and distribution metadata are retained
 in the ignored save-probe audit. Native execution reports remain distinct from
 this API inspection and compilation evidence.
+
+### Combined plugin baseline repair audit
+
+A fresh clean-room conversation first read only this repository's agent guide
+and behavioral specification. It then audited the combined 113-target plugin
+baseline before changing the independent implementation. The 49 failures
+comprised 14 missing native tick aliases, 30 inaccessible Spigot coordinate
+constructors, two 1.19.3 native geometry failures, and three loopback-client
+protocol failures. The latter are test-client repairs and do not establish a
+renderer change. No predecessor code, binaries, archives, design descriptions,
+tests, or global predecessor memory were consulted.
+
+The class-file audit inspected 44 exact official upstream SDKs covering all 37
+available plugin game versions: every available Spigot release, Paper 1.7.10,
+and Paper 1.18 through 1.19.3. The ignored
+`.agents/plugin-baseline-fix/sdk/audit.json` retains distribution metadata,
+native JAR hashes, extracted class hashes, and `javap -p -c` listings. Additional
+native serialization and protocol-template class evidence is retained in the
+adjacent `valueoutput` audit. These upstream class files remain operational
+evidence and are never included in the plugin artifacts.
+
+| SDK boundary | Official distribution or BuildTools revision | Inspected native JAR SHA-256 |
+| --- | --- | --- |
+| Paper 1.18 | [Build 66](https://fill-data.papermc.io/v1/objects/3c995f20dae4e4e21d5554fac957a0a8a5c85bd5bf34915fac4b4f16e0ef101b/paper-1.18-66.jar) | `5e8a29a5785f5f14352bdf311852acc3490b452f8e56d095fca439ea6754d125` |
+| Paper 1.19.3 | [Build 448](https://fill-data.papermc.io/v1/objects/3007f2c638d5f04ed32b6adaa33053fe3634ccfa74345c83d3ea4982d38db5dc/paper-1.19.3-448.jar) | `6d79d568398cea6807305cf529d7868814a01910b5eb7c20c2104098fb3f6566` |
+| Spigot 1.18.2 | `3498`, CraftBukkit `10ba1beb64286206f4edc8d4b44c6472639d044e` | `ec62d93e1cc081ddf8031cccffdf4c7c331195aed5960565716159781da391ed` |
+| Spigot 1.20.5 | `4106`, CraftBukkit `8c1e7c84109cbbf4755c295a0ac88f7e302aeefe` | `542774f99570d4a964fa1b420265a743ab519a5d2f30ed05adc0f07d87ac0e8c` |
+| Spigot 1.21.5 | `4504`, CraftBukkit `dacd062dd1c6d6a06f0774a837ea18ddf89edb6d` | `c0462e6e70fe3ab8a938e858e2894dcdca83cfed03266a1a1661c7c737495cd6` |
+| Spigot 1.21.6 | `4518`, CraftBukkit `98f7fa28ed76204d2d290abb1c8b8083ed1787fb` | `c63213e8d9bce986daf2993866dab939f35a15810a9beb5b9762d0cc1a4ec326` |
+| Spigot 26.2 | `4648` | `4ff2f1c5b327d1485d046b57e3f089a9a34de13fb7eae3b2f82d3a5918eaf81f` |
+| Spigot 26.3 | `4664`, CraftBukkit `e89124d3e8e9585e75ceb7f9a4daba133788e5bd` | `46d7f9db84ed3a097553bc073e1366ebe3d61e259e866686d802a7ea9f0d50a3` |
+
+These Spigot SDKs were produced with the official
+[BuildTools build 201](https://hub.spigotmc.org/jenkins/job/BuildTools/201/artifact/target/BuildTools.jar),
+SHA-256 `81ed06f5ce5fb705b558bf9b3cc2c5c53cdd9742406c5338c452faa13a1e1c24`.
+The audit retains all pinned Bukkit, CraftBukkit, Spigot, and BuildData revisions
+from the corresponding isolated server metadata.
+
+The SDKs establish the following native boundaries. Spigot 1.18–1.19.2 declares
+falling-block tick `k()`, while 1.21.5–1.21.11 declares `g()`. The adapter now
+requires the selected tick to be declared by the falling-block class itself.
+In 1.19.3, `Entity.f(DDD)` delegates to `setPosRaw(DDD, true)` and the falling-block
+constructor calls that method. `Entity.e(DDD)` only resets `VecDeltaCodec`.
+The 1.19.4 SDK reverses those short aliases. The implementation therefore binds
+the 1.19.3 setter to that exact upstream version.
+
+Spigot 1.18.2 through 26.3 makes the five-argument falling-block constructor
+private while retaining the public native entity-type/world constructor. The
+adapter obtains the existing `minecraft:falling_block` type through upstream
+`EntityTypes.a(String)` or `EntityType.byString(String)`, or the named
+`EntityTypes.FALLING_BLOCK` constant introduced in 26.2. It checks the native
+registry key before calling the upstream constructor. It does not construct,
+register, or replace an entity type, and it preserves the real AIR-state and
+mutable-instance-bounds checks.
+
+The audit also establishes boolean native save entry points `a_(NBTTagCompound)`
+on Spigot 1.16.5, `f/g(NBTTagCompound)` on 1.21.5, and `b/c(ValueOutput)` on
+1.21.6–1.21.11. Their bytecode performs native entity/passenger serialization;
+they are not inferred from an arbitrary boolean method alone. The subclass
+refuses these exact signatures and the disposable fixture probes them. Extra
+save parameters must be boolean flags. Mapped `TagValueOutput.a(ProblemReporter,
+HolderLookup.a)` uses the active helper's real native registry access. Its
+`a()` emptiness result and `b()` built compound are checked separately.
+
+For mapped protocol templates, the fixture uses the SDK's retained native
+listener generic types to identify serverbound and clientbound templates. It
+visits the real native packet registry or its bound codec, and reads the packet
+type's actual resource identifier. Spigot `PacketType.a()` is the flow;
+`PacketType.b()` is the identifier. The fixture never substitutes guessed IDs.
+Native execution evidence and real-client visual review remain separate from
+these SDK observations.
+
+The exact Spigot 26.3 public API compile exposed removal of the old
+`World.setGameRuleValue(String, String)` method. Its `GameRule.RESPAWN_RADIUS`
+constant and `World.setGameRule(GameRule, T)` provide the current typed form.
+The disposable fixture selects this real upstream form only when the old
+method is absent. The setting remains zero in either form. Exact main-and-fixture
+compilation against this API is kept separately from the normal Java-8-targeted
+Paper 1.12.2 build. This fixture compatibility path does not alter runtime
+world settings or add a gameplay dependency.
+
+### Native boundary verification for the combined repair
+
+The immutable local `v18` snapshot passed the following exact isolated native boundaries. Every target completed 59 native state assertions, 10 loopback packet assertions, direct live-seat serialization refusal with the real native output, the final saved-world helper UUID scan, and a native server restart. Each run exited zero. The tested fixture SHA-256 is `fd24ced4ad0d3bfed3598b649d665018b9c5c50583cad30125ef095dec51129e`.
+
+| Native server | Plugin JAR SHA-256 |
+| --- | --- |
+| Paper 1.18 | `fbf39cea7dd502568443dc3732db0e9fa99e6bfa7b80ebbf368e9c14673be1fc` |
+| Spigot 1.18.2 | `9cd16aaa7fa9324931c9d30f956c1312bdc97191058cb1ec9c4bd26cff39b81e` |
+| Paper 1.19.3 | `96a59f33b8d4a28dc8488416261443aed4df35562fb8a9cca9eea04d1af63a23` |
+| Spigot 26.3 | `eb21719c97f23d55879ac04500f1ca170081bfff762afcc29e41af0de8e5e608` |
+| Paper 1.21.3 | `1aeb97fb4bee1e537a36057e623b9f90ec8c7aa4878371fbb8b063e8affb88b0` |
+| Spigot 1.21.5 | `b77cc0744f70a4bb130312d73ca667226d69eb7d3bdc90310058f5f871facaa1` |
+| Spigot 1.21.6 | `598f9ae4315d193c885bccf94ef670de4601ce4e0e931cc30f06f31e54a392ba` |
+
+All 37 exact runtime packages compile against the real Paper 1.12.2 SDK with Java release 8. The same source and fixture also compile independently against each of the seven exact Paper and Spigot API boundaries above. Native reports bind server, runtime artifact, and fixture hashes; the ignored `.agents/plugin-baseline-fix/final-validation.json` retains that inventory and the complete verification record.
+
+The fixture retains its initial home only through setup, removes that ticket on its owner before creating a ride, and then proves actual evacuation and chunk unloading. Earlier failed attempts remain retained, including the early Paper 1.18 platform-neighbor physics error, one nonreproduced Spigot 1.18.2 eligibility result, and Spigot 1.21.5 setup-home unloading. Every original failed baseline report is preserved byte-for-byte with its baseline hash. No failed guard is exempted.
+
+This is targeted native and protocol evidence for the combined fix. The full 113-target plugin matrix remains a separate coordinator run, and no real-client visual confirmation is claimed.

@@ -18,6 +18,7 @@ final class NativeAccess {
     private final Constructor<?> vehicleWrapper;
     private final Object craftServer;
     private final Object airBlock, airState;
+    private final Object vanillaSeatType;
     private final Field bounds;
     private final Constructor<?> boxConstructor;
     private final Method boxMutator;
@@ -125,7 +126,13 @@ final class NativeAccess {
         }
         legacySeatType = numericType;
         Method pos = null;
-        for (String name : new String[] {"setPos", "setPosition", "a_", "e"}) {
+        // In the exact 1.19.3 Spigot mappings e(DDD) updates VecDeltaCodec;
+        // f(DDD) is the real position setter. 1.19.4 swaps those aliases.
+        String minecraft = org.bukkit.Bukkit.getBukkitVersion().split("-", 2)[0];
+        String[] positionNames = minecraft.equals("1.19.3")
+                ? new String[] {"setPos", "setPosition", "a_", "f"}
+                : new String[] {"setPos", "setPosition", "a_", "e"};
+        for (String name : positionNames) {
             try {
                 Method candidate = entityClass.getMethod(name, double.class, double.class, double.class);
                 int modifiers = candidate.getModifiers();
@@ -138,15 +145,21 @@ final class NativeAccess {
         }
         if (pos == null) throw new NoSuchMethodException("Overrideable native entity position method");
         position = pos;
-        Constructor<?> parentConstructor = null;
+        Constructor<?> parentConstructor = null, typeConstructor = null;
         for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
             Class<?>[] p = c.getParameterTypes();
-            if (!Modifier.isPrivate(c.getModifiers()) && ((p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level")))
+            if (!Modifier.isPublic(c.getModifiers()) && !Modifier.isProtected(c.getModifiers())) continue;
+            if (((p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level")))
                     || (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class && airState != null && p[4].isInstance(airState)))) {
                 parentConstructor = c; break;
             }
+            if (p.length == 2 && (p[0].getSimpleName().equals("EntityTypes") || p[0].getSimpleName().equals("EntityType"))
+                    && (p[1].getSimpleName().equals("World") || p[1].getSimpleName().equals("Level"))) typeConstructor = c;
         }
+        if (parentConstructor == null) parentConstructor = typeConstructor;
         if (parentConstructor == null) throw new NoSuchMethodException("Vanilla seat world constructor");
+        vanillaSeatType = parentConstructor.getParameterTypes().length == 2
+                ? vanillaSeatType(parentConstructor.getParameterTypes()[0]) : null;
         Class<?> generated = SeatClass.create(seatBase, parentConstructor, pos, oldest);
         seatConstructor = generated.getConstructor(parentConstructor.getParameterTypes());
         boolean cancellableDismount = false;
@@ -184,7 +197,9 @@ final class NativeAccess {
     Entity createSeat(Horse horse) throws ReflectiveOperationException {
         Location at = horse.getLocation();
         Object world = Reflect.handle(horse.getWorld());
-        Object seat = seatConstructor.getParameterTypes().length == 1 ? seatConstructor.newInstance(world)
+        int arguments = seatConstructor.getParameterTypes().length;
+        Object seat = arguments == 1 ? seatConstructor.newInstance(world)
+                : arguments == 2 ? seatConstructor.newInstance(vanillaSeatType, world)
                 : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), airState);
         for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
             if (airState != null && f.getType().isInstance(airState)) { f.setAccessible(true); f.set(seat, airState); }
@@ -220,6 +235,38 @@ final class NativeAccess {
         Reflect.call(position, seat, at.getX(), at.getY(), at.getZ());
         shape(seat);
         return bukkit;
+    }
+
+    private static Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
+        Object value = null;
+        for (String name : new String[] {"byString", "a"}) try {
+            Method lookup = type.getMethod(name, String.class);
+            if (Modifier.isStatic(lookup.getModifiers()) && lookup.getReturnType() == Optional.class) {
+                Optional<?> found = (Optional<?>)Reflect.call(lookup, (Object)null, "minecraft:falling_block");
+                if (found.isPresent()) { value = found.get(); break; }
+            }
+        } catch (NoSuchMethodException absent) { /* Next audited native mapping. */ }
+        // 26.2 moved the existing vanilla constants out of EntityType. Read
+        // that upstream holder; never construct a type or edit its registry.
+        if (value == null) for (String name : new String[] {type.getName(), type.getPackage().getName() + ".EntityTypes"}) try {
+            Field field = Class.forName(name).getField("FALLING_BLOCK");
+            if (Modifier.isStatic(field.getModifiers()) && type.isAssignableFrom(field.getType())) {
+                value = Reflect.get(field, null); break;
+            }
+        } catch (ClassNotFoundException absent) { /* Pre-26.2 native holder. */ }
+          catch (NoSuchFieldException absent) { /* Older obfuscated constants. */ }
+        if (!type.isInstance(value)) throw new NoSuchFieldException("Existing vanilla falling_block entity type");
+        for (String name : new String[] {"getKey", "a"}) try {
+            Method key = type.getMethod(name, type);
+            String result = key.getReturnType().getSimpleName();
+            if (Modifier.isStatic(key.getModifiers()) && (result.equals("Identifier")
+                    || result.equals("ResourceLocation") || result.equals("MinecraftKey"))) {
+                if (!"minecraft:falling_block".equals(String.valueOf(Reflect.call(key, (Object)null, value))))
+                    throw new IllegalStateException("Native falling-block registry identity mismatch");
+                return value;
+            }
+        } catch (NoSuchMethodException absent) { /* Next audited native mapping. */ }
+        throw new NoSuchMethodException("Native falling-block registry identity");
     }
 
     void shape(Object seat) throws ReflectiveOperationException {

@@ -47,14 +47,22 @@ final class SeatClass extends ClassLoader {
                     || args[0].getSimpleName().equals("CompoundTag")
                     || args[0].getSimpleName().equals("ValueOutput"))
                     && (m.getName().startsWith("save") || m.getName().equals("serializeEntity") || m.getName().equals("c") || m.getName().equals("d")
-                        || m.getName().equals("e") || m.getName().equals("f"));
+                        || m.getName().equals("e") || m.getName().equals("f")
+                        || m.getName().equals("g") || m.getName().equals("b") || m.getName().equals("a_"));
+            // Audited native save overloads only append boolean force-save
+            // flags. An unrelated method taking another object is not a save.
+            for (int i = 1; save && i < args.length; i++) if (args[i] != boolean.class) save = false;
             boolean damage = false;
             for (Class<?> arg : args) if (arg.getSimpleName().equals("DamageSource")) damage = true;
             if ((save || damage) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
         }
         boolean tick = false;
-        for (String name : new String[] {"tick", "B_", "l", "h"}) {
-            try { Method m = base.getMethod(name); if (m.getReturnType() == void.class) { writer.tick(m); tick = true; break; } }
+        for (String name : new String[] {"tick", "B_", "l", "h", "k", "g"}) {
+            // The falling-block class itself declares the tick in every audited
+            // SDK. Do not mistake an unrelated inherited alias for that tick.
+            try { Method m = base.getDeclaredMethod(name); if (m.getReturnType() == void.class
+                    && !Modifier.isStatic(m.getModifiers()) && !Modifier.isFinal(m.getModifiers())
+                    && !Modifier.isPrivate(m.getModifiers())) { writer.tick(m); tick = true; break; } }
             catch (NoSuchMethodException absent) { /* Next upstream mapping family. */ }
         }
         if (!tick) throw new IOException("Native seat tick entry point unavailable");

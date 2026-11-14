@@ -36,6 +36,22 @@ are mutable. The adapter updates that box in place through its upstream setter.
 Newer versions still require a nonstatic, nonfinal bounding-box field, avoiding
 the shared empty-box constants in recent server classes.
 
+The generated native subclass calls an accessible upstream constructor. When
+Spigot makes the world/coordinates/state constructor private, the adapter calls
+its public entity-type/world constructor with the already registered vanilla
+`minecraft:falling_block` type and verifies that type's registry key. Spigot
+26.2 and later keep this constant in the separate native `EntityTypes` holder.
+No type is constructed or registered. The helper still receives real AIR state
+and must expose the Bukkit nonliving falling-block type before it can join a
+ride.
+
+The subclass overrides the falling-block class's own declared tick, avoiding
+unrelated inherited methods with the same short mapping names. The audited
+Spigot families include `k` in 1.18–1.19.2 and `g` in 1.21.5–1.21.11. In exact
+1.19.3 mappings, the position setter is `f(double, double, double)`; `e` only
+updates `VecDeltaCodec`. The 1.19.4 mappings swap those two meanings, so this
+selection is tied to the exact upstream game version rather than alias order.
+
 ## Native lifecycle fixture
 
 The disposable fixture requests a real cross-world transfer while the second
@@ -51,6 +67,12 @@ legacy unload-cancellation listener, retain those two landing chunks. Old
 world APIs also disable spawn retention in the disposable primary world. These
 operations belong to the fixture; Tandemount's runtime does not load or retain
 chunks.
+
+During setup, a separate temporary fixture ticket keeps the initial home chunk
+available until the three real players arrive. The fixture removes that ticket
+on the chunk owner before creating a ride. Old Bukkit uses the same temporary
+condition in its unload listener. This avoids a setup race after spawn retention
+is disabled and leaves the later native evacuation/unload check unretained.
 
 On older Folia, the public async teleport API can unmount a passenger as part of
 an accepted transfer without emitting a cancellable teleport event. On later
@@ -80,6 +102,19 @@ and leave its output empty; recent outputs also expose an empty built NBT
 result. Only then does the fixture emit
 `active-seat-refuses-native-serialization` and enter `save-probed`, allowing
 the runner to disable the plugin.
+
+The mapped Spigot save entry points are included as well: `a_` on 1.16.5,
+`f/g` on 1.21.5, and `b/c` on 1.21.6–1.21.11, with their exact native compound
+or `ValueOutput` signatures. Additional save arguments must be boolean flags.
+The Spigot `TagValueOutput` factory receives the helper's real registry access;
+the probe checks both that output's emptiness and its built native compound.
+The fixture obtains protocol IDs from the loaded upstream protocol templates
+and their packet-type identifiers across both named and Spigot mappings.
+
+Disposable platform and landing blocks use the upstream no-physics material
+setter where it exists. This prevents early 1.18 Paper setup from triggering
+neighbor physics into an unloaded chunk at the platform edge. The 1.7 Bukkit
+fallback uses its ordinary material setter. These edits are fixture setup only.
 
 This active serialization check, the final shutdown world-file scan, and the
 native restart check are separate evidence. An old active-phase file scan

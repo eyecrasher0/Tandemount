@@ -14,6 +14,7 @@ import java.util.*;
 
 /** Disposable runtime fixture. It is never included in the release plugin. */
 public final class NativeFixture extends JavaPlugin implements Listener {
+    private final Method quietBlockSetter = findQuietBlockSetter();
     private static final int RETURN_CHUNK = 8;
     private TandemountPlugin tandem;
     private Horse horse;
@@ -33,6 +34,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private volatile World otherWorldSetup;
     private volatile int otherWorldX, otherWorldZ;
     private volatile World returnWorld;
+    private volatile World initialHomeWorld;
+    private volatile boolean initialHomeRetained;
     private volatile World unloadWorld;
     private volatile int unloadX, unloadZ;
     private volatile boolean unloadObserved, unloadContainedHelper;
@@ -92,7 +95,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         // Tandemount plugin or any production-world loading policy.
         if (((event.getWorld() == otherWorldSetup && event.getChunk().getX() == otherWorldX
                     && event.getChunk().getZ() == otherWorldZ)
-                || (event.getWorld() == returnWorld && event.getChunk().getX() == RETURN_CHUNK && event.getChunk().getZ() == RETURN_CHUNK))
+                || (event.getWorld() == returnWorld && event.getChunk().getX() == RETURN_CHUNK && event.getChunk().getZ() == RETURN_CHUNK)
+                || (initialHomeRetained && event.getWorld() == initialHomeWorld
+                    && event.getChunk().getX() == 0 && event.getChunk().getZ() == 0))
                 && event instanceof Cancellable)
             ((Cancellable)event).setCancelled(true);
     }
@@ -133,12 +138,15 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         final Runnable prepare = guarded("prepare-world-settings", new Runnable() { public void run() {
             try {
                 final World world = Bukkit.getWorlds().get(0);
-                world.setGameRuleValue("spawnRadius", "0");
+                setFixtureSpawnRadius(world);
                 world.setKeepSpawnInMemory(false);
                 world.setSpawnLocation(8, 64, 8);
                 region(new Runnable() { public void run() {
                     try {
-                        for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) world.getBlockAt(x, 63, z).setType(Material.STONE);
+                        initialHomeWorld = world;
+                        initialHomeRetained = true;
+                        retainPreparedChunk(world, 0, 0);
+                        for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) setFixtureBlock(world.getBlockAt(x, 63, z), Material.STONE);
                         returnWorld = world;
                         prepareChunk(world, RETURN_CHUNK, RETURN_CHUNK, guarded("prepare-return-chunk", new Runnable() { public void run() {
                             retainPreparedChunk(world, RETURN_CHUNK, RETURN_CHUNK);
@@ -226,10 +234,32 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         if (!world.isChunkLoaded(x, z)) throw new IllegalStateException("Fixture landing chunk is not already loaded");
         int centerX = (x << 4) + 8, centerZ = (z << 4) + 8;
         for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
-            world.getBlockAt(centerX + dx, 63, centerZ + dz).setType(Material.STONE);
-            for (int y = 64; y <= 67; y++) world.getBlockAt(centerX + dx, y, centerZ + dz).setType(Material.AIR);
+            setFixtureBlock(world.getBlockAt(centerX + dx, 63, centerZ + dz), Material.STONE);
+            for (int y = 64; y <= 67; y++) setFixtureBlock(world.getBlockAt(centerX + dx, y, centerZ + dz), Material.AIR);
         }
         return new Location(world, centerX + 0.5, 64, centerZ + 0.5);
+    }
+    private static Method findQuietBlockSetter() {
+        try { return org.bukkit.block.Block.class.getMethod("setType", Material.class, boolean.class); }
+        catch (NoSuchMethodException oldBukkit) { return null; }
+    }
+    private void setFixtureSpawnRadius(World world) throws ReflectiveOperationException {
+        try { Probe.call(world, "setGameRuleValue", "spawnRadius", "0"); }
+        catch (NoSuchMethodException currentApi) {
+            Class<?> rules = Class.forName("org.bukkit.GameRule");
+            Object radius;
+            try { radius = rules.getField("RESPAWN_RADIUS").get(null); }
+            catch (NoSuchFieldException oldName) { radius = rules.getField("SPAWN_RADIUS").get(null); }
+            Probe.call(world, "setGameRule", radius, Integer.valueOf(0));
+        }
+    }
+    private void setFixtureBlock(org.bukkit.block.Block block, Material material) {
+        // These setup blocks need no neighbor physics. In early 1.18 Paper,
+        // physics at the platform edge can request an unloaded neighbor chunk.
+        // The 1.7 Bukkit API has only the ordinary material setter.
+        if (quietBlockSetter == null) { block.setType(material); return; }
+        try { Probe.call(quietBlockSetter, block, material, false); }
+        catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
     }
     private void retainPreparedChunk(World world, int x, int z) {
         try { Probe.call(world, "addPluginChunkTicket", x, z, NativeFixture.this); }
@@ -243,6 +273,12 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("three-real-loopback-players", driver != null && rider != null && third != null);
                 if (driver == null || rider == null || third == null) { state("failed", "players"); return; }
                 require("players-owned-by-region", owns(driver) && owns(rider) && owns(third));
+                // The real connected players now retain this chunk normally.
+                // Drop the setup ticket before any ride or lifecycle check so
+                // native evacuation and the actual unload stay observable.
+                initialHomeRetained = false;
+                try { Probe.call(initialHomeWorld, "removePluginChunkTicket", 0, 0, NativeFixture.this); }
+                catch (NoSuchMethodException oldApi) { /* Legacy listener has just stopped retaining this home. */ }
                 Field bounds = (Field)field(field(tandem, "nativeAccess"), "bounds");
                 require("native-seat-shape-uses-mutable-instance-aabb",
                         !Modifier.isStatic(bounds.getModifiers())
@@ -275,6 +311,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private void interact(Player player) {
         getLogger().info("INTERACT_STATE player=" + player.getName() + " health=" + player.getHealth() + " at=" + player.getLocation()
                 + " vehicle=" + player.getVehicle() + " horse=" + horse.getLocation() + " driverVehicle=" + driver.getVehicle()
+                + " horseValid=" + horse.isValid() + " dead=" + horse.isDead() + " adult=" + horse.isAdult()
+                + " tamed=" + horse.isTamed() + " saddle=" + horse.getInventory().getSaddle()
                 + " eligible=" + invoke(tandem, "eligible", horse) + " passengers=" + invoke(field(tandem, "nativeAccess"), "passengers", horse));
         getServer().getPluginManager().callEvent(new PlayerInteractEntityEvent(player, horse));
     }
@@ -673,7 +711,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                                 || parameters[0].getSimpleName().equals("CompoundTag")
                                 || parameters[0].getSimpleName().equals("ValueOutput"))
                             || !(name.equals("save") || name.equals("saveAsPassenger") || name.equals("serializeEntity")
-                                || name.equals("c") || name.equals("d") || name.equals("e") || name.equals("f"))) continue;
+                                || name.equals("b") || name.equals("c") || name.equals("d") || name.equals("e")
+                                || name.equals("f") || name.equals("g") || name.equals("a_"))) continue;
                     boolean supported = true;
                     for (int i = 1; i < parameters.length; i++) if (parameters[i] != boolean.class) supported = false;
                     if (!supported) continue;
@@ -717,15 +756,41 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         if (!type.getSimpleName().equals("ValueOutput")) return type.getConstructor().newInstance();
         Class<?> reporter = Class.forName("net.minecraft.util.ProblemReporter", true, type.getClassLoader());
         Class<?> output = Class.forName("net.minecraft.world.level.storage.TagValueOutput", true, type.getClassLoader());
-        Object discarding = reporter.getField("DISCARDING").get(null);
-        Object registries = Probe.call(nativeSeat, "registryAccess");
-        for (Method factory : output.getMethods()) if (factory.getName().equals("createWithContext")
+        Field discarded;
+        try { discarded = reporter.getField("DISCARDING"); }
+        catch (NoSuchFieldException spigot) { discarded = reporter.getField("a"); }
+        if (!Modifier.isStatic(discarded.getModifiers()) || discarded.getType() != reporter)
+            throw new NoSuchFieldException("Native discarding problem reporter");
+        Object discarding = discarded.get(null);
+        for (Method factory : output.getMethods()) if ((factory.getName().equals("createWithContext") || factory.getName().equals("a"))
                 && Modifier.isStatic(factory.getModifiers()) && type.isAssignableFrom(factory.getReturnType())
-                && Probe.compatible(factory.getParameterTypes(), new Object[] {discarding, registries}))
+                && factory.getParameterTypes().length == 2 && factory.getParameterTypes()[0] == reporter) {
+            // The named and Spigot SDKs expose the same registry-context
+            // factory with different names. Derive its provider from the real
+            // native method's return type, without replacing that context.
+            Class<?> provider = factory.getParameterTypes()[1];
+            Method registryAccess = null;
+            for (Method candidate : nativeSeat.getClass().getMethods()) if (!Modifier.isStatic(candidate.getModifiers())
+                    && candidate.getParameterTypes().length == 0 && provider.isAssignableFrom(candidate.getReturnType())) {
+                if (registryAccess != null) throw new NoSuchMethodException("Unambiguous native entity registry access");
+                registryAccess = candidate;
+            }
+            if (registryAccess == null) throw new NoSuchMethodException("Native entity registry access");
+            Object registries = Probe.call(registryAccess, nativeSeat);
             return Probe.call(factory, (Object)null, discarding, registries);
+        }
         throw new NoSuchMethodException("Native TagValueOutput.createWithContext(ProblemReporter, HolderLookup.Provider)");
     }
     private boolean emptySaveOutput(Object output) throws ReflectiveOperationException {
+        if (output.getClass().getSimpleName().equals("TagValueOutput")) {
+            Object empty, compound;
+            try { empty = Probe.call(output, "isEmpty"); }
+            catch (NoSuchMethodException spigot) { empty = Probe.call(output, "a"); }
+            if (!Boolean.TRUE.equals(empty)) return false;
+            try { compound = Probe.call(output, "buildResult"); }
+            catch (NoSuchMethodException spigot) { compound = Probe.call(output, "b"); }
+            return emptySaveOutput(compound);
+        }
         try { if (!Boolean.TRUE.equals(Probe.call(output, "isEmpty"))) return false; }
         catch (NoSuchMethodException mappedNbt) {
             // Older obfuscated NBT has no isEmpty name. Inspect its real tag
@@ -738,8 +803,6 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             }
             if (maps != 1) throw new NoSuchFieldException("Unambiguous native NBT tag map");
         }
-        if (output.getClass().getSimpleName().equals("TagValueOutput"))
-            return Boolean.TRUE.equals(Probe.call(Probe.call(output, "buildResult"), "isEmpty"));
         return true;
     }
     private void finish() {
@@ -799,16 +862,16 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 Class<?> protocols = Class.forName("net.minecraft.network.protocol." + stage + "." + cap + "Protocols");
                 for (String flow : new String[] {"SERVERBOUND", "CLIENTBOUND"}) {
                     final String prefix = stage + "." + flow.toLowerCase(Locale.ROOT) + ".";
-                    Object unbound;
-                    try { unbound = protocols.getField(flow + "_TEMPLATE").get(null); }
-                    catch (NoSuchFieldException earlier) { unbound = protocols.getField(flow).get(null); }
+                    Object unbound = protocolTemplate(protocols, flow);
                     try {
-                        Object details = Probe.call(unbound, "details");
-                        Method visit = Probe.named(details.getClass(), "listPackets");
+                        Object details;
+                        try { details = Probe.call(unbound, "details"); }
+                        catch (NoSuchMethodException spigot) { details = Probe.call(unbound, "a"); }
+                        Method visit = protocolVisitor(details.getClass());
                         Class<?> visitorType = visit.getParameterTypes()[0];
                         Object visitor = Proxy.newProxyInstance(visitorType.getClassLoader(), new Class<?>[] {visitorType}, new InvocationHandler() {
                             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                                if (method.getName().equals("accept")) ids.setProperty(prefix + Probe.call(args[0], "id"), args[1].toString());
+                                if (method.getName().equals("accept")) ids.setProperty(prefix + protocolPacketId(args[0]), args[1].toString());
                                 return null;
                             }
                         });
@@ -818,10 +881,12 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         try { info = Probe.call(unbound, "bind", new java.util.function.Function<Object, Object>() {
                             public Object apply(Object value) { return value; }
                         }); } catch (NoSuchMethodException alreadyBound) { }
-                        Object codec = Probe.call(info, "codec");
+                        Object codec;
+                        try { codec = Probe.call(info, "codec"); }
+                        catch (NoSuchMethodException spigot) { codec = Probe.call(info, "c"); }
                         for (Field f : Probe.fields(codec.getClass())) if (Map.class.isAssignableFrom(f.getType()))
                             for (Map.Entry<?, ?> entry : ((Map<?, ?>)Probe.get(f, codec)).entrySet())
-                                if (entry.getValue() instanceof Number) ids.setProperty(prefix + Probe.call(entry.getKey(), "id"), entry.getValue().toString());
+                                if (entry.getValue() instanceof Number) ids.setProperty(prefix + protocolPacketId(entry.getKey()), entry.getValue().toString());
                     }
                 }
             }
@@ -853,6 +918,47 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         }
         Writer writer = new OutputStreamWriter(new FileOutputStream(new File(getDataFolder(), "protocol.properties")), "UTF-8");
         ids.store(writer, "Exact packet identifiers obtained from loaded upstream native protocol registry"); writer.close();
+    }
+    private Object protocolTemplate(Class<?> protocols, String flow) throws ReflectiveOperationException {
+        for (String name : new String[] {flow + "_TEMPLATE", flow}) try { return protocols.getField(name).get(null); }
+        catch (NoSuchFieldException spigot) { /* The SDK retains listener generic types. */ }
+        Field selected = null;
+        int priority = 0;
+        for (Field field : protocols.getFields()) {
+            if (!Modifier.isStatic(field.getModifiers()) || !(field.getGenericType() instanceof ParameterizedType)) continue;
+            Type listener = ((ParameterizedType)field.getGenericType()).getActualTypeArguments()[0];
+            if (!(listener instanceof Class)) continue;
+            String name = ((Class<?>)listener).getSimpleName();
+            boolean serverbound = name.startsWith("Server") || name.contains("PlayIn") || name.contains("LoginIn");
+            boolean clientbound = name.startsWith("Client") || name.contains("PlayOut") || name.contains("LoginOut");
+            if (!(flow.equals("SERVERBOUND") ? serverbound : clientbound)) continue;
+            int score = field.getType().getSimpleName().equals("ProtocolInfo") ? 1 : 2;
+            if (score > priority) { selected = field; priority = score; }
+            else if (score == priority) throw new NoSuchFieldException("Unambiguous upstream protocol template " + flow);
+        }
+        if (selected == null) throw new NoSuchFieldException("Native protocol template " + flow);
+        return selected.get(null);
+    }
+    private Method protocolVisitor(Class<?> details) throws NoSuchMethodException {
+        for (Method method : details.getMethods()) {
+            Class<?>[] parameters = method.getParameterTypes();
+            if (method.getReturnType() != void.class || parameters.length != 1 || !parameters[0].isInterface()) continue;
+            for (Method callback : parameters[0].getMethods()) {
+                Class<?>[] arguments = callback.getParameterTypes();
+                if (callback.getName().equals("accept") && arguments.length == 2 && arguments[1] == int.class
+                        && arguments[0].getSimpleName().equals("PacketType")) return method;
+            }
+        }
+        throw new NoSuchMethodException("Native protocol packet visitor");
+    }
+    private String protocolPacketId(Object type) throws ReflectiveOperationException {
+        for (String name : new String[] {"id", "b"}) try {
+            Method method = type.getClass().getMethod(name);
+            String result = method.getReturnType().getSimpleName();
+            if (result.equals("Identifier") || result.equals("ResourceLocation") || result.equals("MinecraftKey"))
+                return String.valueOf(Probe.call(method, type));
+        } catch (NoSuchMethodException absent) { /* Next exact SDK mapping. */ }
+        throw new NoSuchMethodException("Native packet type identifier");
     }
     private void extractIds(Properties ids, String prefix, Map<?, ?> map) {
         for (Map.Entry<?, ?> packet : map.entrySet()) {
