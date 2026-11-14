@@ -2,7 +2,7 @@
 
 import unittest
 
-from collect_release import MODERN, PLUGIN, PLUGIN_26_3_ATTACHMENT, normalize
+from collect_release import MODERN, PLUGIN, PLUGIN_ATTACHMENT, normalize
 
 
 class NativeCollectionTest(unittest.TestCase):
@@ -50,7 +50,7 @@ class NativeCollectionTest(unittest.TestCase):
         raw = {"minecraft": "1.12.2", "platform": "paper", "server": {"build": "1620"},
                "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                "restart": "passed", "exit_code": 0,
-               "assertions": [{"assertion": n, "status": "passed"} for n in sorted({n for v in PLUGIN.values() for n in v})]}
+               "assertions": [{"assertion": n, "status": "passed"} for n in sorted({n for v in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for n in v})]}
         self.assertEqual(normalize(raw, "plugin")["result"], "pass")
         raw["assertions"].insert(0, {"assertion": "ordinary-non-op-passenger-mounted", "status": "failed"})
         report = normalize(raw, "plugin")
@@ -62,7 +62,7 @@ class NativeCollectionTest(unittest.TestCase):
                 "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                 "restart": "passed", "exit_code": 0,
                 "assertions": [{"assertion": name, "status": "passed"}
-                               for name in sorted({name for required in [*PLUGIN.values(), *PLUGIN_26_3_ATTACHMENT.values()] for name in required})]}
+                               for name in sorted({name for required in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for name in required})]}
 
     def test_server_event_alone_cannot_prove_real_client_mounting(self):
         raw = self.plugin()
@@ -92,22 +92,28 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["result"], "fail")
         self.assertIn("mount", report["incomplete_checks"])
 
-    def test_independent_follower_cannot_pass_the_26_3_native_attachment_contract(self):
-        raw = self.plugin()
-        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required}
-        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
-        report = normalize(raw, "plugin")
-        self.assertEqual(report["result"], "fail")
-        self.assertIn("mount", report["incomplete_checks"])
-        self.assertIn("late-observer", report["incomplete_checks"])
+    def test_independent_follower_cannot_pass_any_native_attachment_contract(self):
+        for version in ("1.7.10", "1.8.9", "1.12.2", "1.16.5", "1.19.4", "1.20.4", "1.20.5", "26.3"):
+            with self.subTest(minecraft=version):
+                raw = self.plugin()
+                raw["minecraft"] = version
+                missing = {name for required in PLUGIN_ATTACHMENT.values() for name in required}
+                raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
+                report = normalize(raw, "plugin")
+                self.assertEqual(report["result"], "fail")
+                self.assertIn("mount", report["incomplete_checks"])
+                self.assertIn("late-observer", report["incomplete_checks"])
 
-    def test_26_3_attachment_requirements_do_not_claim_older_platform_implementation(self):
-        raw = self.plugin()
-        raw["minecraft"] = "1.12.2"
-        common = {name for required in PLUGIN.values() for name in required}
-        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required} - common
-        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
-        self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+    def test_server_graph_alone_cannot_prove_existing_and_late_client_attachment(self):
+        for name in ("tmthird-received-native-attachment-shares-horse-root",
+                     "tmlate-received-native-attachment-shares-horse-root",
+                     "tmthird-attachment-has-no-periodic-position-follow-packets",
+                     "tmlate-attachment-has-no-periodic-position-follow-packets"):
+            with self.subTest(assertion=name):
+                raw = self.plugin()
+                raw["minecraft"] = "1.20.4"
+                raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] != name]
+                self.assertIn("late-observer", normalize(raw, "plugin")["incomplete_checks"])
 
     def test_numeric_offsets_alone_cannot_prove_new_default_and_preservation_contract(self):
         raw = self.plugin()
@@ -118,13 +124,14 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["result"], "fail")
         self.assertIn("settings", report["incomplete_checks"])
 
-    def test_attached_26_3_graph_does_not_require_world_follower_packets_or_driver_only_graph(self):
-        raw = self.plugin()
-        old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
-        raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
-        self.assertEqual(normalize(raw, "plugin")["result"], "pass")
-        raw["minecraft"] = "1.12.2"
-        self.assertIn("late-observer", normalize(raw, "plugin")["incomplete_checks"])
+    def test_attached_graph_does_not_require_world_follower_packets_or_driver_only_graph(self):
+        for version in ("1.7.10", "1.12.2", "1.19.4", "1.20.4", "1.20.5", "26.3"):
+            with self.subTest(minecraft=version):
+                raw = self.plugin()
+                raw["minecraft"] = version
+                old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
+                raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
+                self.assertEqual(normalize(raw, "plugin")["result"], "pass")
 
 
 if __name__ == "__main__":

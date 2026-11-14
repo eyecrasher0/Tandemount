@@ -53,7 +53,7 @@ PLUGIN = {
     "chunk-unload": ("native-chunk-unload-after-evacuation", "retry-after-native-chunk-unload"),
     "restart-cleanup": ("plugin-disable-cleans-seat", "native-restart-does-not-restore-helper", "active-seat-refuses-native-serialization", "native-saved-world-contains-no-helper-uuid"),
 }
-PLUGIN_26_3_ATTACHMENT = {
+PLUGIN_ATTACHMENT = {
     "mount": ("server-native-attachment-shares-horse-root",
               "server-native-horse-keeps-first-driver-control",
               "tmthird-received-native-attachment-shares-horse-root"),
@@ -112,12 +112,10 @@ def normalize(raw, family):
                 and raw.get("restart") == "passed" and raw.get("exit_code") == 0
                 and bool(items) and all(observed.values()))
         groups = dict(PLUGIN)
-        if raw["minecraft"] == "26.3":
-            for name, required in PLUGIN_26_3_ATTACHMENT.items():
-                # The attached client graph includes the horse's anchor and
-                # requires no independent position-follow packets. Older
-                # targets retain their existing follower-specific contract.
-                groups[name] = required if name == "late-observer" else groups[name] + required
+        for name, required in PLUGIN_ATTACHMENT.items():
+            # Every requested port must prove the native attachment, including
+            # received client graphs. A world-position follower is insufficient.
+            groups[name] = required if name == "late-observer" else groups[name] + required
     elif family == "legacy":
         items = (raw.get("native_checks", []) + raw.get("synthetic_behavior", {}).get("checks", [])
                  + raw.get("restart", {}).get("checks", []))
