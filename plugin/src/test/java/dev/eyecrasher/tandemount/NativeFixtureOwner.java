@@ -58,6 +58,12 @@ public final class NativeFixtureOwner implements Listener {
         Constructor<?> loadedConstructor = loaded.getDeclaredConstructor(); loadedConstructor.setAccessible(true);
         Object ready = loadedConstructor.newInstance();
         values.setProperty("loaded", encode(loaded, ready));
+        Class<?> rotation = Class.forName("net.minecraft.network.protocol.game.ServerboundMovePlayerPacket$Rot");
+        Constructor<?> rotationConstructor = rotation.getConstructor(float.class, float.class, boolean.class, boolean.class);
+        for (int step = 0; step < 120; step++) {
+            float yaw = (float)-Math.toDegrees(step * .02);
+            values.setProperty("rotation." + step, encode(rotation, rotationConstructor.newInstance(yaw, 0F, true, false)));
+        }
         try (Writer output = new FileWriter(new File(fixture.getDataFolder(), "owner-wire.properties"))) { values.store(output, "Real upstream STREAM_CODEC bodies"); }
         Bukkit.getScheduler().runTaskTimer(fixture, new Runnable() { public void run() { try { tick++; snapshot(); } catch (Exception failure) { fixture.getLogger().warning(failure.toString()); } }}, 1L, 1L);
         snapshot();
@@ -87,11 +93,14 @@ public final class NativeFixtureOwner implements Listener {
                 blockStateId=((Number)method.invoke(null,blockState)).intValue();
             noGravity=Boolean.TRUE.equals(call(nativeSeat,"isNoGravity"));
         }
-        String record = "{\"tick\":" + tick + ",\"mounted\":" + mounted + ",\"riderVehicle\":" + (seat == null ? -1 : seat.getEntityId())
+        String record = "{\"tick\":" + tick + ",\"nanoTime\":" + System.nanoTime() + ",\"mounted\":" + mounted + ",\"riderVehicle\":" + (seat == null ? -1 : seat.getEntityId())
                 + ",\"horse\":" + horse.getEntityId() + ",\"driverVehicle\":" + (driver.getVehicle() == null ? -1 : driver.getVehicle().getEntityId())
                 + ",\"horseX\":" + horse.getLocation().getX() + ",\"horseY\":" + horse.getLocation().getY() + ",\"horseZ\":" + horse.getLocation().getZ()
+                + ",\"horseYaw\":" + horse.getLocation().getYaw()
                 + ",\"riderX\":" + rider.getLocation().getX() + ",\"riderY\":" + rider.getLocation().getY() + ",\"riderZ\":" + rider.getLocation().getZ()
+                + ",\"seatX\":" + (seat == null ? 0 : seat.getLocation().getX()) + ",\"seatY\":" + (seat == null ? 0 : seat.getLocation().getY()) + ",\"seatZ\":" + (seat == null ? 0 : seat.getLocation().getZ())
                 + ",\"seatBlockStateId\":"+blockStateId+",\"seatNoGravity\":"+noGravity
+                + ",\"seatType\":\"" + (seat == null ? "NONE" : seat.getType().name()) + "\""
                 + ",\"nonOpRiders\":" + (!driver.isOp() && !rider.isOp()) + ",\"vertical\":" + field(field(tandem,"settings"),"vertical") + ",\"rearward\":" + field(field(tandem,"settings"),"rearward") + "}";
         try (Writer output = new FileWriter(new File(fixture.getDataFolder(), "owner-state.json"))) { output.write(record); }
         try (Writer output = new FileWriter(new File(fixture.getDataFolder(), "owner-ticks.jsonl"), true)) { output.write(record + "\n"); }
@@ -105,7 +114,9 @@ public final class NativeFixtureOwner implements Listener {
         if(buffer==null)throw new NoSuchMethodException("Native registry packet buffer");
         Class<?> type=Class.forName("net.minecraft.network.protocol.game.ClientboundAddEntityPacket");Object packet=call(type.getField("STREAM_CODEC").get(null),"decode",buffer);
         int id=((Number)call(packet,"getId")).intValue(), data=((Number)call(packet,"getData")).intValue();
-        String record="{\"entityId\":"+id+",\"blockStateId\":"+data+",\"remainingBytes\":"+call(raw,"readableBytes")+"}";
+        Object entityType=call(packet,"getType");
+        Object key=Class.forName("net.minecraft.world.entity.EntityType").getMethod("getKey",Class.forName("net.minecraft.world.entity.EntityType")).invoke(null,entityType);
+        String record="{\"entityId\":"+id+",\"blockStateId\":"+data+",\"entityType\":\""+key+"\",\"remainingBytes\":"+call(raw,"readableBytes")+"}";
         try(Writer output=new FileWriter(new File(fixture.getDataFolder(),"owner-spawn-decoded.json"))){output.write(record);}
         call(raw,"release");
     }
@@ -118,9 +129,18 @@ public final class NativeFixtureOwner implements Listener {
         if(buffer==null)throw new NoSuchMethodException("Native registry packet buffer");
         Class<?> type=Class.forName("net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket");Object packet=call(type.getField("STREAM_CODEC").get(null),"decode",buffer);
         Field gravity=Class.forName("net.minecraft.world.entity.Entity").getDeclaredField("DATA_NO_GRAVITY");gravity.setAccessible(true);Object accessor=gravity.get(null);int gravityId=((Number)call(accessor,"id")).intValue();
-        Object noGravity=null;
-        for(Object value:(List<?>)call(packet,"packedItems"))if(((Number)call(value,"id")).intValue()==gravityId)noGravity=call(value,"value");
-        String record="{\"entityId\":"+call(packet,"id")+",\"noGravity\":"+noGravity+",\"nativeAccessorId\":"+gravityId+",\"remainingBytes\":"+call(raw,"readableBytes")+"}";
+        Field duration=Class.forName("net.minecraft.world.entity.Display").getDeclaredField("DATA_POS_ROT_INTERPOLATION_DURATION_ID");duration.setAccessible(true);
+        Field state=Class.forName("net.minecraft.world.entity.Display$BlockDisplay").getDeclaredField("DATA_BLOCK_STATE_ID");state.setAccessible(true);
+        int durationId=((Number)call(duration.get(null),"id")).intValue(),stateId=((Number)call(state.get(null),"id")).intValue();
+        Object noGravity=null,teleportDuration=null;Integer blockStateId=null;
+        for(Object value:(List<?>)call(packet,"packedItems")) {
+            int entry=((Number)call(value,"id")).intValue();Object decoded=call(value,"value");
+            if(entry==gravityId)noGravity=decoded;
+            if(entry==durationId)teleportDuration=decoded;
+            if(entry==stateId)for(Method m:Class.forName("net.minecraft.world.level.block.Block").getMethods())
+                if(m.getName().equals("getId")&&m.getParameterTypes().length==1)blockStateId=((Number)m.invoke(null,decoded)).intValue();
+        }
+        String record="{\"entityId\":"+call(packet,"id")+",\"noGravity\":"+noGravity+",\"blockStateId\":"+blockStateId+",\"teleportDuration\":"+teleportDuration+",\"nativeAccessorId\":"+gravityId+",\"remainingBytes\":"+call(raw,"readableBytes")+"}";
         try(Writer output=new FileWriter(new File(fixture.getDataFolder(),"owner-metadata-decoded.json"))){output.write(record);}
         call(raw,"release");
     }

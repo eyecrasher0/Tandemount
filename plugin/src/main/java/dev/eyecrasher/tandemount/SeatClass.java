@@ -57,10 +57,13 @@ final class SeatClass extends ClassLoader {
             if ((save || damage) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
         }
         boolean tick = false;
+        Class<?> tickOwner = base;
+        // The exact 26.3 native block display inherits its tick from Display.
+        if (base.getName().equals("net.minecraft.world.entity.Display$BlockDisplay")) tickOwner = base.getSuperclass();
         for (String name : new String[] {"tick", "B_", "l", "h", "k", "g"}) {
             // The falling-block class itself declares the tick in every audited
             // SDK. Do not mistake an unrelated inherited alias for that tick.
-            try { Method m = base.getDeclaredMethod(name); if (m.getReturnType() == void.class
+            try { Method m = tickOwner.getDeclaredMethod(name); if (m.getReturnType() == void.class
                     && !Modifier.isStatic(m.getModifiers()) && !Modifier.isFinal(m.getModifiers())
                     && !Modifier.isPrivate(m.getModifiers())) { writer.tick(m); tick = true; break; } }
             catch (NoSuchMethodException absent) { /* Next upstream mapping family. */ }

@@ -1,6 +1,7 @@
 # Plugin seat and passenger rendering
 
-The helper seat is a native vanilla falling-block entity. A passenger is
+The helper seat is a native vanilla nonliving entity. Exact 26.3 uses a block
+display with the BARRIER state; older adapters use a falling block. A passenger is
 mounted on this seat while the driver remains mounted on the horse. The client
 receives the native seat entity and its mount edge; no custom client entity is
 created.
@@ -10,9 +11,26 @@ safe invisible state: the unchanged vanilla client removes an AIR falling block
 at the beginning of its first entity tick, before checking whether the world is
 client-side. The server's generated subclass replaces only the server tick, so
 server ride maps and mount packets alone cannot establish client survival.
-BARRIER remains non-AIR and its render shape is `INVISIBLE`; the official
-falling-block renderer returns before submitting block geometry for that shape.
-The existing no-gravity metadata and native position updates are retained.
+BARRIER remains non-AIR and its render shape is `INVISIBLE`. Its official
+block-display model contains only a particle texture, with no elements or
+parent geometry. The existing no-gravity metadata is retained.
+
+The 26.3 client falling block inherits the base entity's no-op interpolation
+handler. Position packets therefore move it immediately, while an observed
+horse follows its native stepped interpolation. The 26.3 helper now uses the
+already registered vanilla `minecraft:block_display` type with its original
+linear position interpolation and a three-tick teleport duration. Only the
+server subclass has a custom tick; client entities and their movement methods
+are unchanged. Position interpolation and visual transformation interpolation
+are separate native display settings; this repair changes the former.
+
+The local-passenger path also matters. The original 26.3 packet handler calls
+`positionRider(localPlayer)` and resets the player's old position when the
+vehicle is not interpolating. The falling-block helper enters this immediate
+snap branch. The interpolating display skips it, leaving native passenger ticks
+and the original partial-tick eye-position interpolation to advance the rider.
+The display has no controlling passenger, so mounting it does not make its
+motion locally authoritative.
 
 This correction currently selects only the exact 26.3 game and its upstream
 `26.3.build.*` Bukkit API labels. Other exact targets require their own client
@@ -27,11 +45,11 @@ the 0.2 adjustment when the absolute clamped difference exceeds 50 degrees.
 In 1.20.6 the bytecode compares the squared difference to 2500, which is the
 same 50-degree threshold; later audited clients compare the absolute value.
 Otherwise the renderer uses the passenger's own body yaw. At each audited
-version, the vanilla `FallingBlockEntity` class extends `Entity`, not
+version, the vanilla falling block and block display both extend `Entity`, not
 `LivingEntity`; the player renderer uses `LivingEntityRenderer` as its base.
 
-`NativeAccess.createSeat` now rejects a helper unless its Bukkit entity is both
-`EntityType.FALLING_BLOCK` and not a `LivingEntity`. The native fixture checks
+`NativeAccess.createSeat` rejects a helper unless its Bukkit entity has the
+audited vanilla type for the exact game and is not a `LivingEntity`. The native fixture checks
 the same invariant, and the loopback client capture ties that checked seat to
 the entity ID in the received spawn and mount packets. This prevents a future
 seat change from silently reintroducing the living-vehicle body-yaw path.
@@ -52,11 +70,13 @@ the shared empty-box constants in recent server classes.
 The generated native subclass calls an accessible upstream constructor. When
 Spigot makes the world/coordinates/state constructor private, the adapter calls
 its public entity-type/world constructor with the already registered vanilla
-`minecraft:falling_block` type and verifies that type's registry key. Spigot
+`minecraft:falling_block` type and verifies that type's registry key. The 26.3
+display adapter verifies `minecraft:block_display` instead. Spigot
 26.2 and later keep this constant in the separate native `EntityTypes` holder.
-No type is constructed or registered. The helper still receives real AIR state
-and must expose the Bukkit nonliving falling-block type before it can join a
-ride.
+No type is constructed or registered. Older falling-block adapters still use
+AIR pending their separate exact-client lifetime verification; the 26.3 display
+uses BARRIER. Both must expose the expected Bukkit nonliving vanilla type
+before joining a ride.
 
 The subclass overrides the falling-block class's own declared tick, avoiding
 unrelated inherited methods with the same short mapping names. The audited
@@ -64,6 +84,8 @@ Spigot families include `k` in 1.18–1.19.2 and `g` in 1.21.5–1.21.11. In exa
 1.19.3 mappings, the position setter is `f(double, double, double)`; `e` only
 updates `VecDeltaCodec`. The 1.19.4 mappings swap those two meanings, so this
 selection is tied to the exact upstream game version rather than alias order.
+The 26.3 block display's original tick is declared by its native `Display`
+parent; only that verified inheritance case uses the parent tick entry point.
 
 ## Native lifecycle fixture
 
@@ -141,12 +163,29 @@ The 26.3 owner regression fixture now sends real native-encoded interaction
 packets through loopback clients, including repeated main/off-hand clicks. It
 observes an ordinary non-operator passenger across ticks and movement, checks a
 cancelled packet interaction, and decodes the observer's actual seat spawn with
-the native packet codec. The observed state ID must match the native helper.
+the native packet codec. Its observed native block-display metadata must match
+the helper's BARRIER state, no-gravity flag, and three-tick interpolation duration.
 The command check decodes the actual clientbound chat component, requires color
 and style plus all four adjustment click actions, then submits an observed click
 command through the client's command packet and verifies independent settings.
 These checks are separate from executing a vanilla client entity tick and from
 human visual review.
+
+For the 26.3 movement repair, an actual curved ordinary-driver capture includes
+native player-look, steering and vehicle-movement packets. Replaying 467
+received observer frames through original vanilla packet codecs and native
+entity movement, common-tick and tick methods measured at most 0.02917 blocks
+of seat-relative error across four client-tick phases. The matched falling-block
+control reached 0.11063 blocks. A separate original display completed 1,200
+stationary client ticks without removal or displacement.
+
+An executable positional-component probe uses an ordinary native ArmorStand
+passenger and the original final eye-position methods. It confirms the
+falling-block control immediately resets both position endpoints, while the
+display keeps the previous endpoint and advances through three native rider
+ticks. This is component evidence. It does not construct a LocalPlayer or
+render a camera; the LocalPlayer and camera branches were audited separately
+in the original client classes.
 
 The official client bytecode establishes the renderer's type check and the
 vanilla seat class hierarchy. The updated native fixture and loopback protocol

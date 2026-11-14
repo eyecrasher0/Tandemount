@@ -107,6 +107,7 @@ class Client:
         self.alive = True
         self.joined = threading.Event()
         self.packets = []
+        self.packet_times = []
         self.errors = []
         self.lock = threading.Lock()
         self.position = (0.0, 0.0, 0.0, 0.0, 0.0)
@@ -152,6 +153,7 @@ class Client:
             while self.alive:
                 packet_id, body = recv_frame(self.sock, self.compressed)
                 self.packets.append((self.stage, packet_id, body.hex()))
+                self.packet_times.append(time.monotonic_ns())
                 if self.stage == 'login':
                     if packet_id == 0:
                         raise RuntimeError('Login disconnect: ' + repr(body))
@@ -282,8 +284,11 @@ def packet_checks(clients, graph, minecraft):
                 pass
         prefix = client.name.lower() + '-'
         check(prefix + 'native-vanilla-seat-spawn-received', graph['seat'] in spawned and bool(types) and all(v > 0 for v in types), 'Actual clientbound protocol frames; native IDs and vanilla spawn packet')
-        check(prefix + 'client-seat-uses-nonliving-falling-block', graph.get('seat_falling_block') == 1 and graph.get('seat_nonliving') == 1
-              and graph['seat'] in spawned, 'Native fixture confirms FALLING_BLOCK and nonliving; loopback client received the same seat entity ID')
+        display = minecraft == '26.3'
+        seat_kind = 'block-display' if display else 'falling-block'
+        check(prefix + 'client-seat-uses-nonliving-' + seat_kind,
+              graph.get('seat_block_display' if display else 'seat_falling_block') == 1 and graph.get('seat_nonliving') == 1
+              and graph['seat'] in spawned, 'Native fixture confirms the exact nonliving vanilla seat type; loopback client received the same seat entity ID')
         check(prefix + 'passenger-seat-edge-received', any(v == graph['seat'] and p == [graph['rider']] for v, p in mounts), 'Actual clientbound mount graph')
         check(prefix + 'horse-has-only-driver-on-client', any(v == graph['horse'] and p == [graph['driver']] for v, p in mounts)
               and not any(v == graph['horse'] and graph['seat'] in p for v, p in mounts), 'Actual clientbound graph preserves native horse control and separate seat position')
@@ -521,7 +526,8 @@ def main():
     finally:
         for client in clients:
             client.close()
-            (run / (client.name + '-packets.json')).write_text(json.dumps({'packets': client.packets, 'errors': client.errors}, indent=2))
+            (run / (client.name + '-packets.json')).write_text(json.dumps({'packets': client.packets,
+                'received_monotonic_ns': client.packet_times, 'errors': client.errors}, indent=2))
         if server.poll() is None:
             try:
                 command_line('stop')

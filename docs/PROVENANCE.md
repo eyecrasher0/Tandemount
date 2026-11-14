@@ -96,6 +96,66 @@ the release verification report records their exact hashes and evidence limits.
 
 GPL-3.0-only text: <https://www.gnu.org/licenses/gpl-3.0.txt>.
 
+## Exact 26.3 passenger movement repair
+
+The fresh Spigot fixture implementer continued in a separate clean-room
+worktree for the owner's 26.3 passenger movement report. Inputs remained this
+independent implementation, its specification and native test evidence, and
+official upstream SDKs; no predecessor or global project-memory material was
+consulted. The inspected official 26.3 client JAR SHA-256 is
+`4508d006323f24fa02876310c192d739af56516eb259000ac50f0909a68c9a2d`;
+the exact Paper 26.3 build 249 patched SDK SHA-256 is
+`dadd84d1697efa8a29bcad6c81e503efdbaaa2dac85dbd4662c8243c97f0b8a4`.
+Their distribution and version-metadata provenance is recorded above.
+
+Client `Entity.createInterpolationHandler()` returns the no-op handler, which
+the original `FallingBlockEntity` inherits. The original client packet handler
+calls `moveOrInterpolateTo`; this immediately moves the falling block while a
+horse uses `SteppedInterpolationHandler`. The official client `Display`
+instead creates a `LinearInterpolationHandler`, and its synchronized position
+and rotation duration configures that handler. Exact Paper's
+`CraftDisplay.setTeleportDuration(int)` writes that native data accessor.
+The repair selects the existing native BARRIER block display only for 26.3
+and its `26.3.build.*` Bukkit labels, keeping the helper nonliving, no-gravity,
+empty-bounded, and refused by the native save entry points.
+
+The official client block-display renderer resolves the block's model. Its
+`assets/minecraft/blockstates/barrier.json` SHA-256 is
+`63ea68aa8c357e5f17999d5104a8dce09057fa26d5724fef5e2d921212acf6e7`.
+That file selects `minecraft:block/barrier`, whose model SHA-256 is
+`194d740cb62d8d1ea36e7982fc7312571f9756df4079c28039cc4ebaeb8c5289`.
+The model contains a particle texture only, with no parent or elements. No
+geometry or particle emitter is added to the vanilla display entity.
+Ignored client/server audit inventories retain original class hashes and
+`javap -p -c` evidence. No downloaded game classes are packaged in the plugin.
+
+The tested runtime JAR SHA-256 is
+`55eecdc1a4240c3878c942e718f44b25712f284e62fd3398aeab14d8c81e8c63`;
+the matching final fixture SHA-256 is
+`8c324fa30e1162f0d21121305ae834aa35e148e7df6a231af89f165df9387bba`.
+Exact Paper 26.3 build 249 passed 62 native assertions, ten observer-packet
+assertions, direct active serialization refusal, saved-world scans, and native
+restart. Ten real-click owner checks also passed, including actual decoded
+block-display type, BARRIER metadata, no-gravity and interpolation duration,
+plus the styled clickable command controls. Compilation passed against both
+the real Java-8-targeted Paper 1.12.2 SDK and the exact 26.3 API/dependencies.
+
+The public client probe sources preserve the independent test drivers. A
+1,200-tick original block-display run remained stationary and alive. A
+hash-bound replay of 467 real observer frames across four client tick phases
+measured maximum relative error 0.02917 blocks, versus 0.11063 for the matched
+original falling-block control. The fixture sends native-codec player-look
+packets with its vehicle movement: omitting the driver's look creates an
+inconsistent test where the ridden horse resets yaw between vehicle packets.
+That earlier trace and its failing interpolation result remain retained.
+
+The original local-passenger packet branch resets the local player's old
+position only when the vehicle is not interpolating. The native component
+probe confirms active display interpolation skips that branch and preserves
+the original eye-position endpoints through native rider ticks. Its ordinary
+ArmorStand passenger is explicitly a positional-component probe; it does not
+claim a constructed LocalPlayer, rendered camera, or human visual review.
+
 The plugin runner shares the modern vanilla protocol helper for teleport
 acknowledgements. The official 26.3 `ServerboundAcceptTeleportationPacket`
 record requires the resulting position and rotation in addition to the

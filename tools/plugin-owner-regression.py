@@ -5,6 +5,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import queue
@@ -140,10 +141,25 @@ def main():
         for _ in range(3):click(clients[1]);click(clients[1],'OFF_HAND');time.sleep(.15)
         observations['repeated']=state();check('real-client-repeated-click-keeps-ride',state()['mounted'],observations['repeated'])
         start=state()
-        for step in range(40):
-            clients[0].steer(int(values['horse']));clients[0].move_vehicle(start['horseX'],start['horseY'],start['horseZ']+(step+1)*.035,0,0);time.sleep(.05)
+        trajectory_start = time.monotonic_ns()
+        for step in range(120):
+            angle = step * .02
+            x = start['horseX'] + 1.75 * (1 - math.cos(angle))
+            z = start['horseZ'] + 1.75 * math.sin(angle)
+            # Native-encoded ordinary player look accompanies vehicle movement,
+            # as it does for a vanilla driver; the horse follows its driver's yaw.
+            clients[0].send(clients[0].identifier('game','serverbound','minecraft:move_player_rot'),base64.b64decode(values['rotation.'+str(step)]))
+            clients[0].steer(int(values['horse']));clients[0].move_vehicle(x,start['horseY'],z,-math.degrees(angle),0);time.sleep(.05)
         clients[0].steer(int(values['horse']),False);time.sleep(.5)
+        trajectory_end = time.monotonic_ns()
         observations['movement']=state();check('real-client-mounted-movement-keeps-ride',state()['mounted'] and abs(state()['horseZ']-start['horseZ'])>.1,observations['movement'])
+        result['trajectory'] = {'horse_id':start['horse'],'seat_id':start['riderVehicle'],'rider_id':int(values['rider']),
+            'start_monotonic_ns':trajectory_start,'end_monotonic_ns':trajectory_end,
+            'initial_horse_position':[start['horseX'],start['horseY'],start['horseZ']],
+            'initial_seat_position':[start['seatX'],start['seatY'],start['seatZ']],
+            'expected_rider_vertical':start['vertical'],'expected_seat_vertical':start['seatY']-start['horseY'],
+            'expected_rearward':start['rearward'],'observer':'TmThird',
+            'input':'120 ordinary native-encoded player look, steer and vehicle move packets on a curved path; fixed settings before commands'}
         spawn_id=clients[2].identifier('game','clientbound','minecraft:add_entity','ClientboundAddEntityPacket')
         for stage,identifier,body in clients[2].packets:
             if stage=='game' and identifier==spawn_id and protocol.read_vi(bytes.fromhex(body))[0]==state()['riderVehicle']:
@@ -151,7 +167,7 @@ def main():
         else:raise RuntimeError('Observer did not receive native seat spawn')
         console('tmfixture owner-decodespawn')
         result['received_spawn']=json.loads(await_file(fixture/'owner-spawn-decoded.json'))
-        check('real-client-seat-spawn-state-matches-native',result['received_spawn']['entityId']==state()['riderVehicle'] and result['received_spawn']['blockStateId']==state()['seatBlockStateId'] and result['received_spawn']['remainingBytes']==0,{'wire':result['received_spawn'],'native':state()})
+        check('real-client-seat-spawn-type-matches-native',result['received_spawn']['entityId']==state()['riderVehicle'] and result['received_spawn']['entityType']=='minecraft:block_display' and state()['seatType']=='BLOCK_DISPLAY' and result['received_spawn']['remainingBytes']==0,{'wire':result['received_spawn'],'native':state()})
         metadata_id=clients[2].identifier('game','clientbound','minecraft:set_entity_data','ClientboundSetEntityDataPacket')
         for stage,identifier,body in clients[2].packets:
             if stage=='game' and identifier==metadata_id and protocol.read_vi(bytes.fromhex(body))[0]==state()['riderVehicle']:
@@ -159,6 +175,7 @@ def main():
         else:raise RuntimeError('Observer did not receive native seat metadata')
         console('tmfixture owner-decodemetadata')
         result['received_metadata']=json.loads(await_file(fixture/'owner-metadata-decoded.json'))
+        check('real-client-seat-block-state-and-interpolation-match-native',result['received_metadata']['blockStateId']==state()['seatBlockStateId'] and result['received_metadata']['teleportDuration']==3,{'wire':result['received_metadata'],'native':state()})
         check('real-client-seat-no-gravity-matches-native',result['received_metadata']['entityId']==state()['riderVehicle'] and result['received_metadata']['noGravity'] is True and state()['seatNoGravity'] is True and result['received_metadata']['remainingBytes']==0,{'wire':result['received_metadata'],'native':state()})
         console('tmfixture owner-admin');time.sleep(.1);send_command(clients[2],'tandemount');time.sleep(.5)
         chat_id=clients[2].identifier('game','clientbound','minecraft:system_chat','ClientboundSystemChatPacket')
@@ -184,7 +201,7 @@ def main():
     except Exception as error:result['error']=str(error)
     finally:
         for client in clients:
-            client.close();(run/(client.name+'-packets.json')).write_text(json.dumps({'packets':client.packets,'errors':client.errors},indent=2)+'\n')
+            client.close();(run/(client.name+'-packets.json')).write_text(json.dumps({'packets':client.packets,'received_monotonic_ns':client.packet_times,'errors':client.errors},indent=2)+'\n')
         if server.poll() is None:
             console('stop')
             try:server.wait(35)

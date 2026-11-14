@@ -362,8 +362,16 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             trackSeat();
             Object nativeSeat = Probe.handle(rider.getVehicle());
             require("seat-not-custom-registry-type", ((Class<?>)field(field(tandem, "nativeAccess"), "seatBase")).isInstance(nativeSeat));
-            require("seat-is-nonliving-vanilla-falling-block", rider.getVehicle().getType() == EntityType.FALLING_BLOCK
+            boolean display = (Boolean)field(field(tandem, "nativeAccess"), "interpolatedSeat");
+            require(display ? "seat-is-nonliving-vanilla-block-display" : "seat-is-nonliving-vanilla-falling-block",
+                    rider.getVehicle().getType().name().equals(display ? "BLOCK_DISPLAY" : "FALLING_BLOCK")
                     && !(rider.getVehicle() instanceof LivingEntity));
+            if (display) {
+                Object state = Probe.call(nativeSeat, "getBlockState");
+                require("seat-block-remains-native-invisible", Probe.call(state, "getRenderShape").toString().equals("INVISIBLE"));
+                require("seat-gravity-remains-disabled", (Boolean)Probe.call(nativeSeat, "isNoGravity"));
+                require("seat-native-position-interpolation-enabled", ((Number)Probe.call(rider.getVehicle(), "getTeleportDuration")).intValue() == 3);
+            }
             interact(third);
             later(3, new Runnable() { public void run() {
                 try {
@@ -440,6 +448,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             graph.setProperty("rider", Integer.toString(rider.getEntityId()));
             graph.setProperty("seat", Integer.toString(rider.getVehicle().getEntityId()));
             graph.setProperty("seat_falling_block", rider.getVehicle().getType() == EntityType.FALLING_BLOCK ? "1" : "0");
+            graph.setProperty("seat_block_display", rider.getVehicle().getType().name().equals("BLOCK_DISPLAY") ? "1" : "0");
             graph.setProperty("seat_nonliving", rider.getVehicle() instanceof LivingEntity ? "0" : "1");
             File initial = new File(getDataFolder(), "initial-graph.properties");
             if (!initial.exists()) { Writer writer = new FileWriter(initial); graph.store(writer, "Native IDs for loopback packet graph assertions"); writer.close(); }

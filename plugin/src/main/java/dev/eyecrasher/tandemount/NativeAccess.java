@@ -13,6 +13,7 @@ import java.util.*;
 /** Narrow adapter discovered from the loaded upstream server's real signatures. */
 final class NativeAccess {
     final boolean oldest;
+    final boolean interpolatedSeat;
     final Class<?> entityClass, seatBase;
     final Constructor<?> seatConstructor;
     private final Constructor<?> vehicleWrapper;
@@ -32,8 +33,11 @@ final class NativeAccess {
     NativeAccess(Object server) throws ReflectiveOperationException, java.io.IOException {
         craftServer = server;
         String craft = server.getClass().getPackage().getName();
+        String bukkitVersion = org.bukkit.Bukkit.getBukkitVersion();
+        String minecraft = bukkitVersion.split("-", 2)[0];
+        interpolatedSeat = minecraft.equals("26.3") || minecraft.startsWith("26.3.build.");
         Class<?> craftSeat;
-        try { craftSeat = Class.forName(craft + ".entity.CraftFallingBlock"); }
+        try { craftSeat = Class.forName(craft + (interpolatedSeat ? ".entity.CraftBlockDisplay" : ".entity.CraftFallingBlock")); }
         catch (ClassNotFoundException oldName) { craftSeat = Class.forName(craft + ".entity.CraftFallingSand"); }
         boolean legacy;
         try { Class.forName(craft + ".entity.CraftArmorStand"); legacy = false; }
@@ -45,6 +49,7 @@ final class NativeAccess {
         if (getHandle == null) throw new NoSuchMethodException("Craft seat native handle");
         seatBase = getHandle.getReturnType();
         Class<?> stateType = null;
+        if (interpolatedSeat) stateType = seatBase.getMethod("getBlockState").getReturnType();
         for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
             Class<?>[] p = c.getParameterTypes();
             if (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class
@@ -56,7 +61,6 @@ final class NativeAccess {
         // Vanilla clients discard an AIR falling block in their first entity
         // tick. BARRIER has invisible render shape while remaining non-AIR.
         // Keep this owner regression repair tied to its exact audited client.
-        String bukkitVersion = org.bukkit.Bukkit.getBukkitVersion();
         org.bukkit.Material material = (bukkitVersion.equals("26.3") || bukkitVersion.startsWith("26.3-") || bukkitVersion.startsWith("26.3.build."))
                 ? org.bukkit.Material.valueOf("BARRIER") : org.bukkit.Material.AIR;
         seatBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, material);
@@ -134,7 +138,6 @@ final class NativeAccess {
         Method pos = null;
         // In the exact 1.19.3 Spigot mappings e(DDD) updates VecDeltaCodec;
         // f(DDD) is the real position setter. 1.19.4 swaps those aliases.
-        String minecraft = org.bukkit.Bukkit.getBukkitVersion().split("-", 2)[0];
         String[] positionNames = minecraft.equals("1.19.3")
                 ? new String[] {"setPos", "setPosition", "a_", "f"}
                 : new String[] {"setPos", "setPosition", "a_", "e"};
@@ -207,6 +210,7 @@ final class NativeAccess {
         Object seat = arguments == 1 ? seatConstructor.newInstance(world)
                 : arguments == 2 ? seatConstructor.newInstance(vanillaSeatType, world)
                 : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), seatState);
+        if (interpolatedSeat) Reflect.call(seat, "setBlockState", seatState);
         for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
             if (seatState != null && f.getType().isInstance(seatState)) { f.setAccessible(true); f.set(seat, seatState); }
             else if (oldest && f.getType().isInstance(seatBlock)) { f.setAccessible(true); f.set(seat, seatBlock); }
@@ -218,10 +222,12 @@ final class NativeAccess {
         // The client LivingEntityRenderer clamps passenger body yaw against a
         // LivingEntity vehicle. Keep this helper on the vanilla, nonliving
         // falling-block entity so a head-yaw wrap cannot steer the rider model.
-        if (bukkit instanceof LivingEntity || bukkit.getType() != EntityType.FALLING_BLOCK) {
+        String requiredType = interpolatedSeat ? "BLOCK_DISPLAY" : "FALLING_BLOCK";
+        if (bukkit instanceof LivingEntity || !bukkit.getType().name().equals(requiredType)) {
             bukkit.remove();
-            throw new IllegalStateException("The shared seat must be a nonliving vanilla falling block");
+            throw new IllegalStateException("The shared seat must be the audited nonliving vanilla type");
         }
+        if (interpolatedSeat) Reflect.call(bukkit, "setTeleportDuration", 3);
         Reflect.optional(bukkit, "setPersistent", false);
         Reflect.optional(bukkit, "setInvulnerable", true);
         Reflect.optional(bukkit, "setSilent", true);
@@ -243,36 +249,38 @@ final class NativeAccess {
         return bukkit;
     }
 
-    private static Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
+    private Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
+        String identifier = interpolatedSeat ? "minecraft:block_display" : "minecraft:falling_block";
+        String constant = interpolatedSeat ? "BLOCK_DISPLAY" : "FALLING_BLOCK";
         Object value = null;
         for (String name : new String[] {"byString", "a"}) try {
             Method lookup = type.getMethod(name, String.class);
             if (Modifier.isStatic(lookup.getModifiers()) && lookup.getReturnType() == Optional.class) {
-                Optional<?> found = (Optional<?>)Reflect.call(lookup, (Object)null, "minecraft:falling_block");
+                Optional<?> found = (Optional<?>)Reflect.call(lookup, (Object)null, identifier);
                 if (found.isPresent()) { value = found.get(); break; }
             }
         } catch (NoSuchMethodException absent) { /* Next audited native mapping. */ }
         // 26.2 moved the existing vanilla constants out of EntityType. Read
         // that upstream holder; never construct a type or edit its registry.
         if (value == null) for (String name : new String[] {type.getName(), type.getPackage().getName() + ".EntityTypes"}) try {
-            Field field = Class.forName(name).getField("FALLING_BLOCK");
+            Field field = Class.forName(name).getField(constant);
             if (Modifier.isStatic(field.getModifiers()) && type.isAssignableFrom(field.getType())) {
                 value = Reflect.get(field, null); break;
             }
         } catch (ClassNotFoundException absent) { /* Pre-26.2 native holder. */ }
           catch (NoSuchFieldException absent) { /* Older obfuscated constants. */ }
-        if (!type.isInstance(value)) throw new NoSuchFieldException("Existing vanilla falling_block entity type");
+        if (!type.isInstance(value)) throw new NoSuchFieldException("Existing vanilla seat entity type " + identifier);
         for (String name : new String[] {"getKey", "a"}) try {
             Method key = type.getMethod(name, type);
             String result = key.getReturnType().getSimpleName();
             if (Modifier.isStatic(key.getModifiers()) && (result.equals("Identifier")
                     || result.equals("ResourceLocation") || result.equals("MinecraftKey"))) {
-                if (!"minecraft:falling_block".equals(String.valueOf(Reflect.call(key, (Object)null, value))))
-                    throw new IllegalStateException("Native falling-block registry identity mismatch");
+                if (!identifier.equals(String.valueOf(Reflect.call(key, (Object)null, value))))
+                    throw new IllegalStateException("Native seat registry identity mismatch");
                 return value;
             }
         } catch (NoSuchMethodException absent) { /* Next audited native mapping. */ }
-        throw new NoSuchMethodException("Native falling-block registry identity");
+        throw new NoSuchMethodException("Native seat registry identity");
     }
 
     void shape(Object seat) throws ReflectiveOperationException {
