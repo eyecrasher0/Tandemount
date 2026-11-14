@@ -1,6 +1,9 @@
 """Offline checks for the CurseForge upload metadata and safe resume ledger."""
 
 import unittest
+from unittest.mock import patch
+import io
+import urllib.error
 
 import publish_curseforge
 
@@ -52,6 +55,20 @@ class CurseForgePublishTests(unittest.TestCase):
     def test_missing_requested_release_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "missing_versions"):
             publish_curseforge.validate_version_names([], {"entries": [{"minecraft": ["1.7.10"], "family": "plugin"}]})
+
+    def test_definitive_rate_limit_rejection_can_retry_same_upload(self):
+        limited = urllib.error.HTTPError("https://example.test/upload", 429, "Limited", {"Retry-After": "1"}, io.BytesIO(b"limited"))
+        with patch("publish_curseforge.urllib.request.urlopen", side_effect=[limited, io.BytesIO(b'{"id":42}')]) as send:
+            with patch("publish_curseforge.time.sleep") as sleep:
+                self.assertEqual(publish_curseforge.request_json("POST", "https://example.test/upload", "fixture", body=b"jar"), {"id": 42})
+        self.assertEqual(send.call_count, 2)
+        sleep.assert_called_once_with(1)
+
+    def test_unknown_upload_outcome_is_never_automatically_retried(self):
+        with patch("publish_curseforge.urllib.request.urlopen", side_effect=urllib.error.URLError("response lost")) as send:
+            with self.assertRaises(RuntimeError):
+                publish_curseforge.request_json("POST", "https://example.test/upload", "fixture", body=b"jar")
+        self.assertEqual(send.call_count, 1)
 
 
 if __name__ == "__main__":

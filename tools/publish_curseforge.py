@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -33,15 +34,25 @@ def request_json(method, url, token, body=None, content_type="application/json")
     if body is not None:
         headers["Content-Type"] = content_type
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=240) as response:
-            data = response.read()
-            return json.loads(data) if data else None
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", "replace")
-        raise RuntimeError(f"CurseForge {method} {url} failed ({error.code}): {detail[:2000]}") from None
-    except urllib.error.URLError as error:
-        raise RuntimeError(f"CurseForge {method} {url} failed: {error.reason}") from None
+    for attempt in range(5):
+        try:
+            with urllib.request.urlopen(request, timeout=240) as response:
+                data = response.read()
+                return json.loads(data) if data else None
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", "replace")
+            if error.code == 429 and attempt < 4:
+                # A definitive rate-limit rejection is safe to retry; an
+                # unknown transport outcome remains a ledger-blocking error.
+                try:
+                    delay = min(60, max(1, int(error.headers.get("Retry-After", "5"))))
+                except ValueError:
+                    delay = 5
+                time.sleep(delay)
+                continue
+            raise RuntimeError(f"CurseForge {method} {url} failed ({error.code}): {detail[:2000]}") from None
+        except urllib.error.URLError as error:
+            raise RuntimeError(f"CurseForge {method} {url} failed: {error.reason}") from None
 
 
 def multipart(metadata, path):
@@ -163,7 +174,7 @@ def main():
                 response = request_json("POST", f"{BASE}/projects/{project_id}/upload-file", token,
                                         body=body, content_type=content_type)
             except RuntimeError as error:
-                rejected = any(f"failed ({status})" in str(error) for status in (400, 401, 403, 404, 413, 422))
+                rejected = any(f"failed ({status})" in str(error) for status in (400, 401, 403, 404, 413, 422, 429))
                 state["files"][key]["status"] = "rejected" if rejected else "ambiguous"
                 state["files"][key]["error"] = str(error)
                 write_state(args.state, state)

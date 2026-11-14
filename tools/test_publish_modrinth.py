@@ -1,9 +1,12 @@
 """Offline checks for Modrinth release metadata and upload form encoding."""
 
 import json
+import io
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+import urllib.error
 
 import publish_modrinth
 
@@ -58,6 +61,18 @@ class ModrinthPublishTests(unittest.TestCase):
         targets = publish_modrinth.expected_targets(matrix)
         self.assertEqual(len(matrix["targets"]), 38)
         self.assertEqual(len(targets), 206)
+
+    def test_unknown_post_outcome_is_not_retried_into_duplicate_versions(self):
+        with patch("publish_modrinth.urllib.request.urlopen", side_effect=urllib.error.URLError("response lost")) as send:
+            with self.assertRaisesRegex(RuntimeError, "outcome is unknown"):
+                publish_modrinth.request("POST", "https://example.test/version", body=b"release")
+        self.assertEqual(send.call_count, 1)
+
+    def test_read_only_request_can_retry_transport_failure(self):
+        with patch("publish_modrinth.urllib.request.urlopen", side_effect=[urllib.error.URLError("temporary"), io.BytesIO(b'{"id":"version"}')]) as send:
+            with patch("publish_modrinth.time.sleep"):
+                self.assertEqual(publish_modrinth.request("GET", "https://example.test/version"), {"id": "version"})
+        self.assertEqual(send.call_count, 2)
 
 
 if __name__ == "__main__":

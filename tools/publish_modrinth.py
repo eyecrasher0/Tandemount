@@ -55,6 +55,11 @@ def request(method, url, token=None, body=None, content_type="application/json",
                 continue
             raise RuntimeError(f"Modrinth {method} {url} failed ({error.code}): {data[:2000]}") from None
         except urllib.error.URLError as error:
+            if method == "POST":
+                # Creation may already have succeeded before the response was
+                # lost. The outer resume path reconciles projects/versions by
+                # slug, version number and artifact hash before any next POST.
+                raise RuntimeError(f"Modrinth POST outcome is unknown; inspect remote state before retrying: {error.reason}") from None
             if attempt < 4:
                 time.sleep(2 ** attempt)
                 continue
