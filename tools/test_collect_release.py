@@ -104,7 +104,8 @@ class NativeCollectionTest(unittest.TestCase):
     def test_26_3_attachment_requirements_do_not_claim_older_platform_implementation(self):
         raw = self.plugin()
         raw["minecraft"] = "1.12.2"
-        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required}
+        common = {name for required in PLUGIN.values() for name in required}
+        missing = {name for required in PLUGIN_26_3_ATTACHMENT.values() for name in required} - common
         raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
         self.assertEqual(normalize(raw, "plugin")["result"], "pass")
 
