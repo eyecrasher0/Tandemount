@@ -74,6 +74,21 @@ class ModrinthPublishTests(unittest.TestCase):
                 self.assertEqual(publish_modrinth.request("GET", "https://example.test/version"), {"id": "version"})
         self.assertEqual(send.call_count, 2)
 
+    def test_release_changelog_links_the_matching_complete_source_archive(self):
+        text = publish_modrinth.release_changelog(self.project)
+        self.assertIn('/releases/download/tandemount-1.0.0/Tandemount-1.0.0-source.zip', text)
+        self.assertIn('/blob/tandemount-1.0.0/docs/INSTALL.md', text)
+
+    def test_provider_description_resolves_repo_links_at_release_tag(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'README.md').write_text('[Install](docs/INSTALL.md) [License](https://example.test/license) [Here](#section)')
+            with patch('publish_modrinth.ROOT', root):
+                text = publish_modrinth.project_body(self.project)
+        self.assertIn('[Install](https://github.com/eyecrasher0/Tandemount/blob/tandemount-1.0.0/docs/INSTALL.md)', text)
+        self.assertIn('[License](https://example.test/license)', text)
+        self.assertIn('[Here](#section)', text)
+
 
 if __name__ == "__main__":
     unittest.main()

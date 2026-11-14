@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -161,6 +162,16 @@ def project_payload(project, body):
     }
 
 
+def release_changelog(project):
+    repository = project["source_url"].rstrip("/")
+    tag = urllib.parse.quote("tandemount-" + project["version"], safe="")
+    archive = urllib.parse.quote("Tandemount-" + project["version"] + "-source.zip", safe="")
+    return (f"Tandemount {project['version']} release.\n\n"
+            f"[Complete GPL source]({repository}/releases/download/{tag}/{archive}) · "
+            f"[Build and installation]({repository}/blob/{tag}/docs/INSTALL.md) · "
+            f"[Verification report]({repository}/releases/download/{tag}/verification.json)")
+
+
 def version_payload(project_id, entry, project):
     if entry["family"] == "plugin":
         loaders = entry["platforms"]
@@ -170,7 +181,7 @@ def version_payload(project_id, entry, project):
     return {
         "name": f"{project['name']} {project['version']} — {', '.join(loaders)} — Minecraft {mc}",
         "version_number": entry["version_number"],
-        "changelog": f"Tandemount {project['version']} release. Source: {project['source_url']}",
+        "changelog": release_changelog(project),
         "dependencies": [],
         "game_versions": [mc],
         "version_type": "release",
@@ -186,6 +197,12 @@ def version_payload(project_id, entry, project):
 
 def project_body(project):
     readme = (ROOT / "README.md").read_text(encoding="utf-8").strip()
+    prefix = project["source_url"].rstrip("/") + "/blob/" + urllib.parse.quote("tandemount-" + project["version"], safe="") + "/"
+    # Provider descriptions are not hosted at the repository root; pin relative
+    # documentation links to the release tag instead of producing broken URLs.
+    readme = re.sub(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)",
+                    lambda match: match.group(0) if urllib.parse.urlsplit(match[2]).scheme or match[2].startswith("#")
+                    else f"[{match[1]}]({prefix}{match[2].removeprefix('./')})", readme)
     return readme + "\n\n---\n\n" + (
         "All release files are server-side. Install only the file matching your exact "
         "Minecraft release and platform. See the source repository for installation, "

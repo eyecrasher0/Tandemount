@@ -84,7 +84,7 @@ def metadata_for(entry, project, version_names):
         raise ValueError("Unverified CurseForge game version names")
     implementation = ", ".join(platform_names[name] for name in entry["platforms"])
     return {
-        "changelog": f"Tandemount {project['version']} release. Source: {project['source_url']}",
+        "changelog": publish_modrinth.release_changelog(project),
         "changelogType": "markdown",
         "displayName": f"Tandemount {project['version']} | {implementation} | Minecraft {mc}",
         # The documented names field avoids confusing equal version names
