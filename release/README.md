@@ -51,6 +51,12 @@ of event. Settings evidence must also inspect the actual chat's color/style and
 click actions and execute a reported adjustment command. Numeric configuration
 assertions alone do not establish a usable settings menu.
 
+Falling-block seat evidence must also execute the official vanilla client
+entity's tick method using the received spawn state. Server-side survival and
+an invisible renderer alone cannot prove client survival: vanilla removes an
+AIR falling block before its client/server side check. The client-lifetime
+probe remains distinct from human review of rendered appearance.
+
 An unavailable cancellable dismount API is disclosed as `not-applicable`, with
 a reason, only for Forge 1.7.10 and Fabric Loader-only installations. Ordinary
 dismount still requires native evidence. No lifecycle check can use this

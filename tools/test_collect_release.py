@@ -84,6 +84,14 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["result"], "fail")
         self.assertIn("settings", report["incomplete_checks"])
 
+    def test_server_seat_survival_cannot_prove_vanilla_client_lifetime(self):
+        raw = self.plugin()
+        raw["assertions"] = [item for item in raw["assertions"]
+                             if item["assertion"] != "vanilla-client-seat-survives-native-ticks"]
+        report = normalize(raw, "plugin")
+        self.assertEqual(report["result"], "fail")
+        self.assertIn("mount", report["incomplete_checks"])
+
 
 if __name__ == "__main__":
     unittest.main()

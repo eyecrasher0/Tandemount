@@ -33,7 +33,7 @@ MODERN = {
 PLUGIN = {
     "mount": ("ordinary-non-op-passenger-mounted", "native-driver-mounted",
               "real-client-right-click-mount-persists", "real-client-repeated-click-keeps-ride",
-              "real-client-mounted-movement-keeps-ride"),
+              "real-client-mounted-movement-keeps-ride", "vanilla-client-seat-survives-native-ticks"),
     "driver-control": ("driver-still-controls-original-horse", "driver-input-moves-horse"),
     "third-rider-rejected": ("third-rider-rejected",),
     "dismount": ("passenger-dismount-cleans-seat", "driver-dismount-cleans-seat"),
@@ -52,7 +52,8 @@ PLUGIN = {
     "restart-cleanup": ("plugin-disable-cleans-seat", "native-restart-does-not-restore-helper", "active-seat-refuses-native-serialization", "native-saved-world-contains-no-helper-uuid"),
 }
 LEGACY = {
-    "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins"),
+    "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
+              "vanilla-client-seat-survives-native-ticks"),
     "driver-control": ("movement-and-turn-pose-with-driver-preserved",),
     "third-rider-rejected": ("third-rider-rejected-without-disruption",),
     "dismount": ("normal-native-dismount-cleans-seat", "driver-dismount-cleans-passenger"),
