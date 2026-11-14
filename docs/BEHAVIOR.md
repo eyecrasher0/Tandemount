@@ -22,6 +22,11 @@ implementation. Implementers must not open predecessor sources or archives.
   Movement, turning, running, jumping, and looking around must not visibly
   oscillate the rider. A newly arriving observer sees the same pose and location
   as an existing observer without requiring either rider to remount.
+- The current Paper 26.3 revision must attach the second rider's seat to the
+  horse's native vehicle graph, with that horse as the shared root vehicle.
+  The attachment must exist on the server and in the vanilla client's passenger
+  graph. An independently positioned seat following the horse does not satisfy
+  this request. The first rider must retain ordinary horse controls.
 - Install on the server only. Unmodified clients can connect; no resource pack,
   client mod, custom entity registry entry, or external plugin is required.
 - The extra seat cannot take damage, be attacked or interacted with as loot,
@@ -46,6 +51,10 @@ implementation. Implementers must not open predecessor sources or archives.
   Settings save immediately and apply to active rides. Reload configuration and
   reset defaults without a server restart. Reject invalid or nonfinite numbers
   without breaking existing rides. Configuration is bounded and documented.
+- Plugin defaults are `vertical=0.8125` and `rearward=0.5`, matching the owner's
+  chosen position. New configuration, missing values, and reset must agree on
+  these defaults. Existing saved settings remain in effect until changed or
+  reset by an administrator.
 - Provide enable/disable, supported horse types, and optional debug logging.
   Preserve existing config and avoid logging personal or authentication data.
 - Public messages and docs are English. Preserve cancellation semantics and
