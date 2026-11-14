@@ -22,8 +22,8 @@ implementation. Implementers must not open predecessor sources or archives.
   Movement, turning, running, jumping, and looking around must not visibly
   oscillate the rider. A newly arriving observer sees the same pose and location
   as an existing observer without requiring either rider to remount.
-- The current Paper 26.3 revision must attach the second rider's seat to the
-  horse's native vehicle graph, with that horse as the shared root vehicle.
+- Each port must attach the second rider's seat to the horse's native vehicle
+  graph, with that horse as the shared root vehicle.
   The attachment must exist on the server and in the vanilla client's passenger
   graph. An independently positioned seat following the horse does not satisfy
   this request. The first rider must retain ordinary horse controls.
@@ -51,10 +51,11 @@ implementation. Implementers must not open predecessor sources or archives.
   Settings save immediately and apply to active rides. Reload configuration and
   reset defaults without a server restart. Reject invalid or nonfinite numbers
   without breaking existing rides. Configuration is bounded and documented.
-- Plugin defaults are `vertical=0.8125` and `rearward=0.5`, matching the owner's
-  chosen position. New configuration, missing values, and reset must agree on
-  these defaults. Existing saved settings remain in effect until changed or
-  reset by an administrator.
+- The default rider-feet position is `0.8125` blocks above the horse's feet and
+  `0.5` blocks rearward, matching the owner's chosen position. Each platform's
+  new configuration, missing values, and reset must produce this position.
+  Preserve existing saved settings and their documented units until changed or
+  reset by an administrator; handle any required format migration explicitly.
 - Provide enable/disable, supported horse types, and optional debug logging.
   Preserve existing config and avoid logging personal or authentication data.
 - Public messages and docs are English. Preserve cancellation semantics and
@@ -86,6 +87,12 @@ not only a metadata declaration.
 - Track compilation, native behavior tests, and actual client visual checks
   separately. Do not present synthetic observers as human visual confirmation.
 - Use official SDKs and primary API/mapping documentation. Record provenance.
+- Apply the final seating, client-lifetime, attachment, movement, settings-menu,
+  defaults, and lifecycle fixes throughout the 38-release port. A native API
+  capability difference must be demonstrated on that exact game and recorded;
+  do not silently omit the requested behavior or claim an independent follower
+  is a native attachment. Existing per-target reports predate these fixes and
+  require fresh artifact-bound verification.
 - Publish matching complete sources, build instructions, GPL text, compatibility
   matrix, changelog, and checksums. Verify downloaded artifacts after publication.
 - The scope includes publication, not modification of an existing game server.
