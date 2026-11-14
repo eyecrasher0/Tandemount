@@ -79,7 +79,7 @@ def metadata_for(entry, project, version_names):
     mc = entry["minecraft"][0]
     platform_names = {"paper": "Paper", "spigot": "Spigot", "purpur": "Purpur", "folia": "Folia",
                       "forge": "Forge", "fabric": "Fabric", "neoforge": "NeoForge"}
-    game_versions = [mc] + ([platform_names[family]] if family != "plugin" else [])
+    game_versions = [mc] + ([platform_names[family], "Server"] if family != "plugin" else [])
     if set(game_versions) - version_names:
         raise ValueError("Unverified CurseForge game version names")
     implementation = ", ".join(platform_names[name] for name in entry["platforms"])
@@ -102,11 +102,12 @@ def validate_version_names(records, plan):
     required_loaders = {entry["family"] for entry in plan["entries"] if entry["family"] != "plugin"}
     missing_versions = sorted(required_versions - available)
     missing_loaders = sorted(loader for loader in required_loaders if loader_names.get(loader) not in available)
-    if missing_versions or missing_loaders:
+    missing_environments = ["Server"] if required_loaders and "Server" not in available else []
+    if missing_versions or missing_loaders or missing_environments:
         raise ValueError("CurseForge version tags are incomplete: " + json.dumps({
-            "missing_versions": missing_versions, "missing_loaders": missing_loaders,
+            "missing_versions": missing_versions, "missing_loaders": missing_loaders, "missing_environments": missing_environments,
         }))
-    return required_versions | {loader_names[loader] for loader in required_loaders}
+    return required_versions | {loader_names[loader] for loader in required_loaders} | ({"Server"} if required_loaders else set())
 
 
 def write_state(path, state):

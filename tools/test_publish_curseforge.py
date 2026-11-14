@@ -14,9 +14,9 @@ class CurseForgePublishTests(unittest.TestCase):
                  "platforms": ["forge"], "sha256": "a" * 64}
         metadata = publish_curseforge.metadata_for(
             entry, {"version": "1.0.0", "source_url": "https://example.test/source"},
-            {"1.21.11", "Forge"},
+            {"1.21.11", "Forge", "Server"},
         )
-        self.assertEqual(metadata["gameVersionNames"], ["1.21.11", "Forge"])
+        self.assertEqual(metadata["gameVersionNames"], ["1.21.11", "Forge", "Server"])
         self.assertIn("Forge", metadata["displayName"])
         self.assertFalse(metadata["isMarkedForManualRelease"])
 
@@ -39,9 +39,10 @@ class CurseForgePublishTests(unittest.TestCase):
             {"id": 101, "name": "26.3", "gameVersionTypeID": 1},
             {"id": 102, "name": "1.7.10", "gameVersionTypeID": 1},
             {"id": 201, "name": "NeoForge", "gameVersionTypeID": 68441},
+            {"id": 301, "name": "Server", "gameVersionTypeID": 75208},
         ]
         resolved = publish_curseforge.validate_version_names(records, plan)
-        self.assertEqual(resolved, {"26.3", "1.7.10", "NeoForge"})
+        self.assertEqual(resolved, {"26.3", "1.7.10", "NeoForge", "Server"})
 
     def test_equal_names_in_historical_groups_do_not_choose_an_arbitrary_numeric_id(self):
         plan = {"entries": [{"minecraft": ["1.21.11"], "family": "forge"}]}
@@ -49,8 +50,9 @@ class CurseForgePublishTests(unittest.TestCase):
             {"id": 1, "name": "1.21.11", "gameVersionTypeID": 1},
             {"id": 2, "name": "1.21.11", "gameVersionTypeID": 615},
             {"id": 3, "name": "Forge", "gameVersionTypeID": 68441},
+            {"id": 4, "name": "Server", "gameVersionTypeID": 75208},
         ]
-        self.assertEqual(publish_curseforge.validate_version_names(records, plan), {"1.21.11", "Forge"})
+        self.assertEqual(publish_curseforge.validate_version_names(records, plan), {"1.21.11", "Forge", "Server"})
 
     def test_missing_requested_release_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "missing_versions"):
