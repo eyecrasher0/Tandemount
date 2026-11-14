@@ -286,3 +286,46 @@ remain necessary after applying them. A separate Forge 1.21.9 run completed
 its native and connected-client checks and saved every dimension, but exceeded
 the runner's shutdown deadline before restart testing; that operational retry
 candidate is not evidence for an implementation change.
+
+
+## Exact Forge 1.21.9 shutdown compatibility (14 November 2026)
+
+Consulted only current independent Tandemount code, official Minecraft mappings,
+official Forge SDK bytecode, and isolated disposable runtime evidence.
+
+- Official Forge Maven metadata, checked 14 November 2026:
+  <https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml>.
+  Latest exact 1.21.9 SDK remains `1.21.9-59.0.5`; metadata SHA-256
+  `277c9727e48ae76824f4412e43cc3d58ee30f008384dc9a6e6e52569ef0b01e1`.
+- Official Forge 1.21.9-59.0.5 installed distribution and userdev SDK:
+  <https://maven.minecraftforge.net/net/minecraftforge/forge/1.21.9-59.0.5/>.
+  Installer SHA-256 `ba5d667c645d6de1f6b53a6d9cc9d2c07de6a84e2bc25110828fe50440cd2899`.
+  Official `fmlcore` compile/runtime JAR SHA-256
+  `7619ee74f044fd0c5528ba612ae086a3ddc8a176ad8b1ef3c939a0b673a2c957`.
+- Official Minecraft 1.21.9 server mappings plus Forge MCP mapping
+  `1.21.9-20250930.103108` establish
+  `DedicatedServer.onServerExit()V` / production alias `m_6988_()V`.
+- `javap` of the official Forge server identifies its missing config cleanup in
+  `DedicatedServer.onServerExit()` and the same call in `showGui()` instead.
+  `ConfigTracker.forceUnload()` stops the COMMON watcher. The official
+  NightConfig 3.7.4 `FileWatcher$FsWatcher` creates a default non-daemon scheduled
+  executor and shuts it down when the watcher receives its stop message.
+- Adjacent official SDKs `1.21.8-58.1.26` and `1.21.10-60.1.18` place
+  `ConfigTracker.forceUnload()` in `DedicatedServer.onServerExit()`, after their
+  dedicated services finish cleanup. This establishes the intended hook phase.
+- Disposable, loopback-only controls show the unchanged mod hangs without any
+  optional test fixture if the Forge COMMON watcher starts a worker. JFR thread
+  creation stacks tie the worker to `FileWatcher$FsWatcher` and COMMON config
+  notifications before server startup. No threads are created by the current
+  Tandemount source.
+- The exact SDK-specific generated mixin invokes Forge's existing
+  `ConfigTracker.INSTANCE.forceUnload()` at RETURN of the dedicated exit method,
+  after world saves and SERVER config unload. It is generated only for Forge,
+  Minecraft 1.21.9, SDK 59.0.5. Other SDKs receive no adapter or changed bytecode.
+  No timeout handling, exit status policy, or optional test fixture is altered.
+
+Private evidence is retained under `.agents/forge-1.21.9-shutdown/`. It includes
+SDK bytecode listings, JFR thread creation records, controls, dependency hashes,
+and private boundary rebuilds proving byte-identical Forge 1.21.8 and 1.21.10
+artifacts. The normal corrected server, with an exercised COMMON config reload,
+exits naturally with code 0 and records COMMON watcher shutdown.

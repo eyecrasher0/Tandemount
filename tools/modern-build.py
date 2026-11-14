@@ -402,6 +402,13 @@ CLASSES = {
 }
 
 
+def forge_config_shutdown_fix(target, platform):
+    # This exact SDK puts its COMMON config cleanup in showGui(), leaving the
+    # dedicated server's non-daemon NightConfig worker alive after world saves.
+    return (platform == "forge" and target["minecraft"] == "1.21.9"
+            and target["platforms"][platform]["sdk"] == "1.21.9-59.0.5")
+
+
 def mapped_table(target, platform):
     version = target["minecraft"]
     data = target["downloads"]
@@ -610,6 +617,13 @@ def mapped_table(target, platform):
         if owner == CLASSES["ServerEntity"] and name == "<init>" and "net.minecraft.world.entity.Entity" in params.split(","):
             table["h.tracker"] = mapped_member(member)
             break
+    if forge_config_shutdown_fix(target, platform):
+        member = methods.get(("net.minecraft.server.dedicated.DedicatedServer", "onServerExit", ""))
+        if member is None or member[2] != "()V" or not any(
+                name == member[1] and desc == member[2] and access & 1
+                for name, desc, access in declared[member[0].replace(".", "/")][2]):
+            raise ValueError("Exact Forge config shutdown exit method is unavailable")
+        table["compat.forgeConfigShutdown"] = mapped_member(member)
     return table
 
 
@@ -638,7 +652,9 @@ def forge_sdk(target, platform):
     if "universal" in config:
         dependencies.append(coordinate(config["universal"], repository))
     for library in config["libraries"]:
-        if (library.startswith("org.ow2.asm:") or ":mixin:" in library or ":sponge-mixin:" in library or ":javafmllanguage:" in library or (library.startswith(("net.neoforged.fancymodloader:loader:", "net.neoforged.fancymodloader:language-java:")))):
+        if (library.startswith("org.ow2.asm:") or ":mixin:" in library or ":sponge-mixin:" in library or ":javafmllanguage:" in library or (library.startswith(("net.neoforged.fancymodloader:loader:", "net.neoforged.fancymodloader:language-java:")))
+                or (forge_config_shutdown_fix(target, platform)
+                    and library == "net.minecraftforge:fmlcore:" + target["platforms"][platform]["sdk"])):
             dependencies.append(coordinate(library, repository))
     metadata = json.loads(fetch(target["minecraft_metadata"], CACHE / (target["minecraft"] + ".metadata.json")).read_text())
     for library in metadata["libraries"]:
@@ -668,6 +684,20 @@ def build(target, platform):
         name = "Target" + str(index)
         (generated / (name + ".java")).write_text('package dev.eyecrasher.tandemount.modern.mixin;\n@org.spongepowered.asm.mixin.Mixin(targets="' + owner + '", remap=false) public abstract class ' + name + ' {}\n')
         mixins.append(name)
+    if forge_config_shutdown_fix(target, platform):
+        owner, aliases, descriptor = table["compat.forgeConfigShutdown"].split("#")
+        selectors = ", ".join(json.dumps(alias + descriptor) for alias in aliases.split("|"))
+        (generated / "ForgeConfigShutdown.java").write_text('''package dev.eyecrasher.tandemount.modern.mixin;
+@org.spongepowered.asm.mixin.Mixin(targets="''' + owner + '''", remap=false)
+public abstract class ForgeConfigShutdown {
+    @org.spongepowered.asm.mixin.injection.Inject(method={''' + selectors + '''},
+        at=@org.spongepowered.asm.mixin.injection.At("RETURN"), require=1, allow=1, remap=false)
+    private void tandemount$closeForgeConfigWatchers(org.spongepowered.asm.mixin.injection.callback.CallbackInfo callback) {
+        net.minecraftforge.fml.config.ConfigTracker.INSTANCE.forceUnload();
+    }
+}
+''')
+        mixins.append("ForgeConfigShutdown")
     (classes / "tandemount-names.properties").write_text("\n".join(k + "=" + v for k, v in sorted(table.items())) + "\n")
     mixin_config = {"required": True, "minVersion": "0.8", "package": "dev.eyecrasher.tandemount.modern.mixin", "compatibilityLevel": "JAVA_8", "plugin": "dev.eyecrasher.tandemount.modern.NativeHooks", "mixins": mixins, "injectors": {"defaultRequire": 1}}
     (classes / "tandemount.mixins.json").write_text(json.dumps(mixin_config, indent=2) + "\n")
