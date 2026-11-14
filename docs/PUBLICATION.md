@@ -69,3 +69,11 @@ resumes the project and uploads the audited files. The script refuses an
 incomplete audit, a dirty source tree, a changed source commit, a mismatched
 artifact, or a conflicting remote version. Its local resume record stays in
 ignored `.agents/release/`.
+
+An existing project is checked through its actual [team membership](https://docs.modrinth.com/api/operations/getteammembers/),
+matching the authenticated user's immutable ID to an accepted owner. The
+project response does not contain an author field. An empty matching draft
+with an unset source and license can receive the audited release metadata;
+a conflicting source, another license, or existing files block that initialization.
+The publisher removes an existing icon to honor the owner's icon-free release
+instruction and verifies the resulting source URL, license, and absent icon.

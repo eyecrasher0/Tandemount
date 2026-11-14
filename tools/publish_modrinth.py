@@ -216,11 +216,47 @@ def load_project(token, slug, expected_username):
         raise ValueError(f"Modrinth token belongs to {user.get('username')!r}, expected {expected_username!r}")
     remote = request("GET", V2 + "/project/" + urllib.parse.quote(slug, safe=""), token=token, optional_404=True)
     if remote:
-        author = remote.get("author", "")
-        if author.casefold() != expected_username.casefold():
-            raise ValueError("The Modrinth slug already belongs to another author")
+        team = remote.get("team")
+        if not team or not user.get("id"):
+            raise ValueError("Modrinth did not identify the authenticated user or project team")
+        members = request("GET", V2 + "/team/" + urllib.parse.quote(team, safe="") + "/members", token=token)
+        owned = any(member.get("user", {}).get("id") == user["id"]
+                    and member.get("accepted") is True and member.get("role", "").casefold() == "owner"
+                    for member in members)
+        if not owned:
+            raise ValueError("The Modrinth project is not owned by the authenticated EyeCrasher account")
         return remote
     return None
+
+
+def prepare_existing_project(token, remote, project, body):
+    """Initialize the owner's empty draft, or refresh this matching project."""
+    license_value = remote.get("license")
+    license_id = license_value.get("id") if isinstance(license_value, dict) else license_value
+    matches = remote.get("source_url") == project["source_url"] and license_id == project["license"]
+    if not matches:
+        empty_draft = (remote.get("status") == "draft"
+                       and remote.get("slug") == project.get("modrinth_slug", project["id"])
+                       and remote.get("title") == project["name"]
+                       and remote.get("source_url") in (None, "", project["source_url"])
+                       and license_id in (None, "", "LicenseRef-Unknown", project["license"])
+                       and not list_versions(token, remote["id"]))
+        if not empty_draft:
+            raise ValueError("Existing Modrinth project must match the source and license, or be an empty matching draft")
+    payload = project_payload(project, body)
+    for field in ("project_type", "slug", "is_draft"):
+        payload.pop(field)
+    url = V2 + "/project/" + urllib.parse.quote(remote["id"], safe="")
+    request("PATCH", url, token=token, body=json.dumps(payload).encode("utf-8"))
+    if remote.get("icon_url"):
+        request("DELETE", url + "/icon", token=token)
+    updated = request("GET", url, token=token)
+    updated_license = updated.get("license")
+    updated_license_id = updated_license.get("id") if isinstance(updated_license, dict) else updated_license
+    if (updated.get("source_url") != project["source_url"] or updated_license_id != project["license"]
+            or updated.get("icon_url")):
+        raise ValueError("Modrinth did not retain the matching source, license, and omitted icon")
+    return updated
 
 
 def validate_provider_tags(plan, project):
@@ -326,11 +362,8 @@ def main():
         payload = project_payload(project, body)
         remote = load_project(token, slug, username)
         if remote:
+            remote = prepare_existing_project(token, remote, project, body)
             project_id = remote["id"]
-            remote_license = remote.get("license")
-            remote_license_id = remote_license.get("id") if isinstance(remote_license, dict) else remote_license
-            if remote.get("source_url") != project["source_url"] or remote_license_id != project["license"]:
-                raise ValueError("Existing Modrinth project does not match the expected source and license")
         else:
             remote = create_project(token, payload)
             project_id = remote["id"]

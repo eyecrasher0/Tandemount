@@ -89,6 +89,59 @@ class ModrinthPublishTests(unittest.TestCase):
         self.assertIn('[License](https://example.test/license)', text)
         self.assertIn('[Here](#section)', text)
 
+    def test_resume_identifies_owner_through_the_projects_team(self):
+        user = {"id": "Owner123", "username": "EyeCrasher"}
+        remote = {"id": "Project1", "team": "Team1234", "slug": "tandemount"}
+        members = [{"user": user, "role": "Owner", "accepted": True}]
+        with patch('publish_modrinth.request', side_effect=[user, remote, members]) as send:
+            self.assertEqual(publish_modrinth.load_project('token', 'tandemount', 'EyeCrasher'), remote)
+        self.assertEqual(send.call_args_list[-1].args[:2],
+                         ('GET', publish_modrinth.V2 + '/team/Team1234/members'))
+
+    def test_resume_rejects_nonowner_unaccepted_or_different_user_ids(self):
+        user = {"id": "Owner123", "username": "EyeCrasher"}
+        remote = {"id": "Project1", "team": "Team1234", "author": "EyeCrasher"}
+        for member in ({"user": user, "role": "Member", "accepted": True},
+                       {"user": user, "role": "Owner", "accepted": False},
+                       {"user": {"id": "Other123", "username": "EyeCrasher"}, "role": "Owner", "accepted": True}):
+            with self.subTest(member=member), patch('publish_modrinth.request', side_effect=[user, remote, [member]]) as send:
+                with self.assertRaisesRegex(ValueError, 'owned by the authenticated'):
+                    publish_modrinth.load_project('token', 'tandemount', 'EyeCrasher')
+                self.assertTrue(all(call.args[0] == 'GET' for call in send.call_args_list))
+
+    def test_empty_owned_draft_receives_release_metadata_and_loses_its_icon(self):
+        remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft",
+                  "source_url": None, "license": {"id": "LicenseRef-Unknown"}, "icon_url": "https://example.test/icon.webp"}
+        updated = {**remote, "source_url": self.project['source_url'], "license": {"id": "GPL-3.0-only"}, "icon_url": None}
+        with patch('publish_modrinth.request', side_effect=[None, None, updated]) as send, \
+                patch('publish_modrinth.list_versions', return_value=[]):
+            self.assertEqual(publish_modrinth.prepare_existing_project('token', remote, self.project, 'release text'), updated)
+        calls = send.call_args_list
+        payload = json.loads(calls[0].kwargs['body'])
+        self.assertEqual(payload['license_id'], 'GPL-3.0-only')
+        self.assertEqual(payload['body'], 'release text')
+        self.assertEqual(payload['source_url'], self.project['source_url'])
+        self.assertNotIn('is_draft', payload)
+        self.assertEqual(calls[1].args[:2], ('DELETE', publish_modrinth.V2 + '/project/Project1/icon'))
+
+    def test_unconfigured_existing_project_with_files_is_not_overwritten(self):
+        remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft",
+                  "source_url": None, "license": {"id": "LicenseRef-Unknown"}}
+        with patch('publish_modrinth.request') as send, patch('publish_modrinth.list_versions', return_value=[{'id': 'Existing'}]):
+            with self.assertRaisesRegex(ValueError, 'empty matching draft'):
+                publish_modrinth.prepare_existing_project('token', remote, self.project, 'release text')
+        send.assert_not_called()
+
+    def test_conflicting_source_or_license_is_not_overwritten_even_in_an_empty_draft(self):
+        remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft"}
+        for metadata in ({'source_url': 'https://example.test/other', 'license': {'id': 'LicenseRef-Unknown'}},
+                         {'source_url': None, 'license': {'id': 'MIT'}}):
+            with self.subTest(metadata=metadata), patch('publish_modrinth.request') as send, \
+                    patch('publish_modrinth.list_versions', return_value=[]):
+                with self.assertRaisesRegex(ValueError, 'empty matching draft'):
+                    publish_modrinth.prepare_existing_project('token', {**remote, **metadata}, self.project, 'release text')
+                send.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
