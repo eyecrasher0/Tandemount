@@ -30,6 +30,12 @@ def modern_runner_helpers():
             + [path for path in (ROOT / "mods/modern/src/test/client").rglob("*") if path.is_file()])
 
 
+def attachment_runner_helpers():
+    names = ("client_attachment.py", "attachment_evidence.py", "modern-build.py", "cache_servers.py")
+    return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
+            + [path for path in (ROOT / "tests/client").rglob("*") if path.is_file()])
+
+
 def sources(mode):
     folder = ROOT / ("mods/modern/src" if mode == "modern" else "plugin/src")
     files = [p for p in folder.rglob("*") if p.is_file()]
@@ -40,6 +46,7 @@ def sources(mode):
         files += plugin_runner_helpers()
     else:
         files += modern_runner_helpers()
+    files += attachment_runner_helpers()
     files += [ROOT / "platforms.json", ROOT / "LICENSE"]
     hasher = hashlib.sha256()
     for path in sorted(set(files)):
@@ -57,6 +64,7 @@ def runner_sources(mode):
         files += plugin_runner_helpers()
     else:
         files += modern_runner_helpers()
+    files += attachment_runner_helpers()
     hasher = hashlib.sha256()
     for path in sorted(set(files)):
         hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")

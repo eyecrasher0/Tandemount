@@ -585,6 +585,24 @@ def main():
         result['server_log'] = str(run / 'server.log')
         if (fixture_config / 'assertions.jsonl').exists():
             result['assertions'] = [json.loads(line) for line in (fixture_config / 'assertions.jsonl').read_text().splitlines()]
+        if result.get('status') == 'passed' and not args.bootstrap_only and tuple(map(int, args.minecraft.split('.'))) >= (1, 19, 4):
+            from attachment_evidence import verify
+            windows = result.get('client_attachment_windows', {})
+            proof = verify(args.minecraft, args.plugin, run, fixture_config / 'protocol.properties', {
+                'existing': {'capture': fixture_config / 'initial-attachment.json',
+                             'trace': run / 'TmThird-packets.json', 'end_ns': windows.get('initial_end_ns')},
+                'late': {'capture': fixture_config / 'late-attachment.json',
+                         'trace': run / 'TmLate-packets.json', 'end_ns': windows.get('late_end_ns')},
+            }) if all(windows.get(key) is not None for key in ('initial_end_ns', 'late_end_ns')) else {
+                'status': 'failed', 'error': 'Native observation cutoff times were not recorded'}
+            result['official_client_attachment'] = proof
+            result.setdefault('packet_assertions', []).append({
+                'assertion': 'vanilla-client-seat-survives-native-ticks',
+                'status': 'passed' if proof['status'] == 'passed' else 'failed',
+                'detail': 'Both existing and late received states decoded by original client codecs and ticked in a controlled native Level; no human visual claim'})
+            if proof['status'] != 'passed':
+                result['status'] = 'failed'
+                result['error'] = proof.get('error', 'Original client attachment checks failed')
         result = workspace.finish(result)
         report_path = Path(result['run']) / 'result.json'
         report_path.write_text(json.dumps(result, indent=2) + '\n')

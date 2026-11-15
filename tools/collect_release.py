@@ -9,6 +9,7 @@ import shutil
 import subprocess
 
 from matrix_verify import sources
+from attachment_evidence import passed_probe
 from release_audit import ROOT, REQUIRED_CHECKS, PLUGIN_PLATFORMS, audit, digest, unavailable_check
 
 
@@ -30,8 +31,8 @@ MOD_ATTACHMENT = {
 
 MODERN = {
     "mount": ("native-interaction-opens-second-seat", "second-rider-uses-native-vehicle"),
-    "driver-control": ("driver-control-vehicle-preserved",),
-    "third-rider-rejected": ("third-rider-rejected",),
+    "driver-control": ("driver-control-vehicle-preserved", "real-client-first-driver-controls-native-horse"),
+    "third-rider-rejected": ("third-rider-rejected", "real-client-third-rider-rejected"),
     "dismount": ("rider-dismount-cleans-seat", "driver-dismount-cleans-seat"),
     "cancelled-interaction": ("consumed-interaction-not-overridden",),
     "cancelled-dismount": ("loader-native-dismount-veto-observed", "loader-cancelled-dismount-retains-ride"),
@@ -121,6 +122,9 @@ def normalize(raw, family):
     if family == "modern":
         observed = {name: True for name in raw.get("checks", [])}
         observed.update({name: True for name in raw.get("restart_fixture", {}).get("checks", [])})
+        network = raw.get("network_probe", {})
+        if network.get("result") == "pass":
+            observed.update({name: True for name in network.get("checks", [])})
         good = (raw.get("native_fixture") is True and raw.get("bootstrap") == "passed"
                 and raw.get("connected_clients") is True and raw.get("restart_passed") is True
                 and raw.get("exit_code") == 0 and not raw.get("error"))
@@ -149,6 +153,15 @@ def normalize(raw, family):
         groups = with_attachment(LEGACY, MOD_ATTACHMENT)
     else:
         raise ValueError("Unknown native report family: " + family)
+    if family in {"modern", "plugin"}:
+        proof = raw.get("official_client_attachment", {})
+        probes = proof.get("probes", {})
+        artifact_sha256 = raw.get("artifact_sha256", raw.get("sha256"))
+        good = (good and proof.get("status") == "passed"
+                and proof.get("artifact_sha256") == artifact_sha256
+                and proof.get("minecraft") == raw["minecraft"]
+                and set(probes) == {"existing", "late"}
+                and all(passed_probe(probe, artifact_sha256) for probe in probes.values()))
     checks = {name: all(observed.get(item) is True for item in required)
               for name, required in groups.items()}
     report = {"schema": 1, "kind": "native", "minecraft": raw["minecraft"], "platform": raw["platform"],
@@ -166,7 +179,7 @@ def normalize(raw, family):
     server = raw.get("server", {})
     identity = server.get("build", server.get("sdk", server.get("loader", raw.get("sdk"))))
     report["server_version"] = f"{raw['platform']} {identity} / Minecraft {raw['minecraft']}" if identity else ""
-    for key in ("world_change_fixture", "unloaded_chunk_fixture", "renderer_analysis"):
+    for key in ("world_change_fixture", "unloaded_chunk_fixture", "renderer_analysis", "official_client_attachment"):
         if key in raw:
             report[key] = raw[key]
     incomplete = [key for key in REQUIRED_CHECKS if checks.get(key) is not True

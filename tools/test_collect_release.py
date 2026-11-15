@@ -8,12 +8,24 @@ from collect_release import LEGACY, MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTAC
 
 
 class NativeCollectionTest(unittest.TestCase):
+    def proof(self, minecraft, artifact):
+        probe = {"kind": "original-client-native-graph-ticks", "receivedNativeState": True,
+                 "originalPacketCodecsConsumed": 50, "probe_exit_code": 0,
+                 "inputs": {"native_artifact_sha256": artifact},
+                 "receivedStateTicks": {"ticks": 1200, "rootErrors": 0, "removedObservations": 0,
+                                        "maximumRelativeDrift": 0},
+                 "ticks": 1200, "rootErrors": 0, "removedObservations": 0,
+                 "maximumRelativeMotionError": .0002, "interactionRays": {"cases": 32, "helperHits": 0}}
+        return {"status": "passed", "minecraft": minecraft, "artifact_sha256": artifact,
+                "probes": {"existing": probe, "late": probe}}
+
     def modern(self):
         return {"minecraft": "1.21.1", "platform": "forge", "sha256": "a" * 64,
                 "server": {"sdk": "1.21.1-52.1.14"}, "native_fixture": True,
                 "bootstrap": "passed", "connected_clients": True, "restart_passed": True,
                 "exit_code": 0, "error": "", "checks": sorted({n for v in [*MODERN.values(), *MOD_ATTACHMENT.values()] for n in v}),
-                "restart_fixture": {"native_fixture": True}}
+                "restart_fixture": {"native_fixture": True},
+                "official_client_attachment": self.proof("1.21.1", "a" * 64)}
 
     def test_complete_report_preserves_named_evidence(self):
         report = normalize(self.modern(), "modern")
@@ -80,6 +92,16 @@ class NativeCollectionTest(unittest.TestCase):
         raw["exit_code"] = 1
         self.assertEqual(normalize(raw, "modern")["result"], "fail")
 
+    def test_lifetime_check_name_alone_cannot_replace_bound_original_client_probes(self):
+        for key in (None, "artifact_sha256", "probes"):
+            with self.subTest(missing=key):
+                raw = self.modern()
+                if key is None:
+                    del raw["official_client_attachment"]
+                else:
+                    del raw["official_client_attachment"][key]
+                self.assertEqual(normalize(raw, "modern")["result"], "fail")
+
     def test_fabric_absent_event_is_never_fabricated_as_pass(self):
         raw = self.modern()
         raw["platform"] = "fabric"
@@ -95,6 +117,7 @@ class NativeCollectionTest(unittest.TestCase):
         raw = {"minecraft": "1.12.2", "platform": "paper", "server": {"build": "1620"},
                "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                "restart": "passed", "exit_code": 0,
+               "official_client_attachment": self.proof("1.12.2", "b" * 64),
                "assertions": [{"assertion": n, "status": "passed"} for n in sorted({n for v in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for n in v})]}
         self.assertEqual(normalize(raw, "plugin")["result"], "pass")
         raw["assertions"].insert(0, {"assertion": "ordinary-non-op-passenger-mounted", "status": "failed"})
@@ -106,6 +129,7 @@ class NativeCollectionTest(unittest.TestCase):
         return {"minecraft": "26.3", "platform": "paper", "server": {"build": "249"},
                 "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                 "restart": "passed", "exit_code": 0,
+                "official_client_attachment": self.proof("26.3", "b" * 64),
                 "assertions": [{"assertion": name, "status": "passed"}
                                for name in sorted({name for required in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for name in required})]}
 
@@ -142,6 +166,7 @@ class NativeCollectionTest(unittest.TestCase):
             with self.subTest(minecraft=version):
                 raw = self.plugin()
                 raw["minecraft"] = version
+                raw["official_client_attachment"]["minecraft"] = version
                 missing = {name for required in PLUGIN_ATTACHMENT.values() for name in required}
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
                 report = normalize(raw, "plugin")
@@ -174,6 +199,7 @@ class NativeCollectionTest(unittest.TestCase):
             with self.subTest(minecraft=version):
                 raw = self.plugin()
                 raw["minecraft"] = version
+                raw["official_client_attachment"]["minecraft"] = version
                 old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
                 self.assertEqual(normalize(raw, "plugin")["result"], "pass")

@@ -114,6 +114,19 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
         restart_fixture = run_dir / "tandemount-restart-result.json"
         result["restart_fixture"] = json.loads(restart_fixture.read_text()) if restart_fixture.exists() else {"native_fixture": False, "error": "Restart fixture result was not produced"}
         result["restart_passed"] = result["restart_fixture"].get("native_fixture", False) and result["restart_exit_code"] == 0
+    if (network_test and result.get("native_fixture") and result.get("connected_clients") and code == 0
+            and tuple(map(int, version.split("."))) >= (1, 19, 4)):
+        from attachment_evidence import verify
+        cutoff = network.get("movement_window", {}).get("start_ns")
+        proof = verify(version, artifact, run_dir, run_dir / "tandemount-protocol.properties", {
+            "existing": {"capture": run_dir / "connected-client.json", "trace": run_dir / "TmWireObserver-wire.json", "end_ns": cutoff},
+            "late": {"capture": run_dir / "connected-client.json", "trace": run_dir / "TmWireLate-wire.json", "end_ns": cutoff},
+        }) if cutoff is not None else {"status": "failed", "error": "Stable native observation cutoff was not recorded"}
+        result["official_client_attachment"] = proof
+        if proof["status"] == "passed":
+            result.setdefault("checks", []).append("vanilla-client-seat-survives-native-ticks")
+        else:
+            result["error"] = proof.get("error", "Original client attachment checks failed")
     evidence = ROOT / ".agents" / "modern-native"
     evidence.mkdir(parents=True, exist_ok=True)
     result = workspace.finish(result)

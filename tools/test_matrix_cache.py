@@ -115,6 +115,20 @@ class RunnerFingerprintTest(unittest.TestCase):
                 self.assertNotEqual(added, (runner_sources('modern'), sources('modern')))
                 self.assertEqual(other_before, (runner_sources('plugins'), sources('plugins')))
 
+    def test_shared_official_client_runner_changes_invalidate_both_families(self):
+        for name in ('tools/client_attachment.py', 'tools/attachment_evidence.py',
+                     'tests/client/AttachmentClientProbe.java'):
+            with self.subTest(input=name):
+                before = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                self.write(name, 'first executable shared client input')
+                added = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                for old, new in zip(before, added):
+                    self.assertNotEqual(old, new)
+                self.write(name, 'changed executable shared client input')
+                changed = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                for old, new in zip(added, changed):
+                    self.assertNotEqual(old, new)
+
 
 if __name__ == '__main__':
     unittest.main()
