@@ -474,6 +474,7 @@ def main():
                     command_line('tmfixture wire-mounted')
                 if current.get('phase') == 'wire-menu' and 'wire-menu' not in handled:
                     handled.add('wire-menu')
+                    result.setdefault('client_attachment_windows', {})['initial_end_ns'] = time.monotonic_ns()
                     send_native(clients[2], wire, 0); time.sleep(.5)
                     result['menu_assertions'] = menu_checks(clients[2], read_vi)
                     if not all(row['status'] == 'passed' for row in result['menu_assertions']):
@@ -496,6 +497,7 @@ def main():
                     time.sleep(3)
                     graph = properties(fixture_config / 'initial-graph.properties')
                     result['packet_assertions'] = packet_checks([clients[2], late], graph, args.minecraft)
+                    result.setdefault('client_attachment_windows', {})['late_end_ns'] = time.monotonic_ns()
                     command_line('tmfixture late')
                 if current.get('phase') == 'finish':
                     command_line('tmfixture finish')
