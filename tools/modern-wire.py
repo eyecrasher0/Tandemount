@@ -16,19 +16,43 @@ class Client(VanillaClient):
     def __init__(self, *args, **kwargs):
         self.raw = []
         self.parents = {}
+        self.known_entities = set()
+        self.skipped_unknown_edges = 0
         super().__init__(*args, **kwargs)
 
     def play(self, identifier, body):
         self.raw.append((time.monotonic_ns(), identifier, bytes(body)))
+        if identifier == self.packet("game", "clientbound", "login", "ClientboundLoginPacket"):
+            self.known_entities.add(struct.unpack_from(">i", body)[0])
+        if identifier in {self.packet("game", "clientbound", "add_entity", "ClientboundAddEntityPacket"),
+                          self.packet("game", "clientbound", "add_player", "ClientboundAddPlayerPacket")}:
+            entity, _ = read_varint(body)
+            self.known_entities.add(entity)
+        if identifier == self.packet("game", "clientbound", "remove_entities", "ClientboundRemoveEntitiesPacket"):
+            count, offset = read_varint(body)
+            for _ in range(count):
+                entity, offset = read_varint(body, offset)
+                self.known_entities.discard(entity)
+                self.parents.pop(entity, None)
+                for child, parent in list(self.parents.items()):
+                    if parent == entity:
+                        del self.parents[child]
         if identifier == self.packet("game", "clientbound", "set_passengers", "ClientboundSetPassengersPacket"):
             vehicle, offset = read_varint(body)
             count, offset = read_varint(body, offset)
-            for passenger, parent in list(self.parents.items()):
-                if parent == vehicle:
-                    del self.parents[passenger]
+            known_vehicle = vehicle in self.known_entities
+            if known_vehicle:
+                for passenger, parent in list(self.parents.items()):
+                    if parent == vehicle:
+                        del self.parents[passenger]
             for _ in range(count):
                 passenger, offset = read_varint(body, offset)
-                self.parents[passenger] = vehicle
+                # The original client skips unknown entities and never queues
+                # these edges. A later native packet must establish the graph.
+                if known_vehicle and passenger in self.known_entities:
+                    self.parents[passenger] = vehicle
+                else:
+                    self.skipped_unknown_edges += 1
         super().play(identifier, body)
 
     def root(self, entity):
@@ -200,6 +224,7 @@ def main():
             client.close()
             trace = directory / (client.name + "-wire.json")
             trace.write_text(json.dumps({"minecraft": args.minecraft, "protocol": ids["protocol"], "name": client.name, "parents": client.parents,
+                "known_entity_ids": sorted(client.known_entities), "skipped_unknown_edges": client.skipped_unknown_edges,
                 "packets": [{"at_ns": when, "state": "game", "id": identifier, "base64": base64.b64encode(body).decode()} for when, identifier, body in client.raw],
                 "errors": client.errors}, indent=2) + "\n")
             traces[client.name] = {"file": trace.name, "sha256": hashlib.sha256(trace.read_bytes()).hexdigest()}
