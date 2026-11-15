@@ -492,6 +492,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("driver-input-moves-horse", driveStart != null && horse.getLocation().distanceSquared(driveStart) > 0.05);
                 require("late-observer-real-player", Bukkit.getPlayerExact("TmLate") != null);
                 require("late-observer-requires-no-remount", rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 1);
+                trackSeat("late-attachment.json");
                 if (wireMode) {
                     require("real-client-repeated-click-keeps-ride",wireInteractions-wireCancelledInteractions>=3 && rider.isInsideVehicle() && countSeats()==1);
                     require("real-client-mounted-movement-keeps-ride",rider.isInsideVehicle() && countSeats()==1 && driveStart != null && horse.getLocation().distanceSquared(driveStart)>0.05);
@@ -522,7 +523,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             } catch (Throwable failure) { failed("late-and-cleanup", failure); }
         }});
     }
-    private void trackSeat() {
+    private void trackSeat() { trackSeat("initial-attachment.json"); }
+    private void trackSeat(String captureName) {
         if (rider.getVehicle() == null) return;
         for (Entity playerSeat : new Entity[] {rider.getVehicle(), Bukkit.getPlayerExact("TmLate") == null ? null : Bukkit.getPlayerExact("TmLate").getVehicle()})
             for (Entity helper = playerSeat; helper != null && helper != horse && !(helper instanceof Player) && !(helper instanceof Horse); helper = helper.getVehicle())
@@ -543,12 +545,13 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 Entity[] helpers = (Entity[])field(ride, "helpers");
                 graph.setProperty("helper_count", Integer.toString(helpers.length));
                 for (int i = 0; i < helpers.length; i++) graph.setProperty("helper_" + i, Integer.toString(helpers[i].getEntityId()));
-                File capture = new File(getDataFolder(), "initial-attachment.json");
+                File capture = new File(getDataFolder(), captureName);
                 if (!capture.exists()) {
                     Object attachment = field(field(tandem, "nativeAccess"), "attachment");
                     Object scale = field(attachment, "scale");
                     StringBuilder json = new StringBuilder("{\"minecraft\":\"").append(field(field(tandem,"nativeAccess"),"minecraft"))
-                            .append("\",\"horse\":").append(horse.getEntityId()).append(",\"driver\":").append(driver.getEntityId())
+                            .append("\",\"snapshot_monotonic_ns\":").append(System.nanoTime())
+                            .append(",\"horse\":").append(horse.getEntityId()).append(",\"driver\":").append(driver.getEntityId())
                             .append(",\"horsePosition\":[").append(horse.getLocation().getX()).append(',').append(horse.getLocation().getY()).append(',').append(horse.getLocation().getZ()).append(']')
                             .append(",\"riderVehicle\":").append(rider.getVehicle().getEntityId())
                             .append(",\"horseYaw\":").append(horse.getLocation().getYaw())
@@ -560,10 +563,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         json.append("{\"id\":").append(helper.getEntityId()).append(",\"type\":\"").append(helper.getType().name())
                                 .append("\",\"parent\":").append(helper.getVehicle().getEntityId())
                                 .append(",\"x\":").append(location.getX()).append(",\"y\":").append(location.getY()).append(",\"z\":").append(location.getZ())
+                                .append(",\"pose\":\"").append(invoke(helper,"getPose")).append('"')
                                 .append(",\"yaw\":").append(location.getYaw()).append(",\"noGravity\":").append(!((Boolean)invoke(helper,"hasGravity")));
                         if (helper.getType().name().equals("LLAMA")) json.append(",\"scale\":").append(scale == null ? 1D : invoke(invoke(helper,"getAttribute",scale),"getBaseValue"));
-                        if (helper.getType().name().equals("INTERACTION")) json.append(",\"height\":").append(invoke(helper,"getInteractionHeight")).append(",\"width\":").append(invoke(helper,"getInteractionWidth"))
-                                .append(",\"pose\":\"").append(invoke(helper,"getPose")).append('"');
+                        if (helper.getType().name().equals("INTERACTION")) json.append(",\"height\":").append(invoke(helper,"getInteractionHeight")).append(",\"width\":").append(invoke(helper,"getInteractionWidth"));
                         json.append('}');
                     }
                     json.append("]}");
