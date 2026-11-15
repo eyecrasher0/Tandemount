@@ -58,6 +58,7 @@ final class NativeAttachment {
     private String alias(String key) { return mappings.getProperty(access.minecraft + "." + key); }
     Object root(Entity entity) throws ReflectiveOperationException { return mapped(Reflect.handle(entity), "getRootVehicle", "rootVehicle"); }
     Object controller(Entity entity) throws ReflectiveOperationException { return mapped(Reflect.handle(entity), "getControllingPassenger", "controller"); }
+    void positionRider(Object parent, Object rider) throws ReflectiveOperationException { mapped(parent, "positionRider", "positionRider", rider); }
 
     private Object mapped(Object target, String name, String key, Object... args) throws ReflectiveOperationException {
         try { return Reflect.call(target, name, args); }

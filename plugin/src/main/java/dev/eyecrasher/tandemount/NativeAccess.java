@@ -388,23 +388,24 @@ final class NativeAccess {
     }
 
     void positionRider(Object seat, Object rider) throws ReflectiveOperationException {
+        if (attachment != null) { attachment.positionRider(seat, rider); return; }
         if (oldest) {
             // Entity.ac(): vanilla 1.7 passenger position update.
             Method m = entityClass.getMethod("ac"); Reflect.call(m, seat); return;
         }
         Method selected = riderPositionMethods.get(seat.getClass());
         if (selected == null) {
-            outer: for (String name : new String[] {"positionRider", "positionPassenger", "updatePassenger", "syncPositionOf", "i", "k", "j"})
-                for (Method m : Reflect.methods(entityClass)) if (m.getName().equals(name)
-                        && m.getReturnType() == void.class && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
-                    selected = m; break outer;
-                }
-            if (selected == null) for (Method m : Reflect.methods(entityClass)) {
+            for (Method m : Reflect.methods(entityClass)) {
                 Class<?>[] p = m.getParameterTypes();
                 if (m.getReturnType() == void.class && p.length == 2 && p[0] == entityClass
                         && p[1].isInterface() && p[1].getEnclosingClass() == entityClass
                         && p[1].getSimpleName().contains("MoveFunction")) { selected = m; break; }
             }
+            outer: for (String name : new String[] {"positionRider", "positionPassenger", "updatePassenger", "syncPositionOf", "i", "k", "j"})
+                for (Method m : Reflect.methods(entityClass)) if (m.getName().equals(name)
+                        && m.getReturnType() == void.class && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
+                    if (selected == null) selected = m; break outer;
+                }
             if (selected == null) {
                 // Older Bukkit mappings expose this as a(Entity); verified by native probe.
                 throw new NoSuchMethodException("Native passenger positioning entry point");
