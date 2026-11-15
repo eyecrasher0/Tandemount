@@ -632,3 +632,55 @@ Their fixture JAR SHA-256 is
 The ignored isolated `final-validation.json` binds the unchanged runtime JARs,
 fixture source, SDKs, exported packet registries, and complete native reports
 to exact hashes. These are native/protocol checks without human visual review.
+
+### Portable plugin attachment API audit
+
+The plugin attachment adapter was generalized in the same independent clean-room
+conversation using the exact official server mappings below and hash-verified
+BuildTools native SDK declarations. Only transformed member aliases are bundled;
+no game classes or complete mappings are redistributed. The official original
+clients for 1.16.5 through 1.19.3 were also inspected for every declared riding
+offset and passenger positioning override, including shulker peek geometry,
+horse rearing, boat rotation, cloud dimensions and slime size callbacks. This
+audit does not by itself prove an older client graph or justify a compatibility
+exemption.
+
+| Exact Minecraft | Official server mapping / SHA-1 | Mapping SHA-256 |
+| --- | --- | --- |
+| 1.19.4 | [73c8bb982e420b33aad9632b482608c5c33e2d13](https://piston-data.mojang.com/v1/objects/73c8bb982e420b33aad9632b482608c5c33e2d13/server.txt) | `097dd353bd96a1a8c0c1c16505e202957730ca5f1095f089487e7ced4a20fad8` |
+| 1.20 | [15e61168fd24c7950b22cd3b9e771a7ce4035b41](https://piston-data.mojang.com/v1/objects/15e61168fd24c7950b22cd3b9e771a7ce4035b41/server.txt) | `87960812690dcde8ef67401ed53e50fbfa2166b9ec31f1274d6bbdb5d358112e` |
+| 1.20.1 | [0b4dba049482496c507b2387a73a913230ebbd76](https://piston-data.mojang.com/v1/objects/0b4dba049482496c507b2387a73a913230ebbd76/server.txt) | `dca153d20defb32cfac3f069c3bf77b3e13c30ae63847637479d3137e099bb72` |
+| 1.20.2 | [dced504a9b5df367ddd3477adac084cea8024ba4](https://piston-data.mojang.com/v1/objects/dced504a9b5df367ddd3477adac084cea8024ba4/server.txt) | `d2e9d78ee5e4148555d1af15c85914968c8f0bbd5b4b18366c9e09937fbafa8c` |
+| 1.20.3 | [c1cafe916dd8b58ed1fe0564fc8f786885224e62](https://piston-data.mojang.com/v1/objects/c1cafe916dd8b58ed1fe0564fc8f786885224e62/server.txt) | `d8a75ea91dd9c8b83cffc7c65a4e65cc3933ded6aecdca13fd4fa52fba9770b2` |
+| 1.20.4 | [c1cafe916dd8b58ed1fe0564fc8f786885224e62](https://piston-data.mojang.com/v1/objects/c1cafe916dd8b58ed1fe0564fc8f786885224e62/server.txt) | `d8a75ea91dd9c8b83cffc7c65a4e65cc3933ded6aecdca13fd4fa52fba9770b2` |
+| 1.20.5 | [14be97974a77b09eb8bca88ed9268445f0fde3e7](https://piston-data.mojang.com/v1/objects/14be97974a77b09eb8bca88ed9268445f0fde3e7/server.txt) | `4b8e6fedfb206a9cd755696c9a30228ba167dfb66b91af393d8d3dd1a515244d` |
+| 1.20.6 | [9e96100f573a46ef44caab3e716d5eb974594bb7](https://piston-data.mojang.com/v1/objects/9e96100f573a46ef44caab3e716d5eb974594bb7/server.txt) | `4e5068e40a89c673b5541192ad7eab96289f6dcae704f577f8992bdf7c984aa3` |
+| 1.21 | [31c77994d96f05ba25a870ada70f47f315330437](https://piston-data.mojang.com/v1/objects/31c77994d96f05ba25a870ada70f47f315330437/server.txt) | `c9d9fda3143c100fa0566099074fc5d912b8b7ef3cb5b84c87eab411bd5bfb51` |
+| 1.21.1 | [03f8985492bda0afc0898465341eb0acef35f570](https://piston-data.mojang.com/v1/objects/03f8985492bda0afc0898465341eb0acef35f570/server.txt) | `9d0b04bead421c8229aff14b534432bbc927bea642e7c8593d1276b8df8ba53f` |
+| 1.21.2 | [ce1d4ab050af87c41fc3d51050ef6862385da784](https://piston-data.mojang.com/v1/objects/ce1d4ab050af87c41fc3d51050ef6862385da784/server.txt) | `0d80dc2239ee9fe5fc6e6c122b1a73178a4243fffe991754faa2a9581364bdbf` |
+| 1.21.3 | [c70e10f72ea65bb97e156143fd97c852dc958325](https://piston-data.mojang.com/v1/objects/c70e10f72ea65bb97e156143fd97c852dc958325/server.txt) | `59ae80f623920a897587d375767a0d722074b3ddc1a5563feb0079f99e2a903c` |
+| 1.21.4 | [0b1e60cc509cfb0172573ae56b436c29febbc187](https://piston-data.mojang.com/v1/objects/0b1e60cc509cfb0172573ae56b436c29febbc187/server.txt) | `dae4a75ad2ca1d52d14e9c080e70e7fbb2888c3533c015ea2d970b2a15856639` |
+| 1.21.5 | [f4812c1d66d0098a94616b19c21829e591d0af3a](https://piston-data.mojang.com/v1/objects/f4812c1d66d0098a94616b19c21829e591d0af3a/server.txt) | `ecd2f68afe3333a4db26e1fb1d1c31551c379fef2f3235007fa739f7be038a7c` |
+| 1.21.6 | [94d453080a58875d3acc1a9a249809767c91ed40](https://piston-data.mojang.com/v1/objects/94d453080a58875d3acc1a9a249809767c91ed40/server.txt) | `c6fe95810b05dfec19fdbdfb8cbbb8f976923f7cb16fcc828a0b605a49d2c492` |
+| 1.21.7 | [eb1e1eb47cb740012fc82eacc394859463684132](https://piston-data.mojang.com/v1/objects/eb1e1eb47cb740012fc82eacc394859463684132/server.txt) | `e373ba569839e6f3c7bd4880247f3e85577d92cde2c605adfa2024eb9cae503e` |
+| 1.21.8 | [eb1e1eb47cb740012fc82eacc394859463684132](https://piston-data.mojang.com/v1/objects/eb1e1eb47cb740012fc82eacc394859463684132/server.txt) | `e373ba569839e6f3c7bd4880247f3e85577d92cde2c605adfa2024eb9cae503e` |
+| 1.21.9 | [587e016fe8a876cbc1cc98d73f9d0d79bfb32b2c](https://piston-data.mojang.com/v1/objects/587e016fe8a876cbc1cc98d73f9d0d79bfb32b2c/server.txt) | `d65cf145581b63a6c84af66748436e390be962effdc4dfc8ab1b5460715b9ac5` |
+| 1.21.10 | [c5440743411a6fd7490fa18a4b6c5d8edf36d88b](https://piston-data.mojang.com/v1/objects/c5440743411a6fd7490fa18a4b6c5d8edf36d88b/server.txt) | `6b90e3206eb288c1976e10e2369f3752e4e93ac7f0afe513754d390d07bb2ebb` |
+| 1.21.11 | [5621e9253f05fd57872bbe7f8ddf5f9a7d525955](https://piston-data.mojang.com/v1/objects/5621e9253f05fd57872bbe7f8ddf5f9a7d525955/server.txt) | `7ffd98f77f403043748d56467aac287a58f8187a27d5d6b7ebcac70042b02b1c` |
+
+The 1.19.4 and 1.20.6 original Entity metadata callbacks refresh dimensions on
+pose data. Interaction height alone changes its box but leaves cached passenger
+dimensions unchanged in these clients. Original SynchedEntityData.assignValues
+invokes the callback for a received pose value even if its value is unchanged.
+The plugin therefore preserves native tracker snapshots and follows each known
+Interaction helper snapshot with an ordinary native pose value. Initial and
+late pairing share this ordering. No independent recurring helper position
+packets are added. Native server geometry must enter the one-argument virtual
+passenger method to retain older llama positioning overrides. Living carrier
+body/head rotation is synchronized explicitly, and angular carriers have
+nonliving separators to preserve their independent directions.
+
+Private SDK audit records under the task-specific plugin-final-port cache
+retain exact distribution refs, mapping URLs and hashes, native/client class
+hashes and declaration listings. Compilation, real server/network assertions,
+original client execution and human visual review remain separate evidence.

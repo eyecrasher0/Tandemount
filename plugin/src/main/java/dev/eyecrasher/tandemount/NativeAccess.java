@@ -14,6 +14,7 @@ import java.util.*;
 final class NativeAccess {
     final boolean oldest;
     final boolean interpolatedSeat;
+    final String minecraft;
     final NativeAttachment attachment;
     final Class<?> entityClass, seatBase;
     final Constructor<?> seatConstructor;
@@ -35,8 +36,13 @@ final class NativeAccess {
         craftServer = server;
         String craft = server.getClass().getPackage().getName();
         String bukkitVersion = org.bukkit.Bukkit.getBukkitVersion();
-        String minecraft = bukkitVersion.split("-", 2)[0];
-        interpolatedSeat = minecraft.equals("26.3") || minecraft.startsWith("26.3.build.");
+        java.util.regex.Matcher version = java.util.regex.Pattern.compile("^(\\d+\\.\\d+(?:\\.\\d+)?).*").matcher(bukkitVersion);
+        if (!version.matches()) throw new IllegalStateException("Exact Minecraft version unavailable: " + bukkitVersion);
+        minecraft = version.group(1);
+        boolean displayAvailable;
+        try { Class.forName(craft + ".entity.CraftBlockDisplay"); Class.forName(craft + ".entity.CraftInteraction"); displayAvailable = true; }
+        catch (ClassNotFoundException absent) { displayAvailable = false; }
+        interpolatedSeat = displayAvailable;
         Class<?> craftSeat;
         try { craftSeat = Class.forName(craft + (interpolatedSeat ? ".entity.CraftBlockDisplay" : ".entity.CraftFallingBlock")); }
         catch (ClassNotFoundException oldName) { craftSeat = Class.forName(craft + ".entity.CraftFallingSand"); }
@@ -50,7 +56,6 @@ final class NativeAccess {
         if (getHandle == null) throw new NoSuchMethodException("Craft seat native handle");
         seatBase = getHandle.getReturnType();
         Class<?> stateType = null;
-        if (interpolatedSeat) stateType = seatBase.getMethod("getBlockState").getReturnType();
         for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
             Class<?>[] p = c.getParameterTypes();
             if (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class
@@ -62,8 +67,9 @@ final class NativeAccess {
         // Vanilla clients discard an AIR falling block in their first entity
         // tick. BARRIER has invisible render shape while remaining non-AIR.
         // Keep this owner regression repair tied to its exact audited client.
-        org.bukkit.Material material = (bukkitVersion.equals("26.3") || bukkitVersion.startsWith("26.3-") || bukkitVersion.startsWith("26.3.build."))
-                ? org.bukkit.Material.valueOf("BARRIER") : org.bukkit.Material.AIR;
+        org.bukkit.Material material;
+        try { material = org.bukkit.Material.valueOf("BARRIER"); }
+        catch (IllegalArgumentException beforeBarrier) { material = org.bukkit.Material.AIR; }
         seatBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, material);
         Object state = null;
         if (stateType != null) {
@@ -212,7 +218,6 @@ final class NativeAccess {
         Object seat = arguments == 1 ? seatConstructor.newInstance(world)
                 : arguments == 2 ? seatConstructor.newInstance(vanillaSeatType, world)
                 : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), seatState);
-        if (interpolatedSeat) Reflect.call(seat, "setBlockState", seatState);
         for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
             if (seatState != null && f.getType().isInstance(seatState)) { f.setAccessible(true); f.set(seat, seatState); }
             else if (oldest && f.getType().isInstance(seatBlock)) { f.setAccessible(true); f.set(seat, seatBlock); }
@@ -221,6 +226,7 @@ final class NativeAccess {
             f.setAccessible(true); f.set(seat, vehicleWrapper.newInstance(craftServer, seat)); break;
         }
         Entity bukkit = (Entity) Reflect.call(seat, "getBukkitEntity");
+        if (interpolatedSeat) Reflect.call(bukkit, "setBlock", Reflect.call(org.bukkit.Material.valueOf("BARRIER"), "createBlockData"));
         // The client LivingEntityRenderer clamps passenger body yaw against a
         // LivingEntity vehicle. Keep this helper on the vanilla, nonliving
         // falling-block entity so a head-yaw wrap cannot steer the rider model.
@@ -229,7 +235,7 @@ final class NativeAccess {
             bukkit.remove();
             throw new IllegalStateException("The shared seat must be the audited nonliving vanilla type");
         }
-        if (interpolatedSeat) Reflect.call(bukkit, "setTeleportDuration", 0);
+        if (interpolatedSeat) Reflect.optional(bukkit, "setTeleportDuration", 0);
         Reflect.optional(bukkit, "setPersistent", false);
         Reflect.optional(bukkit, "setInvulnerable", true);
         Reflect.optional(bukkit, "setSilent", true);
@@ -254,6 +260,9 @@ final class NativeAccess {
     private Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
         String identifier = interpolatedSeat ? "minecraft:block_display" : "minecraft:falling_block";
         String constant = interpolatedSeat ? "BLOCK_DISPLAY" : "FALLING_BLOCK";
+        return vanillaEntityType(type, identifier, constant);
+    }
+    static Object vanillaEntityType(Class<?> type, String identifier, String constant) throws ReflectiveOperationException {
         Object value = null;
         for (String name : new String[] {"byString", "a"}) try {
             Method lookup = type.getMethod(name, String.class);
@@ -385,17 +394,17 @@ final class NativeAccess {
         }
         Method selected = riderPositionMethods.get(seat.getClass());
         if (selected == null) {
-            for (Method m : Reflect.methods(entityClass)) {
+            outer: for (String name : new String[] {"positionRider", "positionPassenger", "updatePassenger", "syncPositionOf", "i", "k", "j"})
+                for (Method m : Reflect.methods(entityClass)) if (m.getName().equals(name)
+                        && m.getReturnType() == void.class && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
+                    selected = m; break outer;
+                }
+            if (selected == null) for (Method m : Reflect.methods(entityClass)) {
                 Class<?>[] p = m.getParameterTypes();
                 if (m.getReturnType() == void.class && p.length == 2 && p[0] == entityClass
                         && p[1].isInterface() && p[1].getEnclosingClass() == entityClass
                         && p[1].getSimpleName().contains("MoveFunction")) { selected = m; break; }
             }
-            outer: for (String name : new String[] {"positionRider", "positionPassenger", "updatePassenger", "syncPositionOf", "i", "k", "j"})
-                for (Method m : Reflect.methods(entityClass)) if (m.getName().equals(name)
-                        && m.getReturnType() == void.class && Arrays.equals(m.getParameterTypes(), new Class<?>[] {entityClass})) {
-                    if (selected == null) selected = m; break outer;
-                }
             if (selected == null) {
                 // Older Bukkit mappings expose this as a(Entity); verified by native probe.
                 throw new NoSuchMethodException("Native passenger positioning entry point");

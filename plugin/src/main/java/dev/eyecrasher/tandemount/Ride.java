@@ -13,6 +13,7 @@ final class Ride {
     final Object nativeSeat;
     Entity[] helpers;
     double attachmentVertical = Double.NaN, attachmentRearward = Double.NaN;
+    double attachmentLiftRatio = Double.NaN;
     volatile boolean closing, closed;
     volatile org.bukkit.event.vehicle.VehicleExitEvent driverExit, riderExit;
     double passengerOffset;

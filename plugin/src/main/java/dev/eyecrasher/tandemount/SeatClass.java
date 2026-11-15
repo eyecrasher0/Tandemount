@@ -32,6 +32,10 @@ final class SeatClass extends ClassLoader {
 
     static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest)
             throws IOException {
+        return create(base, constructor, position, oldest, null);
+    }
+    static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest, Method explicitTick)
+            throws IOException {
         SeatClass writer = new SeatClass(base);
         writer.constructor(constructor);
         writer.position(position);
@@ -56,7 +60,8 @@ final class SeatClass extends ClassLoader {
             for (Class<?> arg : args) if (arg.getSimpleName().equals("DamageSource")) damage = true;
             if ((save || damage) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
         }
-        boolean tick = false;
+        boolean tick = explicitTick != null;
+        if (explicitTick != null) writer.tick(explicitTick);
         Class<?> tickOwner = base;
         // The exact 26.3 native block display inherits its tick from Display.
         if (base.getName().equals("net.minecraft.world.entity.Display$BlockDisplay")) tickOwner = base.getSuperclass();
@@ -64,6 +69,7 @@ final class SeatClass extends ClassLoader {
             tickOwner = base.getMethod("tick").getDeclaringClass();
         } catch (NoSuchMethodException absent) { throw new IOException("Audited native llama tick unavailable", absent); }
         for (String name : new String[] {"tick", "B_", "l", "h", "k", "g"}) {
+            if (tick) break;
             // The falling-block class itself declares the tick in every audited
             // SDK. Do not mistake an unrelated inherited alias for that tick.
             try { Method m = tickOwner.getDeclaredMethod(name); if (m.getReturnType() == void.class

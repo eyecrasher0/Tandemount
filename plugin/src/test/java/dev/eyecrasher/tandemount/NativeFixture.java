@@ -41,6 +41,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private volatile boolean unloadObserved, unloadContainedHelper;
     private volatile String currentPhase;
     private boolean saveProbePending;
+    private boolean wireMode;
+    private int wireInteractions, wireCancelledInteractions, wireThirdInteractions;
+    private org.bukkit.permissions.PermissionAttachment wireAdmin;
+    private Snapshot wireSettings;
 
     @Override public void onEnable() {
         tandem = (TandemountPlugin)getServer().getPluginManager().getPlugin("Tandemount");
@@ -74,6 +78,11 @@ public final class NativeFixture extends JavaPlugin implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR) public void cancelled(PlayerInteractEntityEvent event) {
         if (cancelInteraction && event.getRightClicked() == horse) event.setCancelled(true);
+        if (wireMode && event.getPlayer() == rider && event.getRightClicked() == horse) {
+            wireInteractions++;
+            if (event.isCancelled()) wireCancelledInteractions++;
+        }
+        if (wireMode && event.getPlayer() == third && event.getRightClicked() == horse) wireThirdInteractions++;
     }
     @EventHandler(priority = EventPriority.MONITOR) public void cancelledExit(org.bukkit.event.vehicle.VehicleExitEvent event) {
         if (cancelDismount) event.setCancelled(true);
@@ -118,6 +127,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             if (args[0].startsWith("owner-")) { NativeFixtureOwner.command(this, args[0]); return true; }
             if (args[0].equals("prepare")) prepare();
             if (args[0].equals("start")) start();
+            if (args[0].equals("wire-start")) { wireMode = true; start(); }
+            if (args[0].equals("wire-cancelled")) wireCancelled();
+            if (args[0].equals("wire-mounted")) wireMounted();
+            if (args[0].equals("wire-menu-finish")) wireMenuFinish();
             if (args[0].equals("late")) late();
             if (args[0].equals("saveprobe")) saveprobe();
             if (args[0].equals("finish")) finish();
@@ -299,6 +312,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("native-driver-mounted", mount(horse, driver));
                 getLogger().info("START_LOCATIONS horse=" + horse.getLocation() + " rider=" + rider.getLocation() + " driver=" + driver.getLocation());
                 cancelInteraction = true;
+                if (wireMode) {
+                    new NativeFixtureProtocol((Class<?>)field(field(tandem,"nativeAccess"),"entityClass"), Probe.handle(horse)).export(getDataFolder(), Probe.handle(horse));
+                    state("wire-cancel", Integer.toString(horse.getEntityId())); return;
+                }
                 interact(rider);
                 later(3, new Runnable() { public void run() {
                     try {
@@ -308,6 +325,35 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     } catch (Throwable failure) { failed("cancelled-interaction", failure); }
                 }});
             } catch (Throwable failure) { failed("native-start", failure); }
+        }});
+    }
+    private void wireCancelled() {
+        later(3,new Runnable(){public void run(){
+            require("cancelled-final-interaction-does-not-mount",wireCancelledInteractions > 0 && !rider.isInsideVehicle() && countSeats()==0);
+            cancelInteraction=false;state("wire-mount",Integer.toString(horse.getEntityId()));
+        }});
+    }
+    private void wireMounted() {
+        later(4,new Runnable(){public void run(){
+            require("real-client-right-click-mount-persists",wireInteractions > wireCancelledInteractions && rider.isInsideVehicle() && rider.getVehicle()!=horse && countSeats()==1 && !rider.isOp());
+            if (!rider.isInsideVehicle()) { state("failed","wire-no-seat");return; }
+            Location player = rider.getLocation(), root = horse.getLocation(); double yaw = Math.toRadians(root.getYaw());
+            require("default-native-rider-height", Math.abs(player.getY()-root.getY()-Settings.DEFAULT_VERTICAL)<0.02);
+            require("default-native-rider-rearward", Math.abs(player.getX()-root.getX()-Math.sin(yaw)*Settings.DEFAULT_REARWARD)<0.02
+                    && Math.abs(player.getZ()-root.getZ()+Math.cos(yaw)*Settings.DEFAULT_REARWARD)<0.02);
+            trackSeat();
+            next(third,new Runnable(){public void run(){
+                wireAdmin=third.addAttachment(NativeFixture.this,"tandemount.admin",true);
+                wireSettings=settings();state("wire-menu","0");
+            }});
+        }});
+    }
+    private void wireMenuFinish() {
+        next(third,new Runnable(){public void run(){
+            require("command-click-adjustment-applies",Math.abs(settings().vertical-wireSettings.vertical-1.0/16)<1.0e-9 && settings().rearward==wireSettings.rearward);
+            require("real-client-third-rider-rejected", wireThirdInteractions > 0 && !third.isInsideVehicle() && rider.isInsideVehicle() && driver.getVehicle()==horse && countSeats()==1);
+            third.removeAttachment(wireAdmin);wireAdmin=null;
+            next(driver,new Runnable(){public void run(){mounted();}});
         }});
     }
     private void interact(Player player) {
@@ -384,28 +430,29 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     rider.getVehicle().getType().name().equals(display ? "BLOCK_DISPLAY" : "FALLING_BLOCK")
                     && !(rider.getVehicle() instanceof LivingEntity));
             if (display) {
-                require("seat-gravity-remains-disabled", (Boolean)Probe.call(nativeSeat, "isNoGravity"));
-                require("seat-block-remains-native-invisible", Probe.call(Probe.call(nativeSeat, "getBlockState"), "getRenderShape").toString().equals("INVISIBLE"));
+                require("seat-gravity-remains-disabled", !((Boolean)Probe.call(rider.getVehicle(), "hasGravity")));
+                require("seat-block-remains-native-invisible", Probe.call(Probe.call(rider.getVehicle(), "getBlock"), "getMaterial").toString().equals("BARRIER"));
                 require("attachment-spacer-native-width-is-zero", ((Number)Probe.call(rider.getVehicle().getVehicle(), "getInteractionWidth")).floatValue() == 0);
                 Object tracked = ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId());
                 Entity[] helpers = (Entity[])field(tracked, "helpers");
-                boolean protectedHelpers = helpers.length == 5;
+                Object attachment = field(field(tandem, "nativeAccess"), "attachment");
+                boolean protectedHelpers = helpers.length == ((Number)field(attachment, "helperCount")).intValue();
                 for (Entity helper : helpers) {
-                    Object handle = Probe.handle(helper), box = Probe.call(handle, "getBoundingBox");
-                    protectedHelpers &= (Boolean)Probe.call(handle, "isNoGravity")
-                            && ((Number)Probe.call(box, "getXsize")).doubleValue() == 0
-                            && ((Number)Probe.call(box, "getYsize")).doubleValue() == 0
-                            && ((Number)Probe.call(box, "getZsize")).doubleValue() == 0;
+                    Object box = Probe.call(helper, "getBoundingBox");
+                    protectedHelpers &= !((Boolean)Probe.call(helper, "hasGravity"))
+                            && ((Number)Probe.call(box, "getWidthX")).doubleValue() == 0
+                            && ((Number)Probe.call(box, "getHeight")).doubleValue() == 0
+                            && ((Number)Probe.call(box, "getWidthZ")).doubleValue() == 0;
                     if (helper.getType().name().equals("LLAMA"))
-                        protectedHelpers &= (Boolean)Probe.call(handle, "isInvisible") && (Boolean)Probe.call(handle, "isNoAi")
+                        protectedHelpers &= (Boolean)Probe.call(helper, "isInvisible") && !((Boolean)Probe.call(helper, "hasAI"))
                                 && helper.getLocation().getY() < horse.getLocation().getY() - 40;
                     if (helper.getType().name().equals("INTERACTION"))
                         protectedHelpers &= ((Number)Probe.call(helper, "getInteractionWidth")).floatValue() == 0;
                 }
                 require("native-attachment-helpers-bounded-invisible-no-ai-and-empty-bounds", protectedHelpers);
-                require("server-native-attachment-shares-horse-root", Probe.call(nativeSeat, "getRootVehicle") == Probe.handle(horse)
-                        && Probe.call(Probe.handle(rider), "getRootVehicle") == Probe.handle(horse));
-                require("server-native-horse-keeps-first-driver-control", Probe.call(Probe.handle(horse), "getControllingPassenger") == Probe.handle(driver));
+                require("server-native-attachment-shares-horse-root", invoke(attachment, "root", rider.getVehicle()) == Probe.handle(horse)
+                        && invoke(attachment, "root", rider) == Probe.handle(horse));
+                require("server-native-horse-keeps-first-driver-control", invoke(attachment, "controller", horse) == Probe.handle(driver));
             }
             interact(third);
             later(3, new Runnable() { public void run() {
@@ -445,6 +492,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 require("driver-input-moves-horse", driveStart != null && horse.getLocation().distanceSquared(driveStart) > 0.05);
                 require("late-observer-real-player", Bukkit.getPlayerExact("TmLate") != null);
                 require("late-observer-requires-no-remount", rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 1);
+                if (wireMode) {
+                    require("real-client-repeated-click-keeps-ride",wireInteractions-wireCancelledInteractions>=3 && rider.isInsideVehicle() && countSeats()==1);
+                    require("real-client-mounted-movement-keeps-ride",rider.isInsideVehicle() && countSeats()==1 && driveStart != null && horse.getLocation().distanceSquared(driveStart)>0.05);
+                }
                 cancelDismount = true;
                 rider.leaveVehicle();
                 later(3, new Runnable() { public void run() {
@@ -488,11 +539,36 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             graph.setProperty("seat_block_display", rider.getVehicle().getType().name().equals("BLOCK_DISPLAY") ? "1" : "0");
             graph.setProperty("seat_interaction", rider.getVehicle().getType().name().equals("INTERACTION") ? "1" : "0");
             if ((Boolean)field(field(tandem, "nativeAccess"), "interpolatedSeat")) {
-                Entity lift = rider.getVehicle().getVehicle(), forward = lift.getVehicle(), rear = forward.getVehicle();
-                graph.setProperty("anchor", Integer.toString(rear.getVehicle().getEntityId()));
-                graph.setProperty("lift", Integer.toString(lift.getEntityId()));
-                graph.setProperty("rear_carrier", Integer.toString(rear.getEntityId()));
-                graph.setProperty("forward_carrier", Integer.toString(forward.getEntityId()));
+                Object ride = ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId());
+                Entity[] helpers = (Entity[])field(ride, "helpers");
+                graph.setProperty("helper_count", Integer.toString(helpers.length));
+                for (int i = 0; i < helpers.length; i++) graph.setProperty("helper_" + i, Integer.toString(helpers[i].getEntityId()));
+                File capture = new File(getDataFolder(), "initial-attachment.json");
+                if (!capture.exists()) {
+                    Object attachment = field(field(tandem, "nativeAccess"), "attachment");
+                    Object scale = field(attachment, "scale");
+                    StringBuilder json = new StringBuilder("{\"minecraft\":\"").append(field(field(tandem,"nativeAccess"),"minecraft"))
+                            .append("\",\"horse\":").append(horse.getEntityId()).append(",\"driver\":").append(driver.getEntityId())
+                            .append(",\"horsePosition\":[").append(horse.getLocation().getX()).append(',').append(horse.getLocation().getY()).append(',').append(horse.getLocation().getZ()).append(']')
+                            .append(",\"riderVehicle\":").append(rider.getVehicle().getEntityId())
+                            .append(",\"horseYaw\":").append(horse.getLocation().getYaw())
+                            .append(",\"rider\":").append(rider.getEntityId()).append(",\"vertical\":").append(settings().vertical)
+                            .append(",\"rearward\":").append(settings().rearward).append(",\"helpers\":[");
+                    for (Entity helper : helpers) {
+                        if (json.charAt(json.length()-1) != '[') json.append(',');
+                        Location location = helper.getLocation();
+                        json.append("{\"id\":").append(helper.getEntityId()).append(",\"type\":\"").append(helper.getType().name())
+                                .append("\",\"parent\":").append(helper.getVehicle().getEntityId())
+                                .append(",\"x\":").append(location.getX()).append(",\"y\":").append(location.getY()).append(",\"z\":").append(location.getZ())
+                                .append(",\"yaw\":").append(location.getYaw()).append(",\"noGravity\":").append(!((Boolean)invoke(helper,"hasGravity")));
+                        if (helper.getType().name().equals("LLAMA")) json.append(",\"scale\":").append(scale == null ? 1D : invoke(invoke(helper,"getAttribute",scale),"getBaseValue"));
+                        if (helper.getType().name().equals("INTERACTION")) json.append(",\"height\":").append(invoke(helper,"getInteractionHeight")).append(",\"width\":").append(invoke(helper,"getInteractionWidth"))
+                                .append(",\"pose\":\"").append(invoke(helper,"getPose")).append('"');
+                        json.append('}');
+                    }
+                    json.append("]}");
+                    Writer snapshot = new FileWriter(capture); snapshot.write(json.toString()); snapshot.close();
+                }
             }
             graph.setProperty("seat_nonliving", rider.getVehicle() instanceof LivingEntity ? "0" : "1");
             File initial = new File(getDataFolder(), "initial-graph.properties");

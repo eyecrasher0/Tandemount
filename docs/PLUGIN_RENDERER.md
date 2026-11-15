@@ -1,6 +1,7 @@
 # Plugin seat and passenger rendering
 
-The helper seat is a native vanilla nonliving entity. Exact 26.3 uses a BARRIER
+The helper seat is a native vanilla nonliving entity. The adapter for 1.19.4 and
+later uses a BARRIER
 block display in the same native vehicle graph on the server and vanilla client,
 with the ordinary horse as its shared root:
 
@@ -13,7 +14,13 @@ horse ─ first player (ordinary driver)
               └ BARRIER block display ─ second player
 ```
 
-The helper count is fixed at five. Original native mount methods position every
+The scale-capable family, beginning with 1.20.5, has five helpers. The
+1.19.4–1.20.4 family uses eight ordinary adult llamas with alternating native
+rotations, separated by seven zero-height Interactions, for eighteen helpers.
+Their horizontal vectors cancel sideways and sum to the configured rearward
+distance. The separators keep each carrier's direct vehicle nonliving, so
+vanilla horse passenger body rotation cannot erase the alternating directions.
+Original native mount methods position every
 edge. This path does not hide an edge or broadcast recurring absolute world
 positions for a follower. The first player remains the horse's controlling
 passenger. The second player's direct vehicle remains nonliving.
@@ -25,16 +32,27 @@ range. The lift's signed synchronized height supplies the independent vertical
 setting. Both scales remain inside the native attribute bounds.
 
 An invisible living carrier still has a client pick box. The anchor places
-both carriers 64 blocks below the horse, and the lift restores the display
+the carriers 64 blocks below the horse, and the lift restores the display
 beside the player. This keeps ordinary interaction rays away from their boxes.
 The final display is separate from the lift because vanilla dismount searches
 near the direct vehicle's origin. Neither Interaction spacer has width. All
 helpers have no gravity, empty server bounds and refused native save entry
 points. The carrier server ticks run only the ride validator; AI, collision,
 sound and persistence are disabled. No entity type is created or registered.
-Older adapters use a native falling block and retain their separate evidence.
+Pre-1.19.4 adapters remain a separate porting boundary; successful compilation
+of their falling-block path does not establish native graph compatibility.
 
-For exact 26.3, the seat carries the vanilla BARRIER block state. AIR is not a
+Older Interaction metadata updates its bounding box without refreshing the
+cached dimensions used by passenger attachment points. The adapter measures
+the native height ratio, uses ordinary pose callbacks on the server, and
+appends a native pose-only metadata value after each existing helper metadata
+snapshot. The original vanilla data assignment invokes the dimensions callback
+even when that pose value equals the current value. This ordering also applies
+to an upstream tracker's initial snapshot for a late observer. It introduces
+no periodic pose or helper world-position updates and does not create an entity
+or select observers independently of the native tracker.
+
+The display seat carries the vanilla BARRIER block state. AIR is not a
 safe invisible state: the unchanged vanilla client removes an AIR falling block
 at the beginning of its first entity tick, before checking whether the world is
 client-side. The server's generated subclass replaces only the server tick, so
@@ -51,9 +69,11 @@ display interpolation delay. Client entities and their movement methods are
 unchanged. The display has no controlling passenger, so the second player does
 not gain horse control.
 
-This correction currently selects only the exact 26.3 game and its upstream
-`26.3.build.*` Bukkit API labels. Other exact targets require their own client
-lifetime evidence before the same release claim is made.
+Attachment selection requires the real upstream BlockDisplay and Interaction
+types. Exact aliases for attachment points, dimensions callbacks, body rotation
+and metadata access are recorded in `attachment-mappings.properties`, derived
+from each exact official server mapping. Each target still requires its own
+artifact-bound native and original-client evidence before a release claim.
 
 This seat type avoids the living-vehicle branch in the vanilla player renderer.
 Official client bytecode for 1.20.6, 1.21.11, and 26.3 shows that
@@ -89,12 +109,12 @@ the shared empty-box constants in recent server classes.
 The generated native subclass calls an accessible upstream constructor. When
 Spigot makes the world/coordinates/state constructor private, the adapter calls
 its public entity-type/world constructor with the already registered vanilla
-`minecraft:falling_block` type and verifies that type's registry key. The 26.3
-display adapter verifies `minecraft:block_display` instead. Spigot
+`minecraft:falling_block` type and verifies that type's registry key. The display
+adapter verifies `minecraft:block_display` instead. Spigot
 26.2 and later keep this constant in the separate native `EntityTypes` holder.
-No type is constructed or registered. Older falling-block adapters still use
-AIR pending their separate exact-client lifetime verification; the 26.3 display
-uses BARRIER. Both must expose the expected Bukkit nonliving vanilla type
+No type is constructed or registered. Falling-block adapters select BARRIER
+where the upstream provides it; 1.7.10 still needs a separately verified
+invisible non-AIR state. Both adapters must expose the expected nonliving type
 before joining a ride.
 
 The subclass overrides the falling-block class's own declared tick, avoiding
@@ -103,8 +123,11 @@ Spigot families include `k` in 1.18–1.19.2 and `g` in 1.21.5–1.21.11. In exa
 1.19.3 mappings, the position setter is `f(double, double, double)`; `e` only
 updates `VecDeltaCodec`. The 1.19.4 mappings swap those two meanings, so this
 selection is tied to the exact upstream game version rather than alias order.
-The 26.3 block display's original tick is declared by its native `Display`
-parent; only that verified inheritance case uses the parent tick entry point.
+The block display's original tick is declared by its native `Display` parent.
+Carrier and spacer subclasses receive that exact mapped tick entry explicitly.
+Passenger positioning enters the native one-argument virtual method first,
+preserving older llama overrides instead of bypassing them through Entity's
+two-argument movement callback.
 
 ## Native lifecycle fixture
 

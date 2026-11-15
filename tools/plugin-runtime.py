@@ -22,6 +22,7 @@ import zlib
 
 from vanilla_protocol import accept_teleport
 from runtime_storage import RuntimeWorkspace
+from plugin_protocol import wire_properties, menu_checks, send_native
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get('TANDEMOUNT_CACHE', ROOT / '.agents/cache'))
@@ -244,13 +245,16 @@ def packet_checks(clients, graph, minecraft):
         checks.append({'assertion': name, 'status': 'passed' if passed else 'failed', 'detail': detail})
     oldest = minecraft == '1.7.10'
     for client in clients:
-        spawned, mounts, poses, types = set(), [], [], []
+        spawned, mounts, poses, types, helper_positions = set(), [], [], [], []
+        helpers = [graph['helper_' + str(i)] for i in range(graph.get('helper_count', 0))]
         spawn_ids = {client.identifier('game', 'clientbound', 'minecraft:add_entity', 'PacketPlayOutSpawnEntity', 'ClientboundAddEntityPacket'),
                      client.identifier('game', 'clientbound', 'minecraft:add_mob', 'PacketPlayOutSpawnEntityLiving', 'ClientboundAddMobPacket')}
         mount_id = client.identifier('game', 'clientbound', 'minecraft:set_passengers', 'PacketPlayOutMount', 'ClientboundSetPassengersPacket')
         attach_id = client.identifier('game', 'clientbound', 'PacketPlayOutAttachEntity')
         position_ids = {client.identifier('game', 'clientbound', 'minecraft:entity_position_sync', 'ClientboundEntityPositionSyncPacket'),
                         client.identifier('game', 'clientbound', 'minecraft:teleport_entity', 'PacketPlayOutEntityTeleport', 'ClientboundTeleportEntityPacket')}
+        relative_position_ids = {client.identifier('game', 'clientbound', 'minecraft:move_entity_pos', 'PacketPlayOutRelEntityMove', 'ClientboundMoveEntityPacket$Pos'),
+                                 client.identifier('game', 'clientbound', 'minecraft:move_entity_pos_rot', 'PacketPlayOutRelEntityMoveLook', 'ClientboundMoveEntityPacket$PosRot')}
         for stage, packet_id, raw in client.packets:
             if stage != 'game': continue
             body = bytes.fromhex(raw)
@@ -276,28 +280,32 @@ def packet_checks(clients, graph, minecraft):
                         entity, offset = struct.unpack_from('>i', body)[0], 4
                     else:
                         entity, offset = read_vi(body)
+                    if entity in helpers: helper_positions.append(entity)
                     if entity == graph['seat']:
                         if oldest: pose = tuple(v / 32.0 for v in struct.unpack('>iii', body[offset:offset + 12]))
                         else: pose = struct.unpack('>ddd', body[offset:offset + 24])
                         poses.append(pose)
+                if packet_id in relative_position_ids:
+                    entity, _ = read_vi(body)
+                    if entity in helpers: helper_positions.append(entity)
             except (ValueError, IndexError, struct.error):
                 pass
         prefix = client.name.lower() + '-'
         check(prefix + 'native-vanilla-seat-spawn-received', graph['seat'] in spawned and bool(types) and all(v > 0 for v in types), 'Actual clientbound protocol frames; native IDs and vanilla spawn packet')
-        display = minecraft == '26.3'
+        display = graph.get('seat_block_display') == 1
         seat_kind = 'block-display' if display else 'falling-block'
         check(prefix + 'client-seat-uses-nonliving-' + seat_kind,
               graph.get('seat_block_display' if display else 'seat_falling_block') == 1 and graph.get('seat_nonliving') == 1
               and graph['seat'] in spawned, 'Native fixture confirms the exact nonliving vanilla seat type; loopback client received the same seat entity ID')
         check(prefix + 'passenger-seat-edge-received', any(v == graph['seat'] and p == [graph['rider']] for v, p in mounts), 'Actual clientbound mount graph')
         if display:
-            chain = [(graph['horse'], [graph['driver'], graph['anchor']]),
-                     (graph['anchor'], [graph['rear_carrier']]),
-                     (graph['rear_carrier'], [graph['forward_carrier']]),
-                     (graph['forward_carrier'], [graph['lift']]), (graph['lift'], [graph['seat']])]
+            chain = [(graph['horse'], [graph['driver'], helpers[0]])]
+            chain.extend((parent, [child]) for parent,child in zip(helpers, helpers[1:]))
             check(prefix + 'received-native-attachment-shares-horse-root', all(any(v == parent and p == children for v,p in mounts) for parent,children in chain)
-                  and all(entity in spawned for entity in (graph['anchor'],graph['rear_carrier'],graph['forward_carrier'],graph['lift'])), 'Actual received native passenger graph: horse(driver first,anchor)->rear carrier->forward carrier->lift->nonliving seat->rider')
-            check(prefix + 'attachment-has-no-periodic-position-follow-packets', len(poses) < 3, {'absolute_seat_packets':len(poses),'scope':'Native attached tracking; no independent recurring seat position broadcasts'})
+                  and all(entity in spawned for entity in helpers), 'Actual received bounded native passenger graph shares the horse root with its ordinary driver first')
+            check(prefix + 'attachment-has-no-periodic-position-follow-packets', not helper_positions,
+                  {'absolute_seat_packets': len(poses), 'absolute_helper_packets': len(helper_positions),
+                   'scope': 'All native attached helpers; no independent absolute or relative position broadcasts'})
         else:
             check(prefix + 'horse-has-only-driver-on-client', any(v == graph['horse'] and p == [graph['driver']] for v, p in mounts)
                   and not any(v == graph['horse'] and graph['seat'] in p for v, p in mounts), 'Actual clientbound graph preserves native horse control and separate seat position')
@@ -444,15 +452,36 @@ def main():
                 clients.append(client)
                 if not client.joined.wait(15):
                     raise RuntimeError(name + ' did not join: ' + repr(client.errors))
+                loaded = client.identifier('game', 'serverbound', 'minecraft:player_loaded', 'ServerboundPlayerLoadedPacket')
+                if loaded is not None: client.send(loaded)
                 time.sleep(0.3)
             time.sleep(1)
-            command_line('tmfixture start')
+            command_line('tmfixture wire-start')
             late = None
             handled = set()
             while time.monotonic() < deadline:
                 current = phase()
                 if current.get('phase') == 'failed':
                     raise RuntimeError('Fixture failed: ' + str(current))
+                if current.get('phase') == 'wire-cancel' and 'wire-cancel' not in handled:
+                    handled.add('wire-cancel')
+                    wire = wire_properties(fixture_config / 'wire-packets.properties')
+                    send_native(clients[1], wire, 'interact'); time.sleep(.3)
+                    command_line('tmfixture wire-cancelled')
+                if current.get('phase') == 'wire-mount' and 'wire-mount' not in handled:
+                    handled.add('wire-mount')
+                    send_native(clients[1], wire, 'interact'); time.sleep(.3)
+                    command_line('tmfixture wire-mounted')
+                if current.get('phase') == 'wire-menu' and 'wire-menu' not in handled:
+                    handled.add('wire-menu')
+                    send_native(clients[2], wire, 0); time.sleep(.5)
+                    result['menu_assertions'] = menu_checks(clients[2], read_vi)
+                    if not all(row['status'] == 'passed' for row in result['menu_assertions']):
+                        raise RuntimeError('Received clickable command menu failed validation')
+                    send_native(clients[2], wire, 1); time.sleep(.3)
+                    send_native(clients[2], wire, 'interact'); time.sleep(.1)
+                    for _ in range(3): send_native(clients[1], wire, 'interact'); time.sleep(.1)
+                    command_line('tmfixture wire-menu-finish')
                 if current.get('phase') == 'drive' and late is None:
                     horse_id, x, y, z, yaw, pitch = map(float, current['value'].split(','))
                     for step in range(30):
@@ -489,11 +518,14 @@ def main():
                 if current.get('phase') == 'save-probed' and 'save-probed' not in handled:
                     handled.add('save-probed')
                     result['active_save_assertions'] = active_save_checks(fixture_config)
-                    if current.get('failures') != 0 or not all(a['status'] == 'passed' for a in result['active_save_assertions']):
+                    if current.get('failures') != 0:
+                        failures = [row['assertion'] for row in result['assertions'] if row['status'] != 'passed']
+                        raise RuntimeError('Native fixture assertions failed: ' + ', '.join(failures))
+                    if not all(a['status'] == 'passed' for a in result['active_save_assertions']):
                         raise RuntimeError('Live native seat serialization was not proven to be refused')
                     command_line('tmfixture finish')
                 if current.get('phase') == 'complete':
-                    result['status'] = 'passed' if current['failures'] == 0 and 'save-probed' in handled and all(a['status'] == 'passed' for a in result.get('packet_assertions', []) + result.get('active_save_assertions', [])) else 'failed'
+                    result['status'] = 'passed' if current['failures'] == 0 and 'save-probed' in handled and 'wire-menu' in handled and all(a['status'] == 'passed' for a in result.get('packet_assertions', []) + result.get('active_save_assertions', []) + result.get('menu_assertions', [])) else 'failed'
                     break
                 time.sleep(0.1)
             else:

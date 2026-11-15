@@ -8,11 +8,12 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Changes one mount edge, never creates a client entity or changes visibility. */
+/** Preserves native tracking and orders the attachment's native metadata. */
 final class PacketBridge {
     private final TandemountPlugin plugin;
     private final ConcurrentMap<Integer, Integer> edges = new ConcurrentHashMap<Integer, Integer>();
     private final ConcurrentMap<Integer, Integer> seatTypes = new ConcurrentHashMap<Integer, Integer>();
+    private final ConcurrentMap<Integer, Object> dimensionRefresh = new ConcurrentHashMap<Integer, Object>();
     private final ConcurrentMap<UUID, Object> pipelines = new ConcurrentHashMap<UUID, Object>();
     private final ConcurrentMap<Class<?>, MountCodec> codecs = new ConcurrentHashMap<Class<?>, MountCodec>();
     private static final String HANDLER = "tandemount_seat";
@@ -34,6 +35,9 @@ final class PacketBridge {
         retired.run();
     }
     void addSeat(int seat, int type) { seatTypes.put(seat, type); }
+    void refreshDimensions(int entity, Object posePacket) { dimensionRefresh.put(entity, posePacket); }
+    boolean hasDimensionRefresh(int entity) { return dimensionRefresh.containsKey(entity); }
+    void removeDimensionRefresh(int entity) { dimensionRefresh.remove(entity); }
 
     void install(final Player player) throws ReflectiveOperationException {
         Object nativePlayer = Reflect.handle(player);
@@ -70,7 +74,17 @@ final class PacketBridge {
                 if (name.equals("exceptionCaught")) { Reflect.call(args[0], "fireExceptionCaught", args[1]); return null; }
                 Object[] forwarded = Arrays.copyOfRange(args, 1, args.length);
                 if (name.equals("write")) {
-                    try { forwarded[0] = filter(forwarded[0]); }
+                    try {
+                        forwarded[0] = filter(forwarded[0]);
+                        Object refresh = dimensionRefresh(forwarded[0]);
+                        if (refresh != null) {
+                            // This handler may run after vanilla's bundle
+                            // unpacker. Forward two native packets in order,
+                            // rather than introducing an unencodable bundle.
+                            Reflect.call(args[0], "write", forwarded[0], Reflect.call(args[0], "newPromise"));
+                            forwarded[0] = refresh;
+                        }
+                    }
                     catch (Throwable failure) {
                         // Never send the wrong mount graph: stop this ride on its owner.
                         plugin.packetFailure(failure);
@@ -124,7 +138,22 @@ final class PacketBridge {
             for (Method m : packet.getClass().getMethods()) if (m.getParameterTypes().length == 0
                     && Iterable.class.isAssignableFrom(m.getReturnType())) {
                 List<Object> changed = new ArrayList<Object>();
-                for (Object nested : (Iterable<?>)Reflect.call(m, packet)) changed.add(filter(nested));
+                for (Object nested : (Iterable<?>)Reflect.call(m, packet)) {
+                    Object filtered = filter(nested);
+                    if (filtered.getClass().getSimpleName().equals("ClientboundBundlePacket")) {
+                        boolean expanded = false;
+                        for (Method contents : filtered.getClass().getMethods()) if (contents.getParameterTypes().length == 0
+                                && Iterable.class.isAssignableFrom(contents.getReturnType())) {
+                            for (Object value : (Iterable<?>)Reflect.call(contents, filtered)) changed.add(value);
+                            expanded = true; break;
+                        }
+                        if (!expanded) throw new NoSuchMethodException("Native bundle contents");
+                    } else {
+                        changed.add(filtered);
+                        Object refresh = dimensionRefresh(filtered);
+                        if (refresh != null) changed.add(refresh);
+                    }
+                }
                 for (Constructor<?> c : packet.getClass().getDeclaredConstructors())
                     if (c.getParameterTypes().length == 1 && c.getParameterTypes()[0].isInstance(changed)) {
                         c.setAccessible(true); return c.newInstance(changed);
@@ -151,6 +180,17 @@ final class PacketBridge {
         return codec.create(vehicle, after);
     }
 
+    private Object dimensionRefresh(Object packet) throws ReflectiveOperationException {
+        if (dimensionRefresh.isEmpty()) return null;
+        String name = packet.getClass().getSimpleName();
+        if (!name.equals("PacketPlayOutEntityMetadata") && !name.equals("ClientboundSetEntityDataPacket")) return null;
+        for (Field field : packet.getClass().getDeclaredFields())
+            if (field.getType() == int.class && !Modifier.isStatic(field.getModifiers())) {
+                field.setAccessible(true); return dimensionRefresh.get(field.getInt(packet));
+            }
+        throw new NoSuchFieldException("Native entity metadata identifier");
+    }
+
     void uninstall(Player player) { uninstall(player.getUniqueId()); }
     private void uninstall(UUID id) {
         final Object pipeline = pipelines.remove(id);
@@ -166,7 +206,7 @@ final class PacketBridge {
             });
         } catch (ReflectiveOperationException e) { plugin.debug("Could not reach a disconnected network filter", e); }
     }
-    void close() { for (UUID id : pipelines.keySet()) uninstall(id); edges.clear(); seatTypes.clear(); }
+    void close() { for (UUID id : pipelines.keySet()) uninstall(id); edges.clear(); seatTypes.clear(); dimensionRefresh.clear(); }
 
     private static final class MountCodec {
         final Field vehicle, passengers;
