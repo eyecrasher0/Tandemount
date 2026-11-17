@@ -67,3 +67,7 @@ horses only. Invalid numbers and unsupported horse types are rejected.
 Disable ends active shared rides. Death, disconnect, horse removal, teleport,
 world change, unload, shutdown, and restart must leave no extra seat in the
 world; exact native verification remains a release requirement.
+
+On Paper 26.3, a horse's Nether portal transfer ends the second seat. The driver
+stays on the horse and the second player arrives unmounted at the portal exit,
+where they can join the horse again.
