@@ -109,6 +109,7 @@ class Client:
         self.joined = threading.Event()
         self.packets = []
         self.packet_times = []
+        self.sent_packets = []
         self.errors = []
         self.lock = threading.Lock()
         self.position = (0.0, 0.0, 0.0, 0.0, 0.0)
@@ -148,6 +149,8 @@ class Client:
             data = vi(0) + data
         with self.lock:
             self.sock.sendall(vi(len(data)) + data)
+            self.sent_packets.append({'at_ns': time.monotonic_ns(), 'stage': self.stage,
+                                      'id': packet_id, 'body': body.hex()})
 
     def read(self):
         try:
@@ -570,7 +573,8 @@ def main():
         for client in clients:
             client.close()
             (run / (client.name + '-packets.json')).write_text(json.dumps({'packets': client.packets,
-                'received_monotonic_ns': client.packet_times, 'errors': client.errors}, indent=2))
+                'received_monotonic_ns': client.packet_times, 'sent_packets': client.sent_packets,
+                'errors': client.errors}, indent=2))
         if server.poll() is None:
             try:
                 command_line('stop')

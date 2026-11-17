@@ -150,6 +150,7 @@ def main():
         observations['repeated']=state();check('real-client-repeated-click-keeps-ride',state()['mounted'],observations['repeated'])
         start=state()
         trajectory_start = time.monotonic_ns()
+        predicted_controls = []
         for step in range(120):
             angle = step * .02
             x = start['horseX'] + 1.75 * (1 - math.cos(angle))
@@ -157,11 +158,14 @@ def main():
             # Native-encoded ordinary player look accompanies vehicle movement,
             # as it does for a vanilla driver; the horse follows its driver's yaw.
             clients[0].send(clients[0].identifier('game','serverbound','minecraft:move_player_rot'),base64.b64decode(values['rotation.'+str(step)]))
+            predicted_controls.append({'at_ns': time.monotonic_ns(), 'step': step,
+                'position': [x, start['horseY'], z], 'yaw': -math.degrees(angle), 'pitch': 0})
             clients[0].steer(int(values['horse']));clients[0].move_vehicle(x,start['horseY'],z,-math.degrees(angle),0);time.sleep(.05)
         clients[0].steer(int(values['horse']),False);time.sleep(.5)
         trajectory_end = time.monotonic_ns()
         observations['movement']=state();check('real-client-mounted-movement-keeps-ride',state()['mounted'] and abs(state()['horseZ']-start['horseZ'])>.1,observations['movement'])
         result['trajectory'] = {'horse_id':start['horse'],'seat_id':start['riderVehicle'],'rider_id':int(values['rider']),
+            'driver_id':int(values['driver']), 'predicted_controls':predicted_controls,
             'start_monotonic_ns':trajectory_start,'end_monotonic_ns':trajectory_end,
             'initial_horse_position':[start['horseX'],start['horseY'],start['horseZ']],
             'initial_seat_position':[start['seatX'],start['seatY'],start['seatZ']],
@@ -218,7 +222,7 @@ def main():
     except Exception as error:result['error']=str(error)
     finally:
         for client in clients:
-            client.close();(run/(client.name+'-packets.json')).write_text(json.dumps({'packets':client.packets,'received_monotonic_ns':client.packet_times,'errors':client.errors},indent=2)+'\n')
+            client.close();(run/(client.name+'-packets.json')).write_text(json.dumps({'packets':client.packets,'received_monotonic_ns':client.packet_times,'sent_packets':client.sent_packets,'errors':client.errors},indent=2)+'\n')
         if server.poll() is None:
             console('stop')
             try:server.wait(35)

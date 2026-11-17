@@ -236,3 +236,19 @@ target still needs native evidence bound to its final artifact hash. A protocol 
 does not execute the client renderer. No real client visual review has been
 performed, so smoothness and appearance during a 179° to -179° turn remain open
 for human confirmation.
+
+The Paper 26.3 owner runner records each connection's received and sent packet
+times, the driver's requested vehicle trajectory, and native driver/helper
+poses. This keeps the driver's view, passenger's view and third observer
+captures separate. A packet trace alone does not construct a `LocalPlayer` or
+execute the client renderer.
+
+An audit of the unchanged official 26.3 client found that
+`ClientLevel.tickNonPassenger` and `tickPassenger` advance each vehicle before
+its children, with `commonTick` followed by `rideTick` for each passenger.
+`Entity.setOldPosAndRot` assigns both the renderer's old position and the
+camera's old position. The llama passenger attachment uses the llama's own
+rotation; the plugin currently updates that rotation from the server horse.
+These declarations identify a possible difference between a driver's locally
+controlled horse and remotely received helper rotations during a turn. They
+do not establish the cause of an observed lag or verify a repair.

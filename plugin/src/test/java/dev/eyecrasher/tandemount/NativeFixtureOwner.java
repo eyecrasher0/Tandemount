@@ -103,6 +103,8 @@ public final class NativeFixtureOwner implements Listener {
                 if(chain.length()>1)chain.append(',');
                 chain.append("{\"id\":").append(helper.getEntityId()).append(",\"type\":\"").append(helper.getType().name()).append("\",\"x\":").append(helper.getLocation().getX())
                     .append(",\"y\":").append(helper.getLocation().getY()).append(",\"z\":").append(helper.getLocation().getZ())
+                    .append(",\"yaw\":").append(helper.getLocation().getYaw())
+                    .append(",\"parent\":").append(helper.getVehicle() == null ? -1 : helper.getVehicle().getEntityId())
                     .append(",\"noGravity\":").append(call(handle,"isNoGravity"));
                 if(helper.getType().name().equals("LLAMA"))chain.append(",\"scale\":").append(call(handle,"getScale")).append(",\"invisible\":").append(call(handle,"isInvisible"));
                 if(helper.getType().name().equals("INTERACTION"))chain.append(",\"height\":").append(call(helper,"getInteractionHeight")).append(",\"width\":").append(call(helper,"getInteractionWidth"));
@@ -114,6 +116,8 @@ public final class NativeFixtureOwner implements Listener {
                 + ",\"horse\":" + horse.getEntityId() + ",\"driverVehicle\":" + (driver.getVehicle() == null ? -1 : driver.getVehicle().getEntityId())
                 + ",\"horseX\":" + horse.getLocation().getX() + ",\"horseY\":" + horse.getLocation().getY() + ",\"horseZ\":" + horse.getLocation().getZ()
                 + ",\"horseYaw\":" + horse.getLocation().getYaw()
+                + ",\"driverX\":" + driver.getLocation().getX() + ",\"driverY\":" + driver.getLocation().getY() + ",\"driverZ\":" + driver.getLocation().getZ()
+                + ",\"driverYaw\":" + driver.getLocation().getYaw() + ",\"driverPitch\":" + driver.getLocation().getPitch()
                 + ",\"riderX\":" + rider.getLocation().getX() + ",\"riderY\":" + rider.getLocation().getY() + ",\"riderZ\":" + rider.getLocation().getZ()
                 + ",\"seatX\":" + (seat == null ? 0 : seat.getLocation().getX()) + ",\"seatY\":" + (seat == null ? 0 : seat.getLocation().getY()) + ",\"seatZ\":" + (seat == null ? 0 : seat.getLocation().getZ())
                 + ",\"seatBlockStateId\":"+blockStateId+",\"seatNoGravity\":"+noGravity
