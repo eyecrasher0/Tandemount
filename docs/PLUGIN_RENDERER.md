@@ -252,3 +252,24 @@ rotation; the plugin currently updates that rotation from the server horse.
 These declarations identify a possible difference between a driver's locally
 controlled horse and remotely received helper rotations during a turn. They
 do not establish the cause of an observed lag or verify a repair.
+
+`ClientAttachmentLatencyProbe` isolates that rotation dependency using the
+unchanged official 26.3 client entity classes. It advances the five-helper
+vehicle graph with native passenger ticks, injects the requested horse path,
+and delays helper rotations before submitting them to the native stepped
+interpolator. For a gradual turn of two degrees per tick at the default
+0.5-block rear offset, the maximum position errors were:
+
+| Helper yaw delay | Maximum offset error |
+| --- | --- |
+| 0 ms | 0.035 blocks |
+| 200 ms | 0.105 blocks |
+| 500 ms | 0.208 blocks |
+| 1,000 ms | 0.375 blocks |
+
+Pure translation stayed within 0.000002 blocks for all four delays, retaining
+the horse as the root. An abrupt 90-degree turn with delayed helper yaw reached
+0.707 blocks of temporary error. These are component results with an injected
+root path and player geometry stand-ins. The delays are not measured network
+RTTs, and this probe does not establish either player's rendered view or a
+fix for the owner's report.
