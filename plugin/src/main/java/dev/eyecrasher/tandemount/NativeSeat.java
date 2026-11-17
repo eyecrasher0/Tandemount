@@ -26,6 +26,10 @@ public final class NativeSeat {
         Ride ride = RIDES.get(seat);
         if (ride != null) ride.plugin.tickRide(ride);
     }
+    public static boolean portalTeleport(Object seat, Object transition) {
+        Ride ride = RIDES.get(seat);
+        return ride != null && !ride.closed && ride.plugin.portalTeleport(ride, seat, transition);
+    }
     public static void shape(Object seat) {
         Ride ride = RIDES.get(seat);
         if (ride == null || ride.closed) return;

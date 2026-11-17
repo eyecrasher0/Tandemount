@@ -684,3 +684,39 @@ Private SDK audit records under the task-specific plugin-final-port cache
 retain exact distribution refs, mapping URLs and hashes, native/client class
 hashes and declaration listings. Compilation, real server/network assertions,
 original client execution and human visual review remain separate evidence.
+
+### Paper 26.3 Nether passenger transfer audit
+
+A fresh clean-room implementer consulted the independent runtime and behavioral
+specification, the isolated two-socket reproduction, and the official Paper
+26.3 build 249 distribution. No predecessor project, archive, binary or project
+memory was consulted. The [official distribution](https://fill-data.papermc.io/v1/objects/4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a/paper-26.3-249.jar)
+has SHA-256 `4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a`;
+its bootstrapped native server SDK has SHA-256
+`dadd84d1697efa8a29bcad6c81e503efdbaaa2dac85dbd4662c8243c97f0b8a4`.
+
+Original `javap -p -c` evidence for `Entity`, `LivingEntity`, `ServerPlayer`,
+`NetherPortalBlock` and `TeleportTransition` shows the transfer order:
+`Entity.teleportCrossDimension` ejects passengers before calculating their
+transitions. Ejecting a living carrier calls `LivingEntity.dismountVehicle`,
+then `Entity.teleportTo` and `teleportPassengers`, repositioning its descendants
+through the attachment's signed vertical offsets. A real portal transfer with
+the previously delivered plugin and no PortalLinked installed moved the second
+rider from Y `64.8125` to Y `126.4435` while the first rider arrived at the
+ordinary exit near Y `64.84375`.
+
+The repair is limited to Paper 26.3. A generated Interaction override intercepts
+the anchor's native `teleport(TeleportTransition)` after the horse's portal and
+teleport event dispatch has accepted the transfer, before carrier ejection or
+helper cloning. The adapter positions the existing descendants natively, calls
+the upstream `Entity.calculatePassengerTransition` and
+`PositionMoveRotation.calculateAbsolute`, and retires every helper before
+invoking the player's own cancellable native teleport. Native relative
+position, rotation, velocity, cause and portal callbacks are preserved. The
+world change ends the second seat; the second rider arrives unmounted and the
+horse and first rider complete their normal native transfer. A successful
+second-player transfer receives the player's ordinary native portal cooldown,
+preventing automatic reentry while the unmounted player touches the exit.
+Cancelled horse portal events do not enter this override, and a cancelled second-player
+teleport is not retried. This audit makes no new compatibility claim for other
+versions or platforms. Private SDK listings and native reports remain ignored.

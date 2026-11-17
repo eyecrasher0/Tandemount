@@ -36,9 +36,14 @@ final class SeatClass extends ClassLoader {
     }
     static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest, Method explicitTick)
             throws IOException {
+        return create(base, constructor, position, oldest, explicitTick, null);
+    }
+    static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest, Method explicitTick, Method portalTeleport)
+            throws IOException {
         SeatClass writer = new SeatClass(base);
         writer.constructor(constructor);
         writer.position(position);
+        if (portalTeleport != null) writer.portalTeleport(portalTeleport);
         // Vanilla save entry points and damage entry points are identified by their
         // actual upstream signatures. A seat never serializes and never drops loot.
         Set<String> seen = new HashSet<String>();
@@ -124,6 +129,19 @@ final class SeatClass extends ClassLoader {
         int slots = 1;
         for (Class<?> arg : m.getParameterTypes()) slots += arg == double.class || arg == long.class ? 2 : 1;
         add(m.getName(), descriptor(m.getParameterTypes(), boolean.class), new byte[] {0x03, (byte)0xac}, 1, slots);
+    }
+    private void portalTeleport(Method m) throws IOException {
+        ByteArrayOutputStream raw = new ByteArrayOutputStream(); DataOutputStream code = new DataOutputStream(raw);
+        code.writeByte(0x2a); code.writeByte(0x2b); // aload_0; aload_1
+        code.writeByte(0xb8);
+        code.writeShort(method("dev/eyecrasher/tandemount/NativeSeat", "portalTeleport", "(Ljava/lang/Object;Ljava/lang/Object;)Z"));
+        code.writeByte(0x99); code.writeShort(5); // ifeq: ordinary native teleport
+        code.writeByte(0x01); code.writeByte(0xb0); // handled: aconst_null; areturn
+        code.writeByte(0x2a); code.writeByte(0x2b);
+        String signature = descriptor(m.getParameterTypes(), m.getReturnType());
+        code.writeByte(0xb7); code.writeShort(method(parent, m.getName(), signature));
+        code.writeByte(0xb0);
+        add(m.getName(), signature, raw.toByteArray(), 2, 2);
     }
     private void tick(Method m) throws IOException {
         ByteArrayOutputStream raw = new ByteArrayOutputStream(); DataOutputStream code = new DataOutputStream(raw);

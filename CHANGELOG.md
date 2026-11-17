@@ -9,4 +9,7 @@
   reload, reset, enable/disable, and permission checks.
 - Separate plugin and mod artifacts for exact Minecraft releases, with native
   loader/core verification and hash-bound release evidence.
+- Paper 26.3: the second rider reaches the Nether portal exit at the correct
+  height. World changes end the second seat and leave that rider unmounted;
+  the driver and horse keep their ordinary native transfer.
 - No icon is included in this release candidate.

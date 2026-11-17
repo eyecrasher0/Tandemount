@@ -249,6 +249,24 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         }
     }
 
+    boolean portalTeleport(Ride ride, Object anchor, Object transition) {
+        try {
+            Object riderTransition = nativeAccess.attachment.portalTransition(ride, anchor, transition);
+            if (riderTransition == null) return false;
+            // No helper enters the target world or becomes a vanilla replacement.
+            // Let the rider's own native teleport fire its ordinary cancellable
+            // PlayerTeleportEvent; a cancellation never forces a later retry.
+            close(ride);
+            Object rider = Reflect.handle(ride.rider);
+            if (Reflect.call(rider, "teleport", riderTransition) != null)
+                Reflect.call(rider, "setPortalCooldown");
+        } catch (Throwable failure) {
+            close(ride);
+            debug("A shared portal ride ended because native transfer failed", failure);
+        }
+        return true;
+    }
+
     private void close(Ride ride) {
         if (ride.closed) return;
         ride.closed = true;

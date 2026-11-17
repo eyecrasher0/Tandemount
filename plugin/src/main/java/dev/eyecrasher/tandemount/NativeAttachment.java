@@ -37,7 +37,9 @@ final class NativeAttachment {
         carrier = SeatClass.create(base, nativeConstructor, access.position, false, base.getMethod(tick)).getConstructor(entityType, level);
         Class<?> interaction = handleType(Class.forName(craft + ".entity.CraftInteraction"));
         Constructor<?> interactionConstructor = interaction.getConstructor(entityType, level);
-        spacer = SeatClass.create(interaction, interactionConstructor, access.position, false, interaction.getMethod(tick)).getConstructor(entityType, level);
+        Method portalTeleport = access.minecraft.equals("26.3") && "Paper".equals(org.bukkit.Bukkit.getName())
+                ? access.entityClass.getMethod("teleport", Class.forName("net.minecraft.world.level.portal.TeleportTransition")) : null;
+        spacer = SeatClass.create(interaction, interactionConstructor, access.position, false, interaction.getMethod(tick), portalTeleport).getConstructor(entityType, level);
         llamaType = NativeAccess.vanillaEntityType(entityType, "minecraft:llama", "LLAMA");
         interactionType = NativeAccess.vanillaEntityType(entityType, "minecraft:interaction", "INTERACTION");
         Object scaleAttribute = null;
@@ -261,6 +263,46 @@ final class NativeAttachment {
             parent = child;
         }
         access.positionRider(ride.nativeSeat, Reflect.handle(ride.rider));
+    }
+
+    Object portalTransition(Ride ride, Object anchor, Object transition) throws ReflectiveOperationException {
+        if (ride.helpers.length == 0 || Reflect.handle(ride.helpers[0]) != anchor
+                || !Boolean.TRUE.equals(Reflect.call(transition, "asPassenger"))
+                || !"NETHER_PORTAL".equals(String.valueOf(Reflect.call(transition, "cause")))
+                || Reflect.call(transition, "newLevel") == Reflect.handle(ride.horse.getWorld())) return null;
+        if (!ride.rider.isOnline() || ride.rider.isDead() || ride.rider.getVehicle() != ride.seat
+                || !ride.rider.getWorld().equals(ride.helpers[0].getWorld()))
+            throw new IllegalStateException("Shared portal rider changed vehicle or world");
+        for (int i = 1; i < ride.helpers.length; i++)
+            if (ride.helpers[i].getVehicle() != ride.helpers[i - 1])
+                throw new IllegalStateException("Shared portal attachment changed");
+        // Paper 26.3 ejects each vehicle's passengers before transforming them.
+        // A carrier's living dismount updates its whole descendant tree, moving
+        // the rider through the -64/+64 attachment geometry before sampling the
+        // next passenger offset. Stop at the nonliving anchor, after the horse's
+        // events accepted the transfer and before the first carrier can eject.
+        Object parent = anchor;
+        for (int i = 1; i < ride.helpers.length; i++) {
+            Object child = Reflect.handle(ride.helpers[i]);
+            access.positionRider(parent, child);
+            access.shape(child);
+            parent = child;
+        }
+        Object rider = Reflect.handle(ride.rider);
+        access.positionRider(parent, rider);
+        Method passenger = access.entityClass.getDeclaredMethod("calculatePassengerTransition", transition.getClass(), access.entityClass);
+        Object result = Reflect.call(passenger, anchor, transition, rider);
+        // Resolve every native relative flag before cleanup can perform a living
+        // dismount. Rotation/velocity remain the upstream player's own transform.
+        Class<?> movement = Class.forName("net.minecraft.world.entity.PositionMoveRotation");
+        Object from = Reflect.call(movement.getMethod("of", access.entityClass), (Object)null, rider);
+        Object to = Reflect.call(movement.getMethod("of", transition.getClass()), (Object)null, result);
+        Object absolute = Reflect.call(movement.getMethod("calculateAbsolute", movement, movement, Set.class),
+                (Object)null, from, to, Reflect.call(result, "relatives"));
+        result = Reflect.call(result, "withPosition", Reflect.call(absolute, "position"));
+        result = Reflect.call(result, "withRotation", Reflect.call(absolute, "yRot"), Reflect.call(absolute, "xRot"));
+        result = Reflect.call(result, "withVelocity", Reflect.call(absolute, "deltaMovement"));
+        return Reflect.call(result, "withRelatives", Collections.emptySet());
     }
 
     boolean valid(Ride ride) {
