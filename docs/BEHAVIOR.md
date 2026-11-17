@@ -22,7 +22,7 @@ implementation. Implementers must not open predecessor sources or archives.
   Movement, turning, running, jumping, and looking around must not visibly
   oscillate the rider. A newly arriving observer sees the same pose and location
   as an existing observer without requiring either rider to remount.
-- Each port must attach the second rider's seat to the horse's native vehicle
+- Ports from Minecraft 1.19.4 onward must attach the second rider's seat to the horse's native vehicle
   graph, with that horse as the shared root vehicle.
   The attachment must exist on the server and in the vanilla client's passenger
   graph. An independently positioned seat following the horse does not satisfy
@@ -91,8 +91,42 @@ not only a metadata declaration.
   defaults, and lifecycle fixes throughout the 38-release port. A native API
   capability difference must be demonstrated on that exact game and recorded;
   do not silently omit the requested behavior or claim an independent follower
-  is a native attachment. Existing per-target reports predate these fixes and
+  is a native attachment. For the 13 requested releases before 1.19.4, the
+  owner conditionally approved a separately following seat on 15 November:
+  it must retain the same usable riding quality, correct position, client
+  lifetime, late-observer behavior, unobstructed interaction and cleanup.
+  This exception does not waive those requirements. Existing per-target reports predate these fixes and
   require fresh artifact-bound verification.
 - Publish matching complete sources, build instructions, GPL text, compatibility
   matrix, changelog, and checksums. Verify downloaded artifacts after publication.
 - The scope includes publication, not modification of an existing game server.
+
+## Publication preparation standard — 17 November 2026
+
+The owner's current instruction is preparation for publication, using their
+EyeCrasher mod/plugin standard. Do not push source, create a PR/release, upload
+to a platform, or change an existing server during this preparation stage.
+The earlier personal-test publication gate remains in force.
+
+- Keep `/tandemount` as the only project command root. Provide `reload` and
+  `status`; show real active settings and apply administrative permissions.
+- Expose enabled/debug and world/dimension exclusions. Plugins use exact
+  case-sensitive world names; mods use their platform's dimension identifiers.
+  No matching ride may start in an excluded world. Reloading settings must
+  clean up rides that become excluded without disturbing unrelated players.
+- Invalid syntax, types, nonfinite/out-of-range numbers and invalid exclusions
+  must fail reload without replacing the last valid active configuration or
+  rewriting the invalid file. Existing valid saved seat values retain their
+  documented units unless the administrator changes or resets them.
+- A shared horse's portal transfer must never derive player coordinates from
+  a dismounted helper or transfer helpers as ordinary cloned entities. The
+  second seat ends on a world change; any accepted second-player teleport
+  uses the native destination and respects cancellation and native cooldown.
+- Runtime file names are `tandemount-bukkit-VERSION+MINECRAFT.jar` and
+  `tandemount-LOADER-VERSION+MINECRAFT.jar`. Version and loader metadata inside
+  each JAR must match the artifact. Test fixtures remain separate.
+- Preserve the existing source history and Git identity. English public docs,
+  author EyeCrasher, GitHub eyecrasher0, GPL-3.0-only, no icon until supplied.
+- Source exports must build without private paths or local steering files.
+  Publishable compatibility means exact artifact-bound native verification,
+  not upstream availability or a neighboring release's passing test.
