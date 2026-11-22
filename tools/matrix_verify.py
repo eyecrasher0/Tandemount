@@ -124,6 +124,8 @@ def main():
     parser.add_argument("--mode", choices=["modern", "plugins"], required=True)
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--port-base", type=int, default=27700,
+                        help="First loopback port for the plugin workers")
     parser.add_argument("--versions", nargs="+")
     parser.add_argument("--platforms", nargs="+")
     parser.add_argument("--exclude", action="append", default=[], help="Skip platform@minecraft reserved by another worker")
@@ -136,6 +138,8 @@ def main():
         parser.error("--accept-eula is required for disposable local Minecraft tests")
     if not 1 <= args.jobs <= 4:
         parser.error("jobs must be between 1 and 4")
+    if not 1024 <= args.port_base <= 65536 - args.jobs:
+        parser.error("Plugin worker ports must be between 1024 and 65535")
     output = args.output or ROOT / ".agents" / ("matrix-" + args.mode)
     output.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
@@ -206,7 +210,7 @@ def main():
                        "--accept-eula", "--network-test", "--restart-test", "--timeout", str(args.timeout)]
         else:
             command = [sys.executable, "tools/plugin-runtime.py", "--minecraft", version, "--platform", platform,
-                       "--accept-eula", "--port", str(27700 + slot), "--timeout", str(args.timeout)]
+                       "--accept-eula", "--port", str(args.port_base + slot), "--timeout", str(args.timeout)]
         code = run_process(command, output / (key + "-native.log"), env, args.timeout * 2 + 45)
         result["native_exit_code"] = code
         if native_path.is_file():
