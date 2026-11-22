@@ -633,6 +633,16 @@ The ignored isolated `final-validation.json` binds the unchanged runtime JARs,
 fixture source, SDKs, exported packet registries, and complete native reports
 to exact hashes. These are native/protocol checks without human visual review.
 
+### Spigot 1.21.2–1.21.4 attachment tick binding
+
+The same exact BuildTools SDKs for revisions `4347`, `4398`, and `4458`
+declare the public instance method `Display.h()V`. The official Mojang server
+mappings listed above identify it as `Display.tick()`. Each SDK also declares
+`Interaction.h()V` and supplies the llama's inherited `h()V` through its mob
+class hierarchy. The display's `l()` method returns `AxisAlignedBB`.
+The attachment adapter binds the audited zero-argument void tick on these
+exact versions and checks that the selected method can be overridden.
+
 ### Portable plugin attachment API audit
 
 The plugin attachment adapter was generalized in the same independent clean-room
