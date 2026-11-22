@@ -15,7 +15,6 @@ import java.util.*;
 /** Disposable runtime fixture. It is never included in the release plugin. */
 public final class NativeFixture extends JavaPlugin implements Listener {
     private final Method quietBlockSetter = findQuietBlockSetter();
-    private static final int RETURN_CHUNK = 8;
     private TandemountPlugin tandem;
     private Horse horse;
     private Player driver, rider, third;
@@ -33,7 +32,6 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private Location otherWorldDestination;
     private volatile World otherWorldSetup;
     private volatile int otherWorldX, otherWorldZ;
-    private volatile World returnWorld;
     private volatile World initialHomeWorld;
     private volatile boolean initialHomeRetained;
     private volatile World unloadWorld;
@@ -104,7 +102,6 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         // Tandemount plugin or any production-world loading policy.
         if (((event.getWorld() == otherWorldSetup && event.getChunk().getX() == otherWorldX
                     && event.getChunk().getZ() == otherWorldZ)
-                || (event.getWorld() == returnWorld && event.getChunk().getX() == RETURN_CHUNK && event.getChunk().getZ() == RETURN_CHUNK)
                 || (initialHomeRetained && event.getWorld() == initialHomeWorld
                     && event.getChunk().getX() == 0 && event.getChunk().getZ() == 0))
                 && event instanceof Cancellable)
@@ -161,13 +158,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         initialHomeRetained = true;
                         retainPreparedChunk(world, 0, 0);
                         for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) setFixtureBlock(world.getBlockAt(x, 63, z), Material.STONE);
-                        returnWorld = world;
-                        prepareChunk(world, RETURN_CHUNK, RETURN_CHUNK, guarded("prepare-return-chunk", new Runnable() { public void run() {
-                            retainPreparedChunk(world, RETURN_CHUNK, RETURN_CHUNK);
-                            prepareLanding(world, RETURN_CHUNK, RETURN_CHUNK);
-                            try { prepareOtherWorld(world); }
-                            catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
-                        }}));
+                        prepareOtherWorld(world);
                     } catch (Throwable failure) { failed("prepare-world", failure); }
                 }});
             } catch (Throwable failure) { failed("prepare-world", failure); }
@@ -691,11 +682,6 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private void evacuateAndUnload(final World originalWorld, final Runnable complete) {
         Location origin = horse.getLocation();
         unloadX = origin.getBlockX() >> 4; unloadZ = origin.getBlockZ() >> 4;
-        // The return chunk is selected from the fixture's prepared platform and
-        // must already be loaded. We never reload the chunk under test.
-        if ((unloadX == RETURN_CHUNK && unloadZ == RETURN_CHUNK) || !originalWorld.isChunkLoaded(RETURN_CHUNK, RETURN_CHUNK))
-            throw new IllegalStateException("Prepared retained return chunk must be loaded and separate from the unload arena");
-        final Location returnDestination = new Location(originalWorld, (RETURN_CHUNK << 4) + 8.5, 64, (RETURN_CHUNK << 4) + 8.5);
         unloadObserved = false; unloadContainedHelper = false; unloadWorld = originalWorld;
         require("ride-active-before-native-chunk-evacuation", rider.isInsideVehicle() && countSeats() == 1);
         transferAll(otherWorldDestination, new Runnable() { public void run() {
@@ -707,8 +693,14 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                                 + unloadObserved + ", liveHelper=" + unloadContainedHelper + ", loaded=" + originalWorld.isChunkLoaded(unloadX, unloadZ)
                                 + ". Removed/dead native references are not live helpers. This does not isolate unloading an occupied ride.");
                 unloadWorld = null;
-                transferAll(returnDestination, new Runnable() { public void run() {
-                    horse = newHorse(); mount(horse, driver); interact(rider);
+                afterOwned(driver, 1, new Runnable() { public void run() {
+                    // Retry among the connected riders in the active landing
+                    // world. The chunk under test remains unloaded.
+                    require("retry-target-already-active", rider.getWorld() == otherWorldDestination.getWorld()
+                            && driver.getWorld() == rider.getWorld() && !originalWorld.isChunkLoaded(unloadX, unloadZ));
+                    horse = newHorse();
+                    if (!horse.isValid()) throw new IllegalStateException("The retry horse did not become a native tracked entity");
+                    mount(horse, driver); interact(rider);
                     afterOwned(rider, 6, new Runnable() { public void run() {
                         require("retry-after-native-chunk-unload", rider.isInsideVehicle() && countSeats() == 1);
                         complete.run();

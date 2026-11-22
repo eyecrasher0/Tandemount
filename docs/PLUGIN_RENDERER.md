@@ -137,13 +137,13 @@ player's entity scheduler and uses the upstream `UNMOUNT` flag while omitting
 `LOAD_CHUNK`. Native unmounting is part of that transfer. The fixture then
 confirms the actual destination world, seat cleanup, and a successful retry.
 
-Setup deliberately prepares a secondary-dimension landing chunk and a distant
-return chunk in the disposable worlds. Folia prepares these asynchronously and
-edits their blocks only on their region owners. Fixture chunk tickets, or a
-legacy unload-cancellation listener, retain those two landing chunks. Old
-world APIs also disable spawn retention in the disposable primary world. These
-operations belong to the fixture; Tandemount's runtime does not load or retain
-chunks.
+Setup prepares a secondary-dimension landing chunk in a disposable world.
+Folia prepares it asynchronously and edits its blocks on the region owner.
+A fixture chunk ticket or legacy unload-cancellation listener retains the
+landing chunk. After all four real clients evacuate the original chunk, the
+fixture observes its native unload and confirms that a new ride can start in
+the active landing chunk. The original-world return is tested separately
+during the cross-world transfer check.
 
 During setup, a separate temporary fixture ticket keeps the initial home chunk
 available until the three real players arrive. The fixture removes that ticket
