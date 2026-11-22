@@ -199,6 +199,8 @@ final class NativeAttachment {
         }
         if (!access.mount(ride.seat, ride.rider)) throw new IllegalStateException("Native passenger mount cancelled");
         place(ride);
+        ride.plugin.packets.trackCarrierRotation(ride.driver.getUniqueId(),
+                carrier(ride, 0).getEntityId(), carrier(ride, 1).getEntityId());
     }
 
     private void scale(Entity carrier, double value) throws ReflectiveOperationException {

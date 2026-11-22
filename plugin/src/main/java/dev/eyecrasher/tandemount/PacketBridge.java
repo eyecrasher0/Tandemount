@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Preserves native tracking and orders the attachment's native metadata. */
 final class PacketBridge {
     private final TandemountPlugin plugin;
+    private final DriverCarrierRotation driverCarrierRotation;
     private final ConcurrentMap<Integer, Integer> edges = new ConcurrentHashMap<Integer, Integer>();
     private final ConcurrentMap<Integer, Integer> seatTypes = new ConcurrentHashMap<Integer, Integer>();
     private final ConcurrentMap<Integer, Object> dimensionRefresh = new ConcurrentHashMap<Integer, Object>();
@@ -18,7 +19,11 @@ final class PacketBridge {
     private final ConcurrentMap<Class<?>, MountCodec> codecs = new ConcurrentHashMap<Class<?>, MountCodec>();
     private static final String HANDLER = "tandemount_seat";
 
-    PacketBridge(TandemountPlugin plugin) { this.plugin = plugin; }
+    PacketBridge(TandemountPlugin plugin) throws ReflectiveOperationException {
+        this.plugin = plugin;
+        driverCarrierRotation = "26.3".equals(plugin.nativeAccess.minecraft) && "Paper".equals(org.bukkit.Bukkit.getName())
+                ? new DriverCarrierRotation() : null;
+    }
     void add(int horse, int seat) { edges.put(horse, seat); }
     void remove(final int horse, final int seat) {
         final List<Object> active = new ArrayList<Object>(pipelines.values());
@@ -37,7 +42,15 @@ final class PacketBridge {
     void addSeat(int seat, int type) { seatTypes.put(seat, type); }
     void refreshDimensions(int entity, Object posePacket) { dimensionRefresh.put(entity, posePacket); }
     boolean hasDimensionRefresh(int entity) { return dimensionRefresh.containsKey(entity); }
-    void removeDimensionRefresh(int entity) { dimensionRefresh.remove(entity); }
+    void trackCarrierRotation(UUID driver, int first, int second) {
+        if (driverCarrierRotation == null) return;
+        driverCarrierRotation.track(driver, first);
+        driverCarrierRotation.track(driver, second);
+    }
+    void removeHelper(int entity) {
+        dimensionRefresh.remove(entity);
+        if (driverCarrierRotation != null) driverCarrierRotation.remove(entity);
+    }
 
     void install(final Player player) throws ReflectiveOperationException {
         Object nativePlayer = Reflect.handle(player);
@@ -64,6 +77,7 @@ final class PacketBridge {
         final ClassLoader loader = channel.getClass().getClassLoader();
         final String prefix = channel.getClass().getName().startsWith("net.minecraft.util.") ? "net.minecraft.util.io.netty" : "io.netty";
         final Class<?> outbound = Class.forName(prefix + ".channel.ChannelOutboundHandler", true, loader);
+        final UUID id = player.getUniqueId();
         final Object handler = Proxy.newProxyInstance(loader, new Class<?>[] {outbound}, new InvocationHandler() {
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 String name = method.getName();
@@ -75,7 +89,7 @@ final class PacketBridge {
                 Object[] forwarded = Arrays.copyOfRange(args, 1, args.length);
                 if (name.equals("write")) {
                     try {
-                        forwarded[0] = filter(forwarded[0]);
+                        forwarded[0] = filter(id, forwarded[0]);
                         Object refresh = dimensionRefresh(forwarded[0]);
                         if (refresh != null) {
                             // This handler may run after vanilla's bundle
@@ -97,7 +111,6 @@ final class PacketBridge {
                 return null;
             }
         });
-        final UUID id = player.getUniqueId();
         Reflect.call(loop, "execute", new Runnable() {
             public void run() {
                 try {
@@ -117,7 +130,7 @@ final class PacketBridge {
 
     boolean installed(Player player) { return pipelines.containsKey(player.getUniqueId()); }
 
-    private Object filter(Object packet) throws ReflectiveOperationException {
+    private Object filter(UUID viewer, Object packet) throws ReflectiveOperationException {
         if (seatTypes.isEmpty()) return packet;
         String name = packet.getClass().getSimpleName();
         if (name.equals("PacketPlayOutSpawnEntityLiving")) {
@@ -139,7 +152,7 @@ final class PacketBridge {
                     && Iterable.class.isAssignableFrom(m.getReturnType())) {
                 List<Object> changed = new ArrayList<Object>();
                 for (Object nested : (Iterable<?>)Reflect.call(m, packet)) {
-                    Object filtered = filter(nested);
+                    Object filtered = filter(viewer, nested);
                     if (filtered.getClass().getSimpleName().equals("ClientboundBundlePacket")) {
                         boolean expanded = false;
                         for (Method contents : filtered.getClass().getMethods()) if (contents.getParameterTypes().length == 0
@@ -161,7 +174,8 @@ final class PacketBridge {
                 throw new NoSuchMethodException("Native bundle packet constructor");
             }
         }
-        if (!name.equals("PacketPlayOutMount") && !name.equals("ClientboundSetPassengersPacket")) return packet;
+        if (!name.equals("PacketPlayOutMount") && !name.equals("ClientboundSetPassengersPacket"))
+            return driverCarrierRotation == null ? packet : driverCarrierRotation.shorten(viewer, packet);
         MountCodec codec = codecs.get(packet.getClass());
         if (codec == null) {
             codec = new MountCodec(packet.getClass());
@@ -206,7 +220,13 @@ final class PacketBridge {
             });
         } catch (ReflectiveOperationException e) { plugin.debug("Could not reach a disconnected network filter", e); }
     }
-    void close() { for (UUID id : pipelines.keySet()) uninstall(id); edges.clear(); seatTypes.clear(); dimensionRefresh.clear(); }
+    void close() {
+        for (UUID id : pipelines.keySet()) uninstall(id);
+        edges.clear();
+        seatTypes.clear();
+        dimensionRefresh.clear();
+        if (driverCarrierRotation != null) driverCarrierRotation.clear();
+    }
 
     private static final class MountCodec {
         final Field vehicle, passengers;

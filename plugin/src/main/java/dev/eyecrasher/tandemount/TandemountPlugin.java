@@ -307,7 +307,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             NativeSeat.RIDES.remove(ride.nativeSeat, ride);
             for (Entity helper : ride.helpers) try {
                 NativeSeat.RIDES.remove(Reflect.handle(helper), ride);
-                if (packets != null) packets.removeDimensionRefresh(helper.getEntityId());
+                if (packets != null) packets.removeHelper(helper.getEntityId());
             }
             catch (ReflectiveOperationException failure) { debug("Native attachment retirement details", failure); }
             if (packets != null) {
