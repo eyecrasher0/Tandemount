@@ -273,3 +273,40 @@ the horse as the root. An abrupt 90-degree turn with delayed helper yaw reached
 root path and player geometry stand-ins. The delays are not measured network
 RTTs, and this probe does not establish either player's rendered view or a
 fix for the owner's report.
+
+### Driver latency capture
+
+`tools/plugin-perspective-test.py` also consumes the owner fixture's real
+per-connection packet captures and timestamped outgoing driver controls. For
+the driver component replay, the recorded local root path is injected before
+the original passenger ticks; passenger and observer replays use their own
+received root packets. The same 1/16-block relative-position threshold applies
+to all three roles, at two client-tick phases. The tool binds the candidate,
+native report, packet streams, controls, protocol export, test sources and
+client classpath to hashes.
+
+With the fix4 artifact and a loopback proxy adding 200 ms in each direction
+only for the driver, the driver replay fails this threshold: maximum errors
+are 0.1335 and 0.1235 blocks. Passenger and observer maxima are 0.0375 blocks.
+All six replays retain the horse root, and interaction rays hit no ride helper.
+The server's ordinary riding/menu suite still passes; that does not negate
+this driver-view component failure.
+
+```sh
+python3 tools/plugin-perspective-test.py \
+  --native-report /path/to/owner-run/result.json \
+  --artifact /path/to/exact-tested-plugin.jar \
+  --client-classpath /path/to/official-client.jar:dependency1.jar:dependency2.jar \
+  --output /path/to/perspective-result.json
+```
+
+Use an exact, complete official Minecraft 26.3 client classpath and Java 25.
+The path separator is `:` on Linux and `;` on Windows. An optional
+`--transport-report` binds a separately retained loopback-proxy timing report.
+The tool does not itself start a server or add network latency.
+
+This is an original-entity component replay with controlled root inputs and
+Mannequin player geometry. It does not execute `LocalPlayer` input/prediction,
+the player renderer, a real camera or a human visual test. It is useful as a
+regression that exposes a server/observer-only blind spot; a component PASS
+does not establish the owner's complete visual acceptance criteria.
