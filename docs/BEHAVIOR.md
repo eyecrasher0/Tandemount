@@ -22,6 +22,13 @@ implementation. Implementers must not open predecessor sources or archives.
   Movement, turning, running, jumping, and looking around must not visibly
   oscillate the rider. A newly arriving observer sees the same pose and location
   as an existing observer without requiring either rider to remount.
+  The owner reported that a high-latency driver can see the passenger lag while
+  the passenger's own view looks normal. Attachment must therefore be checked
+  independently from driver, passenger and observer perspectives, including
+  delayed driver connections. A server-correct position and an observer-only
+  replay do not establish that the locally controlled horse stays aligned with
+  the passenger. The owner's GSit player-on-player comparison specifies the
+  desired rigid behavior; it does not authorize copying another implementation.
 - Ports from Minecraft 1.19.4 onward must attach the second rider's seat to the horse's native vehicle
   graph, with that horse as the shared root vehicle.
   The attachment must exist on the server and in the vanilla client's passenger
