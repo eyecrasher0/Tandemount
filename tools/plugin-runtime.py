@@ -394,9 +394,8 @@ def main():
     shutil.copy2(args.fixture, run / 'plugins/TandemountNativeFixture.jar')
     config = run / 'plugins/Tandemount'
     config.mkdir()
-    shutil.copy2(ROOT / 'plugin/src/main/resources/config.yml', config / 'config.yml')
-    with (config / 'config.yml').open('a') as file:
-        file.write('\ndebug: true\n')
+    default_config = (ROOT / 'plugin/src/main/resources/config.yml').read_text()
+    (config / 'config.yml').write_text(default_config.replace('debug: false', 'debug: true'))
     fixture_config = run / 'plugins/TandemountNativeFixture'
     (run / 'eula.txt').write_text('eula=true\n')
     (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
