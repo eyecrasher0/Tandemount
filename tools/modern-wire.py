@@ -203,6 +203,7 @@ def main():
         checks.append("command-chat-has-color-and-style")
         checks.append("command-chat-has-clickable-adjustments")
         chosen = next(command for command in re.findall(pattern, chat) if command.endswith(b"height +"))
+        default_attachment_end_ns = time.monotonic_ns()
         existing.command(chosen.decode())
         wait(lambda value: value.get("height") == .875 and value.get("rear") == .5, "actual clicked adjustment command")
         checks.append("command-click-adjustment-applies")
@@ -242,6 +243,7 @@ def main():
         result.update(result="pass", joined_play=True, connection_held=True, initial_state=initial,
                       mounted_state=mounted, before_motion_state=before_motion, final_state=state(),
                       mount_window={"start_ns": mount_started, "end_ns": mount_finished},
+                      default_attachment_end_ns=default_attachment_end_ns,
                       movement_window={"start_ns": mark, "end_ns": motion_end}, observer_parent_graphs={client.name: client.parents for client in clients})
     except Exception as error:
         result["errors"].append(str(error))

@@ -123,7 +123,10 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
     if (network_test and result.get("native_fixture") and result.get("connected_clients") and code == 0
             and tuple(map(int, version.split("."))) >= (1, 19, 4)):
         from attachment_evidence import verify
-        cutoff = network.get("movement_window", {}).get("start_ns")
+        # This probe uses the recorded original geometry before the fixture
+        # sends any tuning commands. A server-side reset can be visible before
+        # its tracker metadata reaches either connected observer.
+        cutoff = network.get("default_attachment_end_ns")
         proof = verify(version, artifact, run_dir, run_dir / "tandemount-protocol.properties", {
             "existing": {"capture": run_dir / "connected-client.json", "trace": run_dir / "TmWireObserver-wire.json", "end_ns": cutoff},
             "late": {"capture": run_dir / "connected-client.json", "trace": run_dir / "TmWireLate-wire.json", "end_ns": cutoff},
