@@ -692,6 +692,56 @@ retain exact distribution refs, mapping URLs and hashes, native/client class
 hashes and declaration listings. Compilation, real server/network assertions,
 original client execution and human visual review remain separate evidence.
 
+### Spigot 1.21.2–1.21.4 attachment tick audit
+
+The official Mojang server mappings in the preceding table identify
+`Display.tick()`, `Interaction.tick()` and `AbstractHorse.tick()` as `h()`
+on 1.21.2, 1.21.3 and 1.21.4. The neighboring 1.21.1 and 1.21.5 mappings name
+those methods `l()` and `g()`, respectively.
+
+`javap -p` on the exact server SDKs confirmed that `BlockDisplay` inherits
+its tick from `Display`, and `Llama` inherits it from `AbstractHorse`
+(`EntityLlama` and `EntityHorseAbstract` in Spigot). The loaded Spigot
+declarations expose the public virtual `void h()` on those owners and
+`Interaction`. The named SDKs declare `void tick()` on the same owners.
+The Spigot SDKs were extracted from the BuildTools distributions' nested
+`META-INF/versions/spigot-<version>-R0.1-SNAPSHOT.jar` members. The named
+SDKs came from the official distributions' bootstrapped `versions/` trees.
+
+| Minecraft | Upstream | Distribution SHA-256 | Native SDK SHA-256 |
+|---|---|---|---|
+| 1.21.2 | [Spigot revision 4347](https://hub.spigotmc.org/versions/4347.json) | `d18b747cf91f6b5f6882c0052b5395bb718dc47374a94074c51c9d425427d5c5` | `83043639e0ae6a64330c18ba0ede4895b14437157ea36bdf3303bc4edaf393c9` |
+| 1.21.3 | [Spigot revision 4398](https://hub.spigotmc.org/versions/1.21.3.json) | `64d3f5e56f6a7924219ef81ee4b513d369b2b237218986290a52c6f484d84171` | `83e479f5693198c335368b77c34850079942f16d1c8064664e965f63966c2f5e` |
+| 1.21.3 | [Paper build 83](https://fill-data.papermc.io/v1/objects/87e973e1d338e869e7fdbc4b8fadc1579d7bb0246a0e0cf6e5700ace6c8bc17e/paper-1.21.3-83.jar) | `87e973e1d338e869e7fdbc4b8fadc1579d7bb0246a0e0cf6e5700ace6c8bc17e` | `2f7bffaf0ab60e4e8e3167709e25bf3add7fed7741268fd54cc655b5eb849e63` |
+| 1.21.3 | [Purpur build 2358](https://api.purpurmc.org/v2/purpur/1.21.3/2358/download) | `445acfeead6380a533b45e75f0703a2668f5a976b9d65d477a0307d7032be56e` | `4d0da701d1934b7aa953c806742ce85b8c87b58fad0d0a4f0c51a9d7a15c764c` |
+| 1.21.4 | [Spigot revision 4458](https://hub.spigotmc.org/versions/1.21.4.json) | `0c28e9c54e4cea11d2ae49afa951b4855652aecd87c13d683465e5f16eebb767` | `1af9f1e120421efad091f782f96f61bbadf5061e81274fa738996ca7b22ad6c4` |
+| 1.21.4 | [Paper build 232](https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar) | `5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc` | `9cd431f4b77d66a3bd565c01720dae617843684a363c4d9ad2eab590f8450819` |
+| 1.21.4 | [Purpur build 2416](https://api.purpurmc.org/v2/purpur/1.21.4/2416/download) | `5d5e7fbac52581f468768260a6ca3fa5879dcb7839ecf2bfbba342a1c639793d` | `7cf7a7c6ee613cf4b179ea3d5be4fe88d776670a683862221889868f70a455c8` |
+| 1.21.4 | [Folia build 6](https://fill-data.papermc.io/v1/objects/dcf2333211c1468c8eddc482bc8549600818cc661a709124a79c752f8fa2ac3a/folia-1.21.4-6.jar) | `dcf2333211c1468c8eddc482bc8549600818cc661a709124a79c752f8fa2ac3a` | `87948b9124763a55bd5a7cb883c0de848baa5e2c1bb3f1d6c56c4f82218dc871` |
+
+The 1.21.2 Spigot baseline disabled the plugin during startup with
+`NoSuchMethodException: Audited native display tick`. The attachment
+adapter now prefers the named tick and resolves the mapped tick from the
+exact game version's resource entry. The resolved method name binds the
+existing helper tick overrides in the same Bukkit JAR on each core.
+
+The exact artifacts below were built with `tools/plugin-build.py --fixture`
+and exercised with `tools/plugin-runtime.py` against the distributions above.
+Each row reuses one Bukkit JAR across its listed cores.
+
+| Minecraft | Cores | Bukkit JAR SHA-256 |
+|---|---|---|
+| 1.21.2 | Spigot | `5eee9916739f1ce55510c36470d54df7c75b7a13e263f72c8b2521de1f066f2f` |
+| 1.21.3 | Paper, Purpur, Spigot | `818aee06465c45739013320f9a3037577f9793b42f36cf162f21824a704b4967` |
+| 1.21.4 | Folia, Paper, Purpur, Spigot | `858baa81cc8b7617aa8fa2108abf15ab5a288b899d239fe558e1b43fcf235f72` |
+
+The native suite exercises mount and dismount cancellation, native horse
+control and attachment, settings, cleanup, serialization refusal and
+restart. The loopback captures were replayed through original client packet
+codecs and controlled attachment components for both existing and late
+observers. Rendered client review and delayed local driver prediction remain
+open for these exact artifacts.
+
 ### Horse passenger rotation at pairing from 1.21.9
 
 The stationary placement audit used the current Tandemount sources, exact

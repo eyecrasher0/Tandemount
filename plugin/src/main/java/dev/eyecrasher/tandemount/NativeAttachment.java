@@ -28,8 +28,10 @@ final class NativeAttachment {
         Class<?> entityType = access.seatConstructor.getParameterTypes()[0];
         Class<?> level = access.seatConstructor.getParameterTypes()[1];
         Constructor<?> nativeConstructor = base.getConstructor(entityType, level);
+        String mappedTick = alias("displayTick");
+        String[] tickNames = mappedTick == null ? new String[] {"tick", "l", "g"} : new String[] {"tick", mappedTick};
         String tick = null;
-        for (String name : new String[] {"tick", "l", "g"}) try {
+        for (String name : tickNames) try {
             Method method = access.seatBase.getSuperclass().getDeclaredMethod(name);
             if (method.getReturnType() == void.class && !Modifier.isStatic(method.getModifiers())) { tick = name; break; }
         } catch (NoSuchMethodException absent) { }
