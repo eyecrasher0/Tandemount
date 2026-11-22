@@ -119,8 +119,11 @@ def load_ids(path):
 def accept_teleport(version, body, previous=(0.0, 0.0, 0.0, 0.0, 0.0)):
     parts = tuple(map(int, version.split(".")))
     if parts < (1, 21, 2):
+        x, y, z, yaw, pitch, flags = struct.unpack_from(">dddffB", body)
         identifier, _ = read_varint(body, 33)
-        return varint(identifier), previous
+        position = tuple(value + previous[index] if flags & (1 << index) else value
+                         for index, value in enumerate((x, y, z, yaw, pitch)))
+        return varint(identifier), position
     identifier, offset = read_varint(body)
     if parts < (26, 3):
         return varint(identifier), previous

@@ -14,6 +14,12 @@ from vanilla_protocol import VanillaClient, accept_teleport, frame, load_ids, re
 
 
 class FramingTest(unittest.TestCase):
+    def test_older_teleport_records_position_for_next_movement(self):
+        packet = struct.pack(">dddffB", 2.0, 80.0, -4.0, 5.0, 15.0, 1 | 8) + varint(300)
+        payload, position = accept_teleport("1.16.5", packet, (10.0, 64.0, 2.0, 90.0, 0.0))
+        self.assertEqual(payload, varint(300))
+        self.assertEqual(position, (12.0, 80.0, -4.0, 95.0, 15.0))
+
     def test_26_3_teleport_acknowledges_position_and_rotation(self):
         packet = varint(42) + struct.pack(">ddddddffI", 3.0, 64.0, -4.0, 0.0, 0.0, 0.0, 90.0, 15.0, 0)
         payload, position = accept_teleport("26.3", packet)
