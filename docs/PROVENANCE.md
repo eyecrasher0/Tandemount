@@ -985,3 +985,54 @@ Reproduction uses `python3 tools/plugin-build.py --all --fixture` and
 `python3 tools/plugin-runtime.py --platform paper --minecraft 26.3 --accept-eula`.
 Select `--platform folia` for the Folia check. The artifact-bound logs, SDK
 listings, and client replay reports are retained in ignored evidence storage.
+
+### Paper 1.7.10 late-observer fixture audit
+
+The official Paper 1.7.10 build 2025 identified itself as
+`git-PaperSpigot-ab9e48b`. Its patched SDK hash is recorded above.
+`DedicatedPlayerList` reads `view-distance` and `PlayerList.d()` passes that
+setting to `PlayerChunkMap.getFurthestViewableBlock`, which returns
+`16 × view-distance − 16`. `EntityTracker.addEntity` applies that cap.
+`EntityTrackerEntry.updatePlayer` then checks horizontal range and chunk
+visibility before pairing. For a tracked vehicle or passenger it emits the
+native spawn before its corresponding attachment packet.
+[Official Paper distribution](https://fill-data.papermc.io/v1/objects/33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185/paper-1.7.10-2025.jar).
+
+The failing fixture set `view-distance=2`, which capped native entity tracking
+at 16 blocks. The late observer was at Z `8.5` and the driven horse was logged
+at Z `29.13` just after the late-observer check. During the late capture the socket
+received the helper spawn and an attachment mentioning the second rider,
+while the horse and both ridden-player entity spawns were absent. The Mojang
+1.7.10 client JAR SHA-256 is
+`a4fc2284657544e0f4bcc964f927c2fda3e3a205178ed1d5d58883aaf9780cce`.
+Forge Maven's 1.7.10 SRG archive SHA-256
+`d49df5c445dcf00ada532ab3b0e4283bf4b05ac13f210647658dfd3cec8b34c2`
+identifies `NetHandlerPlayClient`'s `S1BPacketEntityAttach` handler. That
+handler looks up both endpoints immediately. It returns for an absent remote
+passenger and cannot bind an absent vehicle.
+[Mojang version metadata](https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json),
+[Forge-hosted MCP mappings](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp/1.7.10/mcp-1.7.10-srg.zip).
+
+The disposable Paper 1.7.10 runner uses `view-distance=4`, giving the arena a
+48-block native tracking cap after the driver moves the horse. The 1.7.10
+packet checks now require the observed entity and player spawns before counting
+either mount edge. A follow-up run received both usable edges but the horse
+coasted past Z `32`, the previous end of the fixture floor, and fell during
+the lifecycle checks. The 1.7.10 fixture floor now extends to Z `64` and the
+driver input sequence still sends 30 forward inputs.
+
+The passing run used the same production JAR bytes as the failing run,
+SHA-256 `c78f242eb0d4f1998b544fc26c2c50ebc491a643e824752ac2435691914429b5`.
+Its separate fixture SHA-256 is
+`94dab04d37a0fe3678b7cbbe1cee5a1a770dd16f0cd6c387e912344a60f0e8a8`.
+The late observer received both player spawns, the horse and helper spawns,
+and the natural driver-to-horse and second-rider-to-helper attachments after
+both endpoints of each edge had spawned. The run passed 96 native assertions,
+10 protocol 5 checks, two menu checks, live serialization refusal, a scan of
+1,906 saved chunks, and native restart. Human visual verification remains
+pending.
+
+Reproduction uses `python3 tools/plugin-build.py --minecraft 1.7.10 --fixture`
+and `python3 tools/plugin-runtime.py --platform paper --minecraft 1.7.10 --accept-eula`.
+The exact upstream bytecode listings and observations are retained in ignored
+evidence storage.

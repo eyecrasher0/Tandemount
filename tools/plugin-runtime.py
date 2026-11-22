@@ -253,6 +253,8 @@ def packet_checks(clients, graph, minecraft):
         helpers = [graph['helper_' + str(i)] for i in range(graph.get('helper_count', 0))]
         spawn_ids = {client.identifier('game', 'clientbound', 'minecraft:add_entity', 'PacketPlayOutSpawnEntity', 'ClientboundAddEntityPacket'),
                      client.identifier('game', 'clientbound', 'minecraft:add_mob', 'PacketPlayOutSpawnEntityLiving', 'ClientboundAddMobPacket')}
+        if oldest:
+            spawn_ids.add(client.identifier('game', 'clientbound', 'PacketPlayOutNamedEntitySpawn'))
         mount_id = client.identifier('game', 'clientbound', 'minecraft:set_passengers', 'PacketPlayOutMount', 'ClientboundSetPassengersPacket')
         attach_id = client.identifier('game', 'clientbound', 'PacketPlayOutAttachEntity')
         position_ids = {client.identifier('game', 'clientbound', 'minecraft:entity_position_sync', 'ClientboundEntityPositionSyncPacket'),
@@ -278,7 +280,9 @@ def packet_checks(clients, graph, minecraft):
                         passenger, offset = read_vi(body, offset); passengers.append(passenger)
                     mounts.append((vehicle, passengers))
                 if oldest and packet_id == attach_id and len(body) >= 9 and body[8] == 0:
-                    passenger, vehicle = struct.unpack('>ii', body[:8]); mounts.append((vehicle, [passenger]))
+                    passenger, vehicle = struct.unpack_from('>ii', body)
+                    if passenger in spawned and vehicle in spawned:
+                        mounts.append((vehicle, [passenger]))
                 if packet_id in position_ids:
                     if oldest:
                         entity, offset = struct.unpack_from('>i', body)[0], 4
@@ -398,7 +402,10 @@ def main():
     (config / 'config.yml').write_text(default_config.replace('debug: false', 'debug: true'))
     fixture_config = run / 'plugins/TandemountNativeFixture'
     (run / 'eula.txt').write_text('eula=true\n')
-    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
+    # Paper 1.7.10 caps entity tracking at (view-distance - 1) * 16 blocks.
+    # Keep the arena within that cap after native driver input moves the horse.
+    view_distance = 4 if args.minecraft == '1.7.10' else 2
+    (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance={view_distance}\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
     (run / 'bukkit.yml').write_text('settings:\n  allow-end: false\n  connection-throttle: 0\n  shutdown-message: Tandemount disposable test complete\nspawn-limits:\n  monsters: 0\n  animals: 0\n  water-animals: 0\n  ambient: 0\n')
     java = java_for(int(metadata['java']), args.java_home)
     command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', str(run / Path(metadata['file']).name), 'nogui']

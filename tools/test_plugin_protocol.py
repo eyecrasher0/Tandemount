@@ -17,13 +17,15 @@ spec.loader.exec_module(runtime)
 class NativePacketClient:
     name = "Observer"
     ids = {"PacketPlayOutSpawnEntity": 14, "PacketPlayOutSpawnEntityLiving": 15,
+           "PacketPlayOutNamedEntitySpawn": 12,
            "PacketPlayOutAttachEntity": 27, "PacketPlayOutEntityTeleport": 24}
 
-    def __init__(self, attachments):
+    def __init__(self, attachments, attach_before_spawns=False):
         # Native 1.7.10: SpawnEntity uses VarInt; AttachEntity and EntityTeleport
         # use fixed 32-bit IDs. The leash discriminator follows both IDs.
-        self.packets = [("game", 14, "0446")]
-        self.packets.extend(("game", 27, struct.pack(">iiB", *edge).hex()) for edge in attachments)
+        spawns = [("game", 12, "00"), ("game", 12, "01"), ("game", 15, "0364"), ("game", 14, "0446")]
+        mounts = [("game", 27, struct.pack(">iiB", *edge).hex()) for edge in attachments]
+        self.packets = mounts + spawns if attach_before_spawns else spawns + mounts
         self.packets.extend(("game", 24, struct.pack(">iiiiBB", 4, x, 2064, 226, 0, 0).hex())
                             for x in (248, 245, 243))
 
@@ -35,9 +37,9 @@ class PluginProtocolTest(unittest.TestCase):
     graph = {"seat": 4, "horse": 3, "driver": 0, "rider": 1,
              "seat_falling_block": 1, "seat_nonliving": 1}
 
-    def results(self, edges):
+    def results(self, edges, attach_before_spawns=False):
         return {r["assertion"]: r["status"] for r in runtime.packet_checks(
-            [NativePacketClient(edges)], self.graph, "1.7.10")}
+            [NativePacketClient(edges, attach_before_spawns)], self.graph, "1.7.10")}
 
     def test_fixed_width_ids_and_trailing_leash_flag(self):
         results = self.results([(0, 3, 0), (1, 4, 0)])
@@ -49,6 +51,11 @@ class PluginProtocolTest(unittest.TestCase):
 
     def test_missing_mount_packets_do_not_pass_from_spawn_alone(self):
         results = self.results([])
+        self.assertEqual(results["observer-horse-has-only-driver-on-client"], "failed")
+        self.assertEqual(results["observer-passenger-seat-edge-received"], "failed")
+
+    def test_legacy_mount_needs_both_endpoints_before_the_attachment(self):
+        results = self.results([(0, 3, 0), (1, 4, 0)], attach_before_spawns=True)
         self.assertEqual(results["observer-horse-has-only-driver-on-client"], "failed")
         self.assertEqual(results["observer-passenger-seat-edge-received"], "failed")
 

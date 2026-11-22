@@ -171,7 +171,11 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         initialHomeWorld = world;
                         initialHomeRetained = true;
                         retainPreparedChunk(world, 0, 0);
-                        for (int x = 0; x <= 32; x++) for (int z = 0; z <= 32; z++) setFixtureBlock(world.getBlockAt(x, 63, z), Material.STONE);
+                        // The legacy server drives the horse from steering input
+                        // and it can coast beyond Z 32 during lifecycle checks.
+                        int floorEndZ = Bukkit.getBukkitVersion().startsWith("1.7.10") ? 64 : 32;
+                        for (int x = 0; x <= 32; x++) for (int z = 0; z <= floorEndZ; z++)
+                            setFixtureBlock(world.getBlockAt(x, 63, z), Material.STONE);
                         prepareOtherWorld(world);
                     } catch (Throwable failure) { failed("prepare-world", failure); }
                 }});
