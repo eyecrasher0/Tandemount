@@ -24,6 +24,9 @@ it normally. A second player right-clicks the occupied horse to join behind the
 driver, then uses the normal dismount action to leave. A third player cannot
 join that ride. Ordinary riding requires no operator privileges.
 
+On sharp turns, the driver may briefly see the passenger lag behind the
+horse. Higher connection latency can make this more noticeable.
+
 Server protection can refuse an interaction or dismount. Supported cancellable
 platform operations retain their final decision. Fabric Loader alone has no
 gameplay event bus; compatibility with additional protection mixins is not

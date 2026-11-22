@@ -22,16 +22,20 @@ implementation. Implementers must not open predecessor sources or archives.
   server protection and visibility decisions, and do not bypass them with a
   deferred operation.
 - The second player appears seated behind the driver at a natural height.
-  Movement, turning, running, jumping, and looking around must not visibly
-  oscillate the rider. A newly arriving observer sees the same pose and location
-  as an existing observer without requiring either rider to remount.
-  The owner reported that a high-latency driver can see the passenger lag while
-  the passenger's own view looks normal. Attachment must therefore be checked
-  independently from driver, passenger and observer perspectives, including
-  delayed driver connections. A server-correct position and an observer-only
-  replay do not establish that the locally controlled horse stays aligned with
-  the passenger. The owner's GSit player-on-player comparison specifies the
-  desired rigid behavior; it does not authorize copying another implementation.
+  The passenger stays aligned without visible oscillation during regular riding
+  on an ordinary connection.
+  Check movement, turning, running, jumping, and looking around independently
+  from driver, passenger and observer perspectives on an ordinary connection.
+  A newly arriving observer sees the same pose and location as an existing
+  observer without requiring either rider to remount. Assess the driver's
+  locally controlled horse in the actual driving view.
+  The owner's GSit player-on-player comparison describes the desired
+  attachment behavior. Use only independent implementations.
+- Sharp turns can produce a temporary passenger offset in the driver's view,
+  especially when the driver's connection has high latency. On 23 November
+  2026, the owner accepted this high-latency limitation for release. Use an
+  ordinary connection for personal acceptance and retain the delayed tests as
+  diagnostic evidence.
 - Ports from Minecraft 1.19.4 onward must attach the second rider's seat to the horse's native vehicle
   graph, with that horse as the shared root vehicle.
   The attachment must exist on the server and in the vanilla client's passenger
