@@ -246,7 +246,8 @@ def main():
                         raise ValueError("Legacy fixture source changed since native execution")
                     build = json.loads(artifact.with_suffix(".json").read_text())
                     java_sources = sorted((ROOT / "mods/legacy/src/main/java").rglob("*.java")) + sorted((ROOT / f"mods/legacy/forge-{mc}/src/main/java").rglob("*.java"))
-                    current = hashlib.sha256(b"".join(p.read_bytes() for p in java_sources)).hexdigest()
+                    current = hashlib.sha256((ROOT / "project.json").read_bytes()
+                                             + b"".join(p.read_bytes() for p in java_sources)).hexdigest()
                     if current != build["source_sha256"] or digest(artifact) != build["sha256"]:
                         raise ValueError("Legacy build source or artifact changed")
                     family, identifier = "legacy", key
