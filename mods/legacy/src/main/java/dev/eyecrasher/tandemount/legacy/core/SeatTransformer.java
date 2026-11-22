@@ -15,7 +15,8 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
             "net.minecraft.entity.Entity", "net.minecraft.entity.EntityLivingBase", "net.minecraft.entity.EntityLiving",
             "net.minecraft.entity.EntityCreature", "net.minecraft.entity.monster.EntityMob",
             "net.minecraft.entity.monster.EntitySilverfish", "net.minecraft.entity.item.EntityArmorStand",
-            "net.minecraft.entity.item.EntityFallingBlock"));
+            "net.minecraft.entity.item.EntityFallingBlock", "net.minecraft.entity.monster.EntitySlime",
+            "net.minecraft.entity.EntityAreaEffectCloud"));
     private static InsnList predicate(String method, boolean two) {
         InsnList p=new InsnList(); p.add(new VarInsnNode(ALOAD,0));
         if (two) p.add(new VarInsnNode(ALOAD,1));
@@ -33,7 +34,8 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
         boolean horse=transformedName.equals("net.minecraft.entity.passive.EntityHorse");
         boolean world=transformedName.equals("net.minecraft.world.World") || transformedName.equals("net.minecraft.world.WorldServer");
         boolean player=transformedName.equals("net.minecraft.entity.player.EntityPlayerMP");
-        boolean login=transformedName.equals("cpw.mods.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.7.10");
+        boolean login=(transformedName.equals("cpw.mods.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.7.10"))
+                || (transformedName.equals("net.minecraftforge.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.8.9"));
         if (!horse && !world && !player && !login && !SEAT_CLASSES.contains(transformedName)) return bytes;
         ClassNode c=new ClassNode(); new ClassReader(bytes).accept(c,0); boolean changed=false;
         for (MethodNode m : c.methods) {
@@ -82,6 +84,8 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
             if (!SEAT_CLASSES.contains(transformedName)) continue;
             if ((n.equals("writeToNBTOptional") || n.equals("writeMountToNBT") || n.equals("writeToNBTAtomically") || n.equals("attackEntityFrom"))
                     && Type.getReturnType(m.desc).getSort()==Type.BOOLEAN) {
+                guard(m,"isSeat",false,true);changed=true;
+            } else if (n.equals("canBeCollidedWith") && m.desc.equals("()Z")) {
                 guard(m,"isSeat",false,true);changed=true;
             } else if (n.equals("onUpdate") && m.desc.equals("()V")) {
                 guard(m,"isSeat",false,false);changed=true;

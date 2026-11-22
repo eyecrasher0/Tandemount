@@ -57,6 +57,12 @@ public final class NativeChecks {
     private static Object get(Object o,String n){try{return field(o,n).get(o instanceof Class?null:o);}catch(Exception ex){throw new IllegalStateException(n,ex);}}
     private static void set(Object o,String n,Object v){try{field(o,n).set(o,v);}catch(Exception ex){throw new IllegalStateException(n,ex);}}
     private static double number(Object o,String n){return ((Number)get(o,n)).doubleValue();}
+    private static double feet(Object entity){return number(entity,"posY")-(oldest?number(entity,"yOffset"):0.0D);}
+    private static Object root(Object entity){
+        Set<Object> visited=Collections.newSetFromMap(new IdentityHashMap<Object,Boolean>());
+        while(vehicle(entity)!=null&&visited.add(entity))entity=vehicle(entity);
+        return entity;
+    }
     @SuppressWarnings({"unchecked","rawtypes"}) private static Object constant(String c,String e){return Enum.valueOf((Class)type(c),e);}
     private static void check(String name,boolean passed){
         System.out.println("[TandemountNative] {\"name\":\""+name+"\",\"passed\":"+passed+"}");
@@ -83,12 +89,15 @@ public final class NativeChecks {
         });
         call(event,"registerServerCommand",proxy);
         verifyRestart();
-        if(oldest&&Boolean.getBoolean("tandemount.native.requireClient"))
+        if(!multi&&Boolean.getBoolean("tandemount.native.requireClient"))
             check("client-required-mod-prevents-vanilla-bridge",!LegacyRuntime.legacyVanillaLogin(new Object(),new Object(),new Object()));
     }
     private static void selectWorld(){world=multi?call(server,"getWorld",0):call(server,"worldServerForDimension",0);}
     private static void dispatch(String[] args){
         if(args.length==0){run();return;}
+        if(args[0].equals("observer-op")){
+            command(server,"op VanillaEarly");System.out.println("[TandemountObserver] {\"phase\":\"admin-ready\"}");return;
+        }
         if(args[0].equals("observer-prepare")){observerPrepare();return;}
         if(args[0].equals("observer-state")){observerState("state");return;}
         if(args[0].equals("observer-move")){
@@ -127,9 +136,11 @@ public final class NativeChecks {
         selectWorld();command(server,"tandemount reset");
         Object players=call(server,"getPlayerList|getConfigurationManager");
         observerDriver=call(players,"getPlayerByUsername","VanillaDriver");observerRider=call(players,"getPlayerByUsername","VanillaRider");
+        dismount(observerDriver);dismount(observerRider); // Clear ordinary mount NBT from a previous disposable run.
         Object early=call(players,"getPlayerByUsername","VanillaEarly");
         call(world,"getChunkFromChunkCoords|getChunk",0,0);
-        call(observerDriver,"setPositionAndUpdate",8.0D,5.0D,8.0D);call(observerRider,"setPositionAndUpdate",8.0D,5.0D,8.0D);
+        call(observerDriver,"setPositionAndUpdate",7.0D,5.0D,8.0D);
+        call(observerRider,"setPositionAndUpdate",9.0D,5.0D,8.0D);
         call(early,"setPositionAndUpdate",12.0D,8.0D,8.0D);
         observerHorse=horse(8.0D);call(observerHorse,"setPositionAndRotation",8.0D,5.0D,8.0D,0.0F,0.0F);
         call(call(observerHorse,"getEntityAttribute",get(type("net.minecraft.entity.SharedMonsterAttributes"),"movementSpeed|MOVEMENT_SPEED")),"setBaseValue",0.0D);
@@ -149,6 +160,10 @@ public final class NativeChecks {
         boolean joined=LegacyRuntime.isSeat(seat)&&vehicle(observerDriver)==observerHorse;
         System.out.println("[TandemountObserver] {\"phase\":\""+phase+"\",\"joined\":"+joined+",\"horse\":"+call(observerHorse,"getEntityId")
                 +",\"driver\":"+call(observerDriver,"getEntityId")+",\"rider\":"+call(observerRider,"getEntityId")+",\"seat\":"+(joined?call(seat,"getEntityId"):-1)
+                +",\"horse_position\":["+number(observerHorse,"posX")+","+number(observerHorse,"posY")+","+number(observerHorse,"posZ")+"]"
+                +",\"rider_feet\":["+number(observerRider,"posX")+","+feet(observerRider)+","+number(observerRider,"posZ")+"]"
+                +",\"seat_root\":"+(joined?call(root(seat),"getEntityId"):-1)
+                +",\"driver_root\":"+call(root(observerDriver),"getEntityId")
                 +",\"position\":"+(joined?("["+number(seat,"posX")+","+number(seat,"posY")+","+number(seat,"posZ")+"]"):"null")+"}");
     }
     public static void interaction(Object event){if(cancelInteraction)call(event,"setCanceled",true);}
@@ -200,6 +215,69 @@ public final class NativeChecks {
         call(world,"spawnEntity|spawnEntityInWorld",h);return h;
     }
     private static boolean hasNoPassengers(Object entity){return multi?((List<?>)call(entity,"getPassengers")).isEmpty():get(entity,"riddenByEntity")==null;}
+    private static Properties configuration(){
+        Properties p=new Properties();
+        try(InputStream in=new FileInputStream("config/tandemount.properties")){p.load(in);return p;}
+        catch(IOException ex){throw new IllegalStateException(ex);}
+    }
+    private static void writeConfiguration(Properties p){
+        try(OutputStream out=new FileOutputStream("config/tandemount.properties")){p.store(out,"Native fixture settings");}
+        catch(IOException ex){throw new IllegalStateException(ex);}
+    }
+    private static void defaultsAndMigration(Object horse,Object rider){
+        check("fresh-config-uses-owner-defaults",Math.abs(feet(rider)-number(horse,"posY")-.8125)<1e-6
+                &&Math.abs(number(rider,"posZ")-number(horse,"posZ")+.5)<1e-6);
+        Properties p=configuration();p.remove("vertical");p.remove("rear");p.remove("vertical-origin");writeConfiguration(p);
+        command(server,"tandemount reload");
+        check("missing-settings-use-owner-defaults",Math.abs(feet(rider)-number(horse,"posY")-.8125)<1e-6
+                &&Math.abs(number(rider,"posZ")-number(horse,"posZ")+.5)<1e-6);
+        p=configuration();p.setProperty("vertical","0.0625");p.setProperty("rear","0.625");p.remove("vertical-origin");writeConfiguration(p);
+        command(server,"tandemount reload");
+        double nativeFeetOffset=((Number)call(rider,"getYOffset")).doubleValue()-(oldest?number(rider,"yOffset"):0.0D);
+        double expected=((Number)call(horse,"getMountedYOffset")).doubleValue()+.0625+nativeFeetOffset;
+        Properties migrated=configuration();
+        check("saved-settings-remain-preserved",Math.abs(feet(rider)-number(horse,"posY")-expected)<1e-6
+                &&Math.abs(number(rider,"posZ")-number(horse,"posZ")+.625)<1e-6
+                &&"0.0625".equals(migrated.getProperty("vertical"))&&"0.625".equals(migrated.getProperty("rear"))
+                &&"legacy-mounted-offset".equals(migrated.getProperty("vertical-origin")));
+        command(server,"tandemount reset");
+        check("reset-restores-owner-defaults",Math.abs(feet(rider)-number(horse,"posY")-.8125)<1e-6
+                &&Math.abs(number(rider,"posZ")-number(horse,"posZ")+.5)<1e-6
+                &&"horse-feet".equals(configuration().getProperty("vertical-origin")));
+    }
+    private static byte[] fileBytes() {
+        try{return java.nio.file.Files.readAllBytes(java.nio.file.Paths.get("config/tandemount.properties"));}
+        catch(IOException ex){throw new IllegalStateException(ex);}
+    }
+    private static void strictReloadAndExclusions(Object driver,Object rider,Object ordinary,Object otherDriver,Object otherRider,Object horse,Object otherHorse,Object seat,Object otherSeat) {
+        Properties valid=configuration();double y=feet(rider),z=number(rider,"posZ");
+        for(String[] invalid:new String[][]{{"enabled","maybe"},{"debug","1"},{"vertical","NaN"},{"rear","2.0625"},{"excluded-dimensions","minecraft:overworld"},{"excluded-dimensions","0,,1"},{"excluded-dimensions","2147483648"},{"types","donkey"},{"unknown-setting","true"}}) {
+            Properties p=new Properties();p.putAll(valid);p.setProperty(invalid[0],invalid[1]);writeConfiguration(p);byte[] before=fileBytes();
+            command(server,"tandemount reload");LegacyRuntime.worldTick(world);
+            check("invalid-reload-preserves-active-and-file-"+invalid[0]+"-"+invalid[1].replace(':','_').replace(',','_'),
+                    Arrays.equals(before,fileBytes())&&vehicle(rider)==seat&&vehicle(otherRider)==otherSeat&&feet(rider)==y&&number(rider,"posZ")==z);
+        }
+        writeConfiguration(valid);command(server,"tandemount reload");
+        Properties excluded=new Properties();excluded.putAll(valid);excluded.setProperty("excluded-dimensions","0");writeConfiguration(excluded);
+        byte[] before=fileBytes();command(ordinary,"tandemount reload");
+        check("ordinary-player-cannot-reload-exclusions",Arrays.equals(before,fileBytes())&&vehicle(rider)==seat&&vehicle(otherRider)==otherSeat);
+        command(server,"tandemount reload");
+        check("exclusion-reload-cleans-only-extra-seats",vehicle(rider)==null&&vehicle(otherRider)==null&&!LegacyRuntime.isSeat(seat)&&!LegacyRuntime.isSeat(otherSeat)&&vehicle(driver)==horse&&vehicle(otherDriver)==otherHorse);
+        interact(rider,horse);interact(otherRider,otherHorse);
+        check("excluded-dimension-refuses-new-rides",vehicle(rider)==null&&vehicle(otherRider)==null&&vehicle(driver)==horse&&vehicle(otherDriver)==otherHorse);
+        writeConfiguration(valid);command(server,"tandemount reload");
+        call(rider,"setPosition",number(horse,"posX"),number(horse,"posY"),number(horse,"posZ"));
+        call(otherRider,"setPosition",number(otherHorse,"posX"),number(otherHorse,"posY"),number(otherHorse,"posZ"));
+        if(multi) {
+            interact(rider,horse);
+            check("native-remount-cooldown-retained-after-cleanup",vehicle(rider)==null&&number(rider,"rideCooldown")>0);
+            // The native API sets a 60-tick remount cooldown on removal. Exercise
+            // its ordinary countdown instead of forcing a new mount through it.
+            for(int tick=0;tick<60;tick++){call(rider,"onEntityUpdate");call(otherRider,"onEntityUpdate");}
+        }
+        interact(rider,horse);interact(otherRider,otherHorse);
+        check("removing-exclusion-allows-independent-retry",LegacyRuntime.isSeat(vehicle(rider))&&LegacyRuntime.isSeat(vehicle(otherRider))&&vehicle(rider)!=vehicle(otherRider));
+    }
     private static void dimensionChanges(List<Object> cleanup){
         // Test setup only: Forge may have unloaded the empty End since server startup.
         // Initialize that standard dimension explicitly before either real player transfer.
@@ -254,10 +332,28 @@ public final class NativeChecks {
             }
             interact(b,horse);Object seat=vehicle(b);
             check("uncancelled-native-interaction-joins",seat!=null&&LegacyRuntime.isSeat(seat)&&vehicle(a)==horse);
-            check("native-type-no-custom-registry",seat.getClass().getName().equals("net.minecraft.entity.item.EntityFallingBlock"));
-            check("seat-does-not-enter-living-rider-renderer-branch",!type("net.minecraft.entity.EntityLivingBase").isInstance(seat));
+            defaultsAndMigration(horse,b);
+            set(a,"moveForward",1.0F);set(a,"rotationYaw",90.0F);
+            double beforeControlX=number(horse,"posX"),beforeControlZ=number(horse,"posZ");
+            // A freshly constructed airborne horse initializes its movement speed
+            // on the first travel call and uses it on the following native frame.
+            for(int frame=0;frame<3;frame++) {
+                if(multi)call(horse,"travel",0.0F,0.0F,0.0F);else call(horse,"moveEntityWithHeading",0.0F,0.0F);
+            }
+            // 1.12's local driver owns vehicle travel. The server consumes its
+            // ordinary vehicle-move packets; it intentionally does not integrate
+            // the client's movement a second time in AbstractHorse.travel.
+            check("server-native-horse-keeps-first-driver-control",vehicle(a)==horse&&vehicle(b)==seat
+                    &&Math.abs(number(horse,"rotationYaw")-90)<1e-6
+                    &&(multi ? call(horse,"getControllingPassenger")==a&&Boolean.TRUE.equals(call(horse,"canBeSteered"))
+                    : Math.abs(number(horse,"posX")-beforeControlX)+Math.abs(number(horse,"posZ")-beforeControlZ)>1e-6));
+            set(a,"moveForward",0.0F);set(a,"rotationYaw",0.0F);
+            call(horse,"setPositionAndRotation",8.0D,65.0D,8.0D,0.0F,0.0F);LegacyRuntime.worldTick(world);
+            check("native-type-no-custom-registry",seat.getClass().getName().equals(multi?"net.minecraft.entity.EntityAreaEffectCloud":oldest?"net.minecraft.entity.monster.EntitySlime":"net.minecraft.entity.item.EntityArmorStand"));
+            check("living-seat-yaw-follows-passenger",multi || Math.abs(number(seat,"rotationYaw")-number(b,"rotationYaw"))<1e-6);
             for(int i=0;i<5;i++)call(seat,"onUpdate");
-            check("air-seat-does-not-place-block-or-fall",blockAt(seat)==airBlock()&&!Boolean.TRUE.equals(get(seat,"isDead"))&&vehicle(b)==seat);
+            check("native-seat-does-not-place-block-or-fall",blockAt(seat)==airBlock()&&!Boolean.TRUE.equals(get(seat,"isDead"))&&vehicle(b)==seat);
+            check("server-seat-cannot-intercept-clicks",Boolean.FALSE.equals(call(seat,"canBeCollidedWith")));
             check("seat-cannot-save",Boolean.FALSE.equals(call(seat,"writeToNBTOptional",make("net.minecraft.nbt.NBTTagCompound"))));
             Object damage=get(type("net.minecraft.util.DamageSource"),"generic|GENERIC");
             check("seat-cannot-take-damage",Boolean.FALSE.equals(call(seat,"attackEntityFrom",damage,5.0F)));
@@ -275,9 +371,12 @@ public final class NativeChecks {
             check("ordinary-player-settings-permission-denied",number(seat,"posZ")==z);
             call(horse,"setPositionAndRotation",9.0D,66.0D,9.0D,90.0F,0.0F);
             LegacyRuntime.worldTick(world);
-            check("movement-and-turn-pose-with-driver-preserved",vehicle(a)==horse&&vehicle(b)==seat&&Math.abs(number(seat,"posX")-9.6875)<1e-5&&Math.abs(number(seat,"posZ")-9.0)<1e-5);
+            check("movement-and-turn-pose-with-driver-preserved",vehicle(a)==horse&&vehicle(b)==seat&&Math.abs(number(seat,"posX")-9.5625)<1e-5&&Math.abs(number(seat,"posZ")-9.0)<1e-5
+                    &&Math.abs(feet(b)-66.0-.875)<1e-6);
             mount(d,horseTwo);interact(e,horseTwo);Object seatTwo=vehicle(e);
             check("multiple-rides-isolated",seatTwo!=null&&seatTwo!=seat&&LegacyRuntime.isSeat(seatTwo)&&vehicle(b)==seat);
+            strictReloadAndExclusions(a,b,c,d,e,horse,horseTwo,seat,seatTwo);
+            seat=vehicle(b);seatTwo=vehicle(e);
             if(!oldest){
                 int before=dismountEvents;
                 cancelDismount=true;dismount(b);cancelDismount=false;LegacyRuntime.worldTick(world);

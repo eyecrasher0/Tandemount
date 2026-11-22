@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from project_metadata import metadata, artifact_name
 
 ROOT = Path(__file__).resolve().parents[1]
 SDK = {"1.7.10": "1.7.10-10.13.4.1614-1.7.10", "1.8.9": "1.8.9-11.15.1.2318-1.8.9", "1.12.2": "1.12.2-14.23.5.2864"}
@@ -59,14 +60,16 @@ def fetch(cache, name, url):
 
 def build(mc, args):
     cache = args.cache; cache.mkdir(parents=True, exist_ok=True)
+    project = metadata(); version = project["version"]
     sdk = SDK[mc]
     if mc == "1.12.2":
         api = fetch(cache, "forge-1.12.2-api.jar", MAVEN+f"net/minecraftforge/forge/{sdk}/forge-{sdk}-universal.jar")
     else:
         userdev = fetch(cache, f"forge-{sdk}-userdev.jar", MAVEN+f"net/minecraftforge/forge/{sdk}/forge-{sdk}-userdev.jar")
         api = cache/f"forge-{mc}-api.jar"
-        with zipfile.ZipFile(userdev) as z:
-            api.write_bytes(z.read("binaries.jar" if mc == "1.7.10" else "classes.jar"))
+        if not api.exists():
+            with zipfile.ZipFile(userdev) as z:
+                api.write_bytes(z.read("binaries.jar" if mc == "1.7.10" else "classes.jar"))
     asm = fetch(cache, "asm-5.0.3.jar", MAVEN+"org/ow2/asm/asm-debug-all/5.0.3/asm-debug-all-5.0.3.jar")
     launch = fetch(cache, "launchwrapper-1.12.jar", "https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar")
     names = fetch(cache, f"mcp-{mc}-names.zip", MAVEN+f"de/oceanlabs/mcp/mcp_stable/{MAPPINGS[mc]}/mcp_stable-{MAPPINGS[mc]}.zip")
@@ -83,12 +86,18 @@ def build(mc, args):
                     symbols[row["searge"]] = row["name"]
     with tempfile.TemporaryDirectory(prefix=f"build-{mc}-", dir=cache) as temporary:
         classes=Path(temporary)/"classes"; classes.mkdir()
-        subprocess.run([str(args.java/"bin/javac"), "-source", "8", "-target", "8", "-encoding", "UTF-8", "-Xlint:all,-path", "-cp", os.pathsep.join(map(str,[api,asm,launch])), "-d", str(classes), *map(str,sources)],check=True)
+        generated = []
+        for source in sources:
+            target = Path(temporary)/"sources"/source.relative_to(ROOT/"mods/legacy")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(source.read_text().replace("@VERSION@", version))
+            generated.append(target)
+        subprocess.run([str(args.java/"bin/javac"), "-source", "8", "-target", "8", "-encoding", "UTF-8", "-Xlint:all,-path", "-cp", os.pathsep.join(map(str,[api,asm,launch])), "-d", str(classes), *map(str,generated)],check=True)
         (classes/"tandemount-names.properties").write_text("\n".join(k+"="+v for k,v in sorted(symbols.items()))+"\n")
-        info=[{"modid":"tandemount","name":"Tandemount","version":"1.0.0","mcversion":mc,"description":"Independent server-side horse sharing.","authorList":["EyeCrasher"],"credits":"","url":"","updateUrl":"","logoFile":"","dependencies":[]}]
+        info=[{"modid":project["id"],"name":project["name"],"version":version,"mcversion":mc,"description":"Independent server-side horse sharing.","authorList":[project["author"]],"credits":"","url":"https://github.com/"+project["github"],"updateUrl":"","logoFile":"","dependencies":[]}]
         (classes/"mcmod.info").write_text(json.dumps(info,indent=2)+"\n")
-        output=args.output/f"tandemount-forge-{mc}-1.0.0.jar"; output.parent.mkdir(parents=True,exist_ok=True)
-        manifest="Manifest-Version: 1.0\nFMLCorePlugin: dev.eyecrasher.tandemount.legacy.core.CorePlugin\nFMLCorePluginContainsFMLMod: true\nImplementation-Title: Tandemount\nImplementation-Version: 1.0.0\nImplementation-Vendor: EyeCrasher\nTandemount-Minecraft: "+mc+"\nTandemount-License: GPL-3.0-only\n\n"
+        output=args.output/artifact_name("forge",mc); output.parent.mkdir(parents=True,exist_ok=True)
+        manifest="Manifest-Version: 1.0\nFMLCorePlugin: dev.eyecrasher.tandemount.legacy.core.CorePlugin\nFMLCorePluginContainsFMLMod: true\nImplementation-Title: "+project["name"]+"\nImplementation-Version: "+version+"\nImplementation-Vendor: "+project["author"]+"\nTandemount-Minecraft: "+mc+"\nTandemount-License: "+project["license"]+"\n\n"
         with zipfile.ZipFile(output,"w",zipfile.ZIP_DEFLATED,compresslevel=9) as z:
             def add(name,data):
                 entry=zipfile.ZipInfo(name,(2026,11,13,0,0,0));entry.compress_type=zipfile.ZIP_DEFLATED;entry.external_attr=0o644<<16;z.writestr(entry,data)
@@ -97,7 +106,7 @@ def build(mc, args):
                 if path.is_file():add(path.relative_to(classes).as_posix(),path.read_bytes())
             license_path=ROOT/"LICENSE"
             if license_path.exists():add("META-INF/LICENSE",license_path.read_bytes())
-        record={"minecraft":mc,"platform":"forge","sdk":sdk,"artifact":str(output.resolve()),"sha256":sha(output),"compilation":"passed-real-forge-api","native_behavior":"unverified","renderer_analysis":"passed-static-official-client-bytecode-audit; see docs/LEGACY-RENDERER.md","human_visual":"unverified","visual":"unverified","dependencies":[{"file":p.name,"sha256":sha(p)} for p in [api,asm,launch,names]],"source_sha256":hashlib.sha256(b"".join(p.read_bytes() for p in sources)).hexdigest()}
+        record={"minecraft":mc,"version":version,"platform":"forge","sdk":sdk,"artifact":str(output.resolve()),"sha256":sha(output),"compilation":"passed-real-forge-api","native_behavior":"unverified","human_visual":"unverified","visual":"unverified","dependencies":[{"file":p.name,"sha256":sha(p)} for p in [api,asm,launch,names]],"source_sha256":hashlib.sha256((ROOT/"project.json").read_bytes()+b"".join(p.read_bytes() for p in sources)).hexdigest()}
         output.with_suffix(".json").write_text(json.dumps(record,indent=2)+"\n")
         print(json.dumps(record))
         return record

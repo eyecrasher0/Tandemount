@@ -5,17 +5,22 @@ EyeCrasher, under GPL-3.0-only. Its initial project inputs were `AGENTS.md`,
 `docs/BEHAVIOR.md`, and `platforms.json`. No predecessor horse-sharing source,
 archive, patch, binary, test, project memory, or chat history was consulted.
 
-The implementation does not register a custom entity type. Its final seat is a
-vanilla `EntityFallingBlock` with the air block state on all three legacy
-versions. It is nonliving, so the vanilla player renderer does not use the
-living-vehicle body-yaw path; its client renderer also draws no model for the
-air state. `SeatTransformer` blocks its ordinary falling/update path, while
-`LegacyRuntime` controls its server-side position and rider relationship. The
-existing player-to-horse relationship remains intact. An identity set limits
-save, damage, interaction, collision, and server tick guards to managed seats.
-The narrow class hooks and reflection helper are original code. See
-`LEGACY-RENDERER.md` for the exact client evidence and the remaining native and
-visual validation limits.
+The implementation does not register a custom entity type. Its nonliving
+vanilla `EntityFallingBlock` seat now uses moving piston (`piston_extension`)
+on 1.7.10 and barrier on 1.8.9 / 1.12.2. The earlier AIR candidate is discarded
+by the original unmodified client's first tick; a server-side tick guard never
+made that client-safe. Native dimensions remain intact and only server collision
+bounds are empty. 1.12.2 uses synchronized NoGravity; the older clients require
+observed per-tick native teleport/velocity gravity refresh. These repairs do not
+complete the requested common horse-root graph. The current independent follower
+fails the final attachment requirements. See `LEGACY-RENDERER.md` for exact
+original-client tick and graph evidence and its scope limits.
+
+The narrow class hooks, runtime and verification fixtures are original code.
+An identity set limits save, damage, interaction, collision and server tick
+guards to managed seats. Original-client probes use unchanged whole official
+client jars, normal native world constructors and actual packet/tick methods;
+no copied native implementation or transformed client bytecode is distributed.
 
 The following upstream material was consulted or used as build/runtime input:
 
@@ -47,3 +52,50 @@ protocol observations, and human client visual checks are distinct evidence.
 The Forge event source was used as API documentation; its implementation was
 not copied into Tandemount. Forge, Minecraft, LaunchWrapper, ASM, and MCP binaries
 are not bundled in the mod.
+
+Additional upstream use for the client-lifetime repair and capability audit:
+
+- Exact official 1.7.10 / 1.8.9 / 1.12.2 client jars and Mojang metadata-hashed
+  libraries: native Bootstrap, WorldSettings, WorldClient, Minecraft constructor
+  thread identity, FallingBlock state/physics, packet readers/handlers, native
+  mount/updateRidden/passenger placement, and nonliving renderer control flow.
+- The exact Forge-hosted MCP stable/SRG inputs above: complete inventory of
+  passenger-position/getMountedYOffset/getYOffset overrides, including Chicken,
+  Horse/AbstractHorse, Boat, Llama, and native slime-size synchronization.
+- Exact 1.7.10 vanilla NetHandlerPlayServer.setPlayerLocation and original client
+  NetHandlerPlayClient.handlePlayerPosLook/C06 packet serializer: S08 carries
+  stance Y, and its acknowledgement carries bounding-box minY followed by posY.
+  The isolated wire fixture uses those units and ordinary movement acknowledgements.
+- Exact original client method descriptors from the Forge-hosted SRG inputs:
+  overloaded obfuscated methods are selected by their complete JVM signature,
+  including return type. The fixture does not infer a mount from a short name
+  and matching parameters alone.
+- Exact original 1.12.2 `EnumConnectionState` play-state registration and
+  `SPacketEntityMetadata` reader: metadata packet `0x3c` carries the native
+  NoGravity value consumed by the unchanged client. The original horse travel
+  bytecode and controlling-passenger APIs establish server travel on 1.7.10 /
+  1.8.9 and local-client travel on 1.12.2.
+- Exact Forge 1.8.9 build 2318 userdev `sources.zip`:
+  `NetworkDispatcher.insertIntoChannel`, `handlerAdded`,
+  `serverToClientHandshake`, `serverInitiateHandshake`, and
+  `completeServerSideConnection`, together with `FMLNetworkHandler` and
+  `NetworkRegistry.isVanillaAccepted`. The asynchronous channel handler can
+  start the handshake while immediate unmarked vanilla completion is already
+  running. The independent adapter uses existing native login initialization
+  only after FML's vanilla-policy approval and, on 1.8.9, a false/absent FML marker; it
+  preserves the official connected-event ordering for each old loader.
+- Exact official old `EntityTrackerEntry.updatePlayerEntity` and native
+  `S1BPacketEntityAttach` serializers: the accepted player relationships are
+  sent only after all four native tracking sets already include the observer,
+  following interaction/mount cancellation checks. Native `IntHashMap.lookup`
+  and `trackedEntityHashTable` identify those real tracker entries. No entity
+  is force-spawned or made visible.
+- Exact original `C15PacketClientSettings` / `CPacketClientSettings` serializers:
+  the wire fixture sends ordinary client settings after JoinGame and waits for
+  the first native server position before beginning periodic movement frames.
+
+The native report's source digest includes both test runners and both Java
+fixtures, in the documented order. Original-client probes additionally record
+client class, metadata, libraries, packet sequence and probe-source digests.
+A native test, received packet, original client method execution and human
+visual review remain distinct evidence; incomplete attachment is never a pass.

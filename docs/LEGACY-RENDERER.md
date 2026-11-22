@@ -1,16 +1,88 @@
 # Legacy rider renderer audit
 
-Status: static renderer audit and artifact-bound native lifecycle, vanilla-protocol, and restart tests **passed** for 1.7.10, 1.8.9 and 1.12.2. The owner accepted the Minecraft EULA for isolated disposable tests. Human visual confirmation is **unverified**.
+Status: the original AIR-seat client-lifetime defect is confirmed. The current
+non-air repair, native server behavior and received packet checks are separate
+from the required native attachment, which remains incomplete. Old reports
+that passed only the AIR server tick guard are not final release evidence.
+Human visual confirmation is **unverified**.
 
 ## Finding
 
-The vanilla living renderer uses a living vehicle as a rider body-yaw reference. In the exact Mojang clients, `RendererLivingEntity` (1.7.10 and 1.8.9) and `RenderLivingBase` (1.12.2) check `isRiding()` and whether the vehicle is an `EntityLivingBase`. When both checks pass, they interpolate the vehicle's `renderYawOffset`, wrap the rider head/body difference across the yaw boundary, clamp it to -85°..85°, then adjust the rider's rendered body yaw. A small correction is applied when the remaining angle is large. A living Silverfish or ArmorStand seat would enter that path; the final seat type avoids it.
+The exact vanilla living renderers test whether a rider's vehicle is an
+`EntityLivingBase`. That path derives the rider's body yaw from the vehicle,
+wraps the head/body difference and clamps it. A final nonliving
+`EntityFallingBlock` avoids that branch. Its vanilla dimensions must remain the
+same on server and client; empty server collision bounds are applied separately.
 
-The seat now uses vanilla `EntityFallingBlock` with the vanilla air block state. In each version it extends `Entity`, not `EntityLivingBase`, so the renderer's vehicle-derived yaw branch is skipped and the passenger keeps the ordinary player body/head yaw path. `SeatTransformer` guards the falling-block update so it cannot fall or place a block; `LegacyRuntime` continues to set its position and update the passenger on the server thread.
+AIR is not a client-safe falling-block state. All three original client
+`onUpdate` methods test AIR, call `setDead` and return before checking whether
+the world is remote. A server transformer cannot change this unmodified client.
+The original-client fixture explicitly reproduces first-tick AIR removal.
 
-The vanilla falling-block renderer has no model to draw for air. In 1.7.10 and 1.8.9, `BlockAir#getRenderType()` returns `-1`, and `RenderFallingBlock` skips the matching world state or sends that render type through the no-model path. In 1.12.2, `BlockAir#getRenderType()` returns `EnumBlockRenderType.INVISIBLE`; `RenderFallingBlock` only continues for `MODEL`. The seat remains a built-in vanilla entity and does not add a registry entry.
+The current states are vanilla moving piston (`piston_extension`) on 1.7.10
+and vanilla barrier on 1.8.9 / 1.12.2. The moving-piston and 1.8.9 barrier block
+render types are -1; 1.12.2 barrier is `INVISIBLE`, while its falling-block
+renderer requires `MODEL`. They are non-air and have no falling-block model.
+No entity registry entry, resource pack or client mod is added.
 
-This renderer audit establishes bytecode behavior and seat class inheritance. The separate native suite establishes server behavior; neither is human visual confirmation.
+1.12.2 supports synchronized native `NoGravity`. The older two clients subtract
+0.04 gravity unconditionally. Their tracking-only repair sends native teleport
+and velocity packets each server tick. The original client's actual spawn,
+metadata, teleport and velocity packet readers are executed before its unchanged
+falling-block ticks. The report measures drift both with the observed refresh
+frames and for one additional unrefreshed tick. This distinguishes bounded
+transport evidence from a guarantee under packet delay or loss.
+
+`tools/legacy-client-test.py` downloads metadata-hashed official clients and
+libraries into the task cache. `ClientChecks.java` uses normal Bootstrap,
+Minecraft/WorldSettings/WorldClient constructors and native packet handlers.
+It does not replace a game class or tick, subclass WorldClient, use Unsafe,
+load Tandemount into the client, or claim graphical/human review. It records
+the untouched falling-block class digest, full official client/library hashes,
+probe source digest and consumed packet-sequence digest.
+
+Native reflection is bound by the complete mapped JVM descriptor, including the
+return type. In the obfuscated 1.8.9 client, a void mount method and an AABB
+collision method share the same short name and parameter types. Selecting by
+those two properties alone can call the collision query without mounting.
+The corrected probe retains each exact SRG descriptor and verifies the native
+vehicle relationship after the call. Earlier graph observations made with
+ambiguous method selection are superseded by descriptor-bound execution.
+
+The 1.12.2 play-state registration in the original client identifies entity
+metadata as packet `0x3c`; the probe consumes the actual captured metadata
+before checking `hasNoGravity`. Original-client horse controls are also tested
+at the correct ownership boundary: the older two releases integrate travel on
+the server, while 1.12.2 integrates a local client's vehicle travel. The server
+suite checks that the first controlling passenger remains the driver; the
+1.12.2 original-client fixture additionally requires actual horizontal travel.
+
+## Native graph capability evidence
+
+`--graph` runs the original native mount and passenger-update methods on a
+normally constructed official client world. It tests the direct second child
+and horse→driver→falling-block→player adapters and 1200 original mounted ticks.
+The direct slot on 1.7.10 / 1.8.9 cannot remain the first driver and a second
+seat simultaneously. The simple driver chain can share the horse root, but
+its native passenger update replaces the requested rear location with its
+parent's center. A forced second child in 1.12.2 has the same centered-offset
+problem while preserving the first passenger list element.
+
+These are measurements of the named simple adapters. In particular, old local
+and remote player representations use different stance coordinates; a larger
+graph routed through the driver needs both views checked before acceptance.
+
+The complete exact MCP override inventory was also inspected. Horizontal
+passenger placement is overridden by Chicken, Horse and Boat on 1.7.10 / 1.8.9;
+1.12.2 additionally provides Llama and uses AbstractHorse. Chicken uses a
+0.1 body-yaw offset; Horse's additional offset depends on rearing; old Boat
+uses 0.4 but its native renderer draws the boat model despite the invisibility
+flag. Llama uses its native 0.3 offset. Generic Entity sets passenger X/Z to
+its own center. Native height/getYOffset overrides and synchronized slime
+sizes are additional helper-graph inputs, not arbitrary native transforms.
+An exhaustive impossibility result for all combinations of these helpers has
+**not** been established. A more complex adapter needs exact client yaw,
+geometry, transport, visibility and lifecycle proof before use.
 
 ## Exact client and mapping evidence
 
@@ -34,12 +106,32 @@ Forge describes [MCPConfig](https://github.com/MinecraftForge/MCPConfig) as its 
 
 ## Build and test status
 
-The final artifacts were rebuilt with OpenJDK 8u504b01 against the exact Forge APIs. Each final fixture then ran in an isolated native server with ordinary vanilla-protocol clients and a separate stop/restart check. The hashes below identify the executed files.
+The three modules compile against the exact Forge API artifacts listed in
+`LEGACY-PROVENANCE.md`. The native runner records fresh artifact-bound checks
+for default feet geometry, explicit configuration-unit migration, independent
+adjustments, permission/cancellation, rider/horse state, cleanup, real dimension
+transfer, chunk unloading, disconnect/reconnect and save/restart. Its wire
+fixture receives styled clickable chat and sends the exact encoded adjustment
+commands, then observes the resulting live position change.
 
-| Version | Forge API artifact SHA-256 | Tandemount artifact SHA-256 | Test fixture jar SHA-256 | Native status |
-|---|---|---|---|---|
-| 1.7.10 | `e9ef6b96625c96628533aee0528dd5f08a8a1b0f48ddfa188e7ba0d51f13f492` | `52f5adc7b314e5ab8ddb18f3168238362fe517765a3f15e0b969c40244fbbbcd` | `6a127a63c9f7dcc26a2a96950d430b2ce0e82698d9acd801228423c6ebd1b0ea` | passed |
-| 1.8.9 | `6b392af4bdbb88fdcdfb69e1fb4c52ca46ef1ef686f624a373c6e0a470989a00` | `4a0d68a3eca436b5b8c20b2f929fe53a3f680c6f6b4487a6fe3b636c1f632bc8` | `86e38159260943672782999cfdb3729e41e1da5c2aa8a5629d973addb9a681fd` | passed |
-| 1.12.2 | `ff578d670d2c720a72f8fff31ea3d6868595c7e980ecdecba3254f307ef2c2a9` | `c4c8dfe551dcd4e7076c3f07060bff4801bb7874c58152e987e8f04dc06b45d4` | `8746b2404a37a3f64dfff9492df2ec7a7d1cc061cdb4f44cbfce0cc29b0ecf8d` | passed |
+Run the native and original-client checks together:
 
-The final suite confirms repeated falling-block updates leave the world block as air, the seat stays alive and mounted, native NBT saving is refused, server stop removes it, and restart does not load it. Existing and late vanilla-protocol observers receive the native seat, position updates, and correct mount relationships. Actual native player dimension transfers and the separate mapped-state guard probes are described in `LEGACY.md`. Forge 1.7.10 has no cancellable `EntityMountEvent`; that specific capability is disclosed rather than counted as a passing cancellation test. The release verification report identifies the exact artifacts and named checks. Human visual confirmation remains **unverified**.
+```sh
+python3 tools/legacy-native-test.py --java /path/to/jdk8 --cache /large/task/cache/legacy --artifacts /path/to/artifacts --port 25844 --client-ticks 240 --accept-eula
+```
+
+Run an exact original-client capability probe separately:
+
+```sh
+python3 tools/legacy-client-test.py --minecraft 1.7.10 --graph --java /path/to/jdk8 --sdk-cache /large/task/cache/legacy --cache /large/task/cache/client --output /path/to/graph.json
+```
+
+Schema 2 native reports expose `verified_slice_status` separately from the
+required overall `status`. The latter remains failed when server/client horse
+roots or the no-periodic-follower requirement fail. Named `final_checks` use
+`{name, passed}` and do not promote a separate follower to native attachment.
+The source binding concatenates, in order: `tools/legacy-native-test.py`,
+`mods/legacy/native-test/NativeChecks.java`, `tools/legacy-client-test.py`, and
+`mods/legacy/client-test/ClientChecks.java`. Operational logs and binaries remain
+outside Git. Forge 1.7.10 has no cancellable `EntityMountEvent`; only that event
+capability is unavailable. All lifecycle checks remain required.
