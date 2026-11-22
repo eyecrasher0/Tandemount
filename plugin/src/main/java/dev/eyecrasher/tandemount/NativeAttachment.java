@@ -28,21 +28,11 @@ final class NativeAttachment {
         Class<?> entityType = access.seatConstructor.getParameterTypes()[0];
         Class<?> level = access.seatConstructor.getParameterTypes()[1];
         Constructor<?> nativeConstructor = base.getConstructor(entityType, level);
-        String mappedTick = alias("displayTick");
-        String[] tickNames = mappedTick == null ? new String[] {"tick", "l", "g"} : new String[] {"tick", mappedTick};
-        Class<?> display = access.seatBase.getSuperclass();
         String tick = null;
-        for (String name : tickNames) {
-            Method method;
-            try { method = display.getDeclaredMethod(name); }
-            catch (NoSuchMethodException absent) { continue; }
-            int modifiers = method.getModifiers();
-            if (method.getReturnType() != void.class || !Modifier.isPublic(modifiers)
-                    || Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) continue;
-            if (tick != null) throw new NoSuchMethodException("Ambiguous audited native display tick on " + display.getName());
-            tick = name;
-            if (mappedTick == null) break;
-        }
+        for (String name : new String[] {"tick", "l", "g"}) try {
+            Method method = access.seatBase.getSuperclass().getDeclaredMethod(name);
+            if (method.getReturnType() == void.class && !Modifier.isStatic(method.getModifiers())) { tick = name; break; }
+        } catch (NoSuchMethodException absent) { }
         if (tick == null) throw new NoSuchMethodException("Audited native display tick");
         carrier = SeatClass.create(base, nativeConstructor, access.position, false, base.getMethod(tick)).getConstructor(entityType, level);
         Class<?> interaction = handleType(Class.forName(craft + ".entity.CraftInteraction"));
