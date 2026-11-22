@@ -22,7 +22,7 @@ import uuid
 import zipfile
 
 from cache_servers import java_for
-from vanilla_protocol import load_ids
+from vanilla_protocol import load_ids, read_varint
 
 ROOT=Path(__file__).resolve().parents[1]
 CACHE=Path(os.environ.get("TANDEMOUNT_CACHE", ROOT/".agents/cache"))
@@ -298,33 +298,36 @@ PLUGIN_PACKET_CLASSES={
     "PacketPlayOutMount":"ClientboundSetPassengersPacket",
     "PacketPlayOutEntityHeadRotation":"ClientboundRotateHeadPacket",
 }
+SPAWN_PACKETS={"ClientboundAddEntityPacket", "ClientboundAddMobPacket", "ClientboundAddPlayerPacket"}
+MOTION_PACKETS={
+    "move_entity_pos":"ClientboundMoveEntityPacket$Pos",
+    "move_entity_pos_rot":"ClientboundMoveEntityPacket$PosRot",
+    "teleport_entity":"ClientboundTeleportEntityPacket",
+    "entity_position_sync":"ClientboundEntityPositionSyncPacket",
+    "remove_entities":"ClientboundRemoveEntitiesPacket",
+}
 
 
-def received_state(trace, protocol, output, end_ns=None):
-    """Normalize captured native packet bytes, retaining only state components.
-
-    Movement is deliberately not replayed by this component interface. The
-    original native graph ticks start with decoded received helper state.
-    """
+def captured_packets(trace, protocol, end_ns):
     ids={}
+    packet_classes={**PACKET_CLASSES, **MOTION_PACKETS}
     for key,identifier in load_ids(protocol).items():
         if not key.startswith(("game.clientbound.","play.clientbound.")):
             continue
         name=key.split(".clientbound.",1)[1].removeprefix("minecraft:").removeprefix("class.")
-        if name in PACKET_CLASSES:
-            ids[identifier]=PACKET_CLASSES[name]
-        elif name in PACKET_CLASSES.values():
+        if name in packet_classes:
+            ids[identifier]=packet_classes[name]
+        elif name in packet_classes.values():
             ids[identifier]=name
         elif name in PLUGIN_PACKET_CLASSES:
             ids[identifier]=PLUGIN_PACKET_CLASSES[name]
     raw=json.loads(trace.read_text())
     if raw.get("errors"):
         raise ValueError("Captured observer has protocol errors")
-    rows=[]
     for index,packet in enumerate(raw["packets"]):
         if isinstance(packet,dict):
             when,identifier=packet["at_ns"],packet["id"]
-            payload=base64.b64decode(packet["base64"],validate=True).hex()
+            payload=base64.b64decode(packet["base64"],validate=True)
         else:
             when=raw["received_monotonic_ns"][index]
             stage,identifier,payload=packet
@@ -333,13 +336,63 @@ def received_state(trace, protocol, output, end_ns=None):
         if end_ns is not None and when>end_ns:
             continue
         if identifier in ids:
-            # Decode here too so a malformed source cannot become valid text.
-            bytes.fromhex(payload)
-            rows.append(ids[identifier]+"\t"+payload)
+            yield when,ids[identifier],bytes.fromhex(payload) if isinstance(payload,str) else payload
+
+
+def write_received_state(packets, output):
+    """Write the state the original entity components can replay."""
+    rows=[kind+"\t"+payload.hex() for _,kind,payload in packets if kind in PACKET_CLASSES.values()]
     if not rows:
         raise ValueError("No native attachment state packets in the selected observer trace")
     output.write_text("\n".join(rows)+"\n")
     return len(rows)
+
+
+def received_state(trace, protocol, output, end_ns=None):
+    return write_received_state(captured_packets(trace,protocol,end_ns),output)
+
+
+def stationary_capture_ns(packets, state, end_ns):
+    """Measure the quiet interval of the captured ride in this observer's graph."""
+    if end_ns is None or not state.get("nativeAttachment", True):
+        return None
+    expected = {state["driver"]: state["horse"], state["rider"]: state["riderVehicle"]}
+    expected.update((helper["id"],helper["vehicle"]) for helper in state["helpers"])
+    wanted = set(expected) | {state["horse"]}
+    present, parents = set(), {}
+    last = None
+    for when, kind, payload in packets:
+        entity, offset = read_varint(payload)
+        if kind in SPAWN_PACKETS:
+            present.add(entity)
+        elif kind == "ClientboundSetPassengersPacket":
+            if entity not in present:
+                continue
+            passengers, offset = read_varint(payload,offset)
+            for child in tuple(parents):
+                if parents[child] == entity:
+                    del parents[child]
+            for _ in range(passengers):
+                child, offset = read_varint(payload,offset)
+                if child in wanted and child in present:
+                    parents[child] = entity
+                    last = when
+        elif kind == "ClientboundRemoveEntitiesPacket":
+            removed = set()
+            for _ in range(entity):
+                child, offset = read_varint(payload,offset)
+                removed.add(child)
+            if removed & wanted:
+                last = when
+            present.difference_update(removed)
+            parents = {child:parent for child,parent in parents.items()
+                       if child not in removed and parent not in removed}
+            continue
+        if entity in wanted:
+            last = when
+    if last is None or not wanted <= present or parents != expected:
+        return None
+    return end_ns - last
 
 
 def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifact=None):
@@ -363,7 +416,8 @@ def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifa
                        stdout=log,stderr=subprocess.STDOUT,check=True,timeout=120)
     raw_output=folder/"result.json"
     normalized_capture=folder/"capture.json"
-    normalized_capture.write_text(json.dumps(normalize_capture(json.loads(capture.read_text())),indent=2)+"\n")
+    state=normalize_capture(json.loads(capture.read_text()))
+    normalized_capture.write_text(json.dumps(state,indent=2)+"\n")
     command=[str(java),"-XX:ActiveProcessorCount=2","-Djava.awt.headless=true","-cp",
              str(launcher_classes)+os.pathsep+classpath,"dev.eyecrasher.tandemount.clienttest.AttachmentClientLauncher",
              str(classes),str(symbols),str(normalized_capture),str(raw_output)]
@@ -376,10 +430,12 @@ def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifa
         if protocol is None:
             raise ValueError("An observer trace requires its exact native protocol export")
         normalized=folder/"received-state.tsv"
-        inputs["captured_state_packets"]=received_state(trace,protocol,normalized,end_ns)
+        packets=list(captured_packets(trace,protocol,end_ns))
+        inputs["captured_state_packets"]=write_received_state(packets,normalized)
+        quiet_ns=stationary_capture_ns(packets,state,end_ns)
         inputs.update(observer_trace_sha256=digest(trace),protocol_export_sha256=digest(protocol),
-                      normalized_state_sha256=digest(normalized),end_ns=end_ns)
-        command.append(str(normalized))
+                      normalized_state_sha256=digest(normalized),end_ns=end_ns,stationary_capture_ns=quiet_ns)
+        command.extend([str(normalized),str(quiet_ns if quiet_ns is not None else -1)])
     log_path=folder/"console.log"
     with log_path.open("w") as log:
         completed=subprocess.run(command,cwd=folder,stdout=log,stderr=subprocess.STDOUT,timeout=120)

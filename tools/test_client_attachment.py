@@ -5,7 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from client_attachment import normalize_capture, received_state
+from client_attachment import normalize_capture, received_state, stationary_capture_ns
+from vanilla_protocol import varint
 
 
 class CaptureInputTest(unittest.TestCase):
@@ -79,6 +80,20 @@ class CaptureInputTest(unittest.TestCase):
                     trace.write_text(json.dumps(raw))
                     with self.assertRaises(ValueError):
                         received_state(trace,protocol,root/"state.tsv")
+
+    def test_stationary_window_requires_the_captured_mount_graph(self):
+        state = normalize_capture(self.state())
+        packets = [(index, "ClientboundAddEntityPacket", varint(entity))
+                   for index,entity in enumerate((10,1,2,25,90))]
+        packets += [(10, "ClientboundSetPassengersPacket", bytes((10,2,1,25))),
+                    (20, "ClientboundSetPassengersPacket", bytes((25,1,2))),
+                    (30, "ClientboundMoveEntityPacket$PosRot", varint(10)),
+                    (40, "ClientboundSetEntityDataPacket", varint(90))]
+        self.assertEqual(stationary_capture_ns(packets,state,50),20)
+        self.assertIsNone(stationary_capture_ns(
+            packets+[(45,"ClientboundSetPassengersPacket",bytes((90,1,2)))],state,50))
+        self.assertIsNone(stationary_capture_ns(
+            packets+[(45,"ClientboundRemoveEntitiesPacket",bytes((1,25)))],state,50))
 
 
 if __name__=="__main__":

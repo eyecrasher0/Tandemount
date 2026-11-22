@@ -1036,3 +1036,57 @@ Reproduction uses `python3 tools/plugin-build.py --minecraft 1.7.10 --fixture`
 and `python3 tools/plugin-runtime.py --platform paper --minecraft 1.7.10 --accept-eula`.
 The exact upstream bytecode listings and observations are retained in ignored
 evidence storage.
+
+### Forge stationary geometry in received-state verification
+
+The audited Mojang 1.19.4 client has SHA-256
+`0e79cf7f07c107e9a1fe22ed703e472372b44149e64114944f0811abbd25f3ec`.
+Its client mappings have SHA-256
+`5ef270b938f89cfc77371e0deee9f9044c41d9a373fa11dcb1fd1923272c4606`.
+[Official client](https://piston-data.mojang.com/v1/objects/958928a560c9167687bea0cefeb7375da1e552a8/client.jar)
+and [official mappings](https://piston-data.mojang.com/v1/objects/f14771b764f943c154d3a6fcb47694477e328148/client.txt).
+
+The Forge 1.19.4-45.4.5 installer has SHA-256
+`1b4475d6ece01e7242855504fbe0fe37ac79efd7b3281bf42b8dcf390d421f35`.
+[Official installer](https://maven.minecraftforge.net/net/minecraftforge/forge/1.19.4-45.4.5/forge-1.19.4-45.4.5-installer.jar).
+
+The original Forge runtime passed native, loopback and restart checks. The
+existing observer's original packet bytes record a horse yaw of 4.21875°
+and carrier yaws of 82.96875° and −73.125°. The horse spawn reached the
+observer about 885 ms before the second-rider join. The received-state
+component applies the retained state packets together before its first native
+tick. Its horse yaw reached 0° on the first tick and returned to 4.21875°
+over the next three ticks. The first lateral sample was 0.042633 blocks,
+then 0.030467, 0.018282 and 0.006086. The last value held through tick 1,200.
+Official `ClientPacketListener` schedules three ticks for rotation packets.
+
+The fixture now checks the captured parent membership and measures time from
+the last relevant packet to the capture cutoff. When the complete ride has
+been quiet for at least 200 ms, it checks the stationary placement on the
+fourth native tick. Short or incomplete windows use the first tick for
+placement. Every replay records its first position and applies the root,
+lifetime and 1/16-block drift checks across all 1,200 ticks. The stationary
+placement bounds are 0.002 blocks vertically and 1/32 block horizontally.
+
+Replaying the same capture and untouched Tandemount JAR
+`b49e7e5b4826a7e1c9d986a29ccc208524eeb3b4511e2f309585590a086201bb`
+passed for both observers. Their quiet windows were 918 and 383 ms. Both
+settled to 0.006086 blocks lateral, 0.497029 rearward and 0.812503 vertically.
+The existing observer's recorded first-to-stationary drift was 0.036591
+blocks. Both retained the native horse root and all helper entities.
+At a cutoff with only 100 ms of quiet time, the same capture retained its
+first-tick failure.
+
+A fresh run of `tools/modern-native.py --platform forge --minecraft 1.19.4
+--accept-eula --network-test --restart-test` passed native, loopback, restart
+and original-client checks with that same production JAR. Both observers'
+stationary lateral error was 0.006128 blocks. The client attachment and
+evidence unit suites passed 11 tests.
+
+The cross-check used the original 26.3 client identified above,
+Forge 26.3-66.1.8 and Tandemount JAR SHA-256
+`6185d9c41ecb91b85701f1d59a6b8f795f865ff5c1cb2753171b702324e4f897`.
+Both existing and late captures passed with zero lateral error and
+0.49999999 blocks rearward. These are original packet and entity component
+measurements with controlled terrain. Rendered turn alignment is tracked
+separately. [Forge 26.3 installer](https://maven.minecraftforge.net/net/minecraftforge/forge/26.3-66.1.8/forge-26.3-66.1.8-installer.jar).

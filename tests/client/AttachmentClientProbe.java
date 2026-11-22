@@ -24,6 +24,7 @@ public final class AttachmentClientProbe {
  static final String ENTITY="net.minecraft.world.entity.Entity",LEVEL="net.minecraft.world.level.Level",REGISTRY="net.minecraft.core.Registry",ACCESS="net.minecraft.core.RegistryAccess",LOOKUP="net.minecraft.core.HolderLookup$Provider",REF="net.minecraft.core.Holder$Reference";
  static final String PACKETS="net.minecraft.network.protocol.game.";
  static final String REGISTRY_BUFFER="net.minecraft.network.RegistryFriendlyByteBuf";
+ static final int RECEIVED_ROTATION_TICKS=3;
  static boolean has(String owner,String name,String params){return S.containsKey("method."+owner+"#"+name+"#"+params);}
  static Object any(String owner,Object receiver,String...names)throws Exception{
   for(String name:names)if(S.containsKey("method."+owner+"#"+name+"#"))return call(owner,name,"",receiver);
@@ -107,7 +108,7 @@ public final class AttachmentClientProbe {
    Object e=call(owner,"getEntity",LEVEL,p,world);
    if(e!=null){
     Object angle=any(owner,p,"getYHeadRot");float degrees=((Number)angle).floatValue()*(angle instanceof Byte?360F/256F:1);
-    call(ENTITY,"lerpHeadTo","float,int",e,degrees,3);
+    call(ENTITY,"lerpHeadTo","float,int",e,degrees,RECEIVED_ROTATION_TICKS);
    }
   }else if(kind.equals("ClientboundMoveEntityPacket$Rot")){
    String base=PACKETS+"ClientboundMoveEntityPacket";Object e=call(base,"getEntity",LEVEL,p,world);
@@ -116,8 +117,8 @@ public final class AttachmentClientProbe {
     float yr=((Number)yaw).floatValue()*(yaw instanceof Byte?360F/256F:1),xr=((Number)pitch).floatValue()*(pitch instanceof Byte?360F/256F:1);
     double[] at=xyz(e);
     if(has(ENTITY,"moveOrInterpolateTo","float,float"))call(ENTITY,"moveOrInterpolateTo","float,float",e,yr,xr);
-    else if(has(ENTITY,"lerpTo","double,double,double,float,float,int"))call(ENTITY,"lerpTo","double,double,double,float,float,int",e,at[0],at[1],at[2],yr,xr,3);
-    else if(has(ENTITY,"lerpTo","double,double,double,float,float,int,boolean"))call(ENTITY,"lerpTo","double,double,double,float,float,int,boolean",e,at[0],at[1],at[2],yr,xr,3,false);
+    else if(has(ENTITY,"lerpTo","double,double,double,float,float,int"))call(ENTITY,"lerpTo","double,double,double,float,float,int",e,at[0],at[1],at[2],yr,xr,RECEIVED_ROTATION_TICKS);
+    else if(has(ENTITY,"lerpTo","double,double,double,float,float,int,boolean"))call(ENTITY,"lerpTo","double,double,double,float,float,int,boolean",e,at[0],at[1],at[2],yr,xr,RECEIVED_ROTATION_TICKS,false);
     else {
      Object interpolation=call(ENTITY,"getInterpolation","",e);
      if(interpolation!=null){
@@ -340,7 +341,9 @@ public final class AttachmentClientProbe {
   Map<String,Object> initialGeometry=null;
   Object follower=nativeGraph?horse:entities.get(state.getAsJsonArray("helpers").get(0).getAsJsonObject().get("id").getAsInt());
   if(receivedState){
-   double[] firstRelative=null;double maximumDrift=0;int lostRoots=0,removedNodes=0;
+   long stationaryCaptureNs=args.length>4?Long.parseLong(args[4]):-1;
+   int stationaryStep=stationaryCaptureNs>=(RECEIVED_ROTATION_TICKS+1)*50_000_000L?RECEIVED_ROTATION_TICKS:0;
+   double[] firstRelative=null,settledRelative=null;double maximumDrift=0;int lostRoots=0,removedNodes=0;
    for(int step=0;step<1200;step++){
     tickClientEntity(horse,false);nested(horse,entities,children);
     if(!nativeGraph){tickClientEntity(follower,false);nested(follower,entities,children);}
@@ -349,10 +352,18 @@ public final class AttachmentClientProbe {
     double angle=Math.toRadians(heading(horse));double[] hp=xyz(horse),rp=xyz(rider);
     double dx=rp[0]-hp[0],dz=rp[2]-hp[2];double[] relative={Math.cos(angle)*dx+Math.sin(angle)*dz,rp[1]-hp[1],-Math.sin(angle)*dx+Math.cos(angle)*dz};
     if(firstRelative==null)firstRelative=relative;
-    if(initialGeometry==null)initialGeometry=playerFeetGeometry(state,world,rider,entities.get(last),relative);
+    // This replay batches state packets before its first tick. If the capture
+    // includes a complete quiet ride, give it the native interpolation ticks.
+    // The first position and drift, root and lifetime checks cover every tick.
+    if(step==stationaryStep){
+     settledRelative=relative;
+     initialGeometry=playerFeetGeometry(state,world,rider,entities.get(last),relative);
+    }
     maximumDrift=Math.max(maximumDrift,Math.sqrt(Math.pow(relative[0]-firstRelative[0],2)+Math.pow(relative[1]-firstRelative[1],2)+Math.pow(relative[2]-firstRelative[2],2)));
    }
    receivedTickResult.put("ticks",1200);receivedTickResult.put("rootErrors",lostRoots);receivedTickResult.put("removedObservations",removedNodes);receivedTickResult.put("maximumRelativeDrift",maximumDrift);receivedTickResult.put("initialArmorStandLocalPosition",firstRelative);
+   receivedTickResult.put("stationaryGeometryTick",stationaryStep+1);
+   receivedTickResult.put("stationaryArmorStandLocalPosition",settledRelative);
    if(lostRoots!=0||removedNodes!=0||maximumDrift>1./16)throw new AssertionError("Unmodified received graph ticks failed: "+new Gson().toJson(receivedTickResult));
   }
   List<Map<String,Object>> samples=new ArrayList<>();double[] expected=null;double errorMax=0;int removed=0,rootErrors=0;
