@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import zipfile
 
+from project_metadata import artifact_name, metadata
+
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get('TANDEMOUNT_CACHE', ROOT / '.agents/cache'))
 LOCAL_JAVAS = json.loads((ROOT / '.agents/toolchains.json').read_text()) if (ROOT / '.agents/toolchains.json').is_file() else {}
@@ -16,6 +18,7 @@ JAVA_HOME = os.environ.get('JAVA_HOME') or os.environ.get('TANDEMOUNT_JAVA_25') 
 
 
 def main():
+    project = metadata()
     parser = argparse.ArgumentParser()
     parser.add_argument('--fixture', action='store_true', help='Build disposable native-test fixture variant')
     parser.add_argument('--api', type=Path, help='Real upstream Paper/Spigot API or patched server JAR')
@@ -69,9 +72,12 @@ def main():
         jar.writestr(entry, data)
     artifacts = []
     for target in targets:
-        artifact = args.output / ('tandemount-1.0.0-' + (target + '-' if target else '') + 'plugin.jar')
+        name = artifact_name('bukkit', target) if target else f"{project['id']}-bukkit-{project['version']}.jar"
+        artifact = args.output / name
         with zipfile.ZipFile(artifact, 'w', zipfile.ZIP_DEFLATED) as jar:
-            manifest = 'Manifest-Version: 1.0\nImplementation-Title: Tandemount\nImplementation-Version: 1.0.0\nImplementation-Vendor: EyeCrasher\npaperweight-mappings-namespace: mojang\n'
+            manifest = (f"Manifest-Version: 1.0\nImplementation-Title: {project['name']}\n"
+                        f"Implementation-Version: {project['version']}\nImplementation-Vendor: {project['author']}\n"
+                        "paperweight-mappings-namespace: mojang\n")
             if target: manifest += 'Tandemount-Minecraft-Target: ' + target + '\n'
             write(jar, 'META-INF/MANIFEST.MF', manifest + '\n')
             for tree in [classes, ROOT / 'plugin/src/main/resources']:
@@ -79,7 +85,9 @@ def main():
                     if file.is_file():
                         relative = file.relative_to(tree).as_posix()
                         if 'NativeFixture' not in relative:
-                            write(jar, relative, file.read_bytes())
+                            data = (file.read_text().replace('${projectVersion}', project['version']).encode('utf-8')
+                                    if relative == 'plugin.yml' else file.read_bytes())
+                            write(jar, relative, data)
             write(jar, 'META-INF/LICENSE', (ROOT / 'LICENSE').read_bytes())
         artifacts.append({'minecraft': target or 'universal', 'artifact': str(artifact.resolve()), 'artifact_sha256': hashlib.sha256(artifact.read_bytes()).hexdigest()})
     if args.fixture:

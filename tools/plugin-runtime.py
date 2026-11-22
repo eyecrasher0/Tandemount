@@ -23,6 +23,7 @@ import zlib
 from vanilla_protocol import accept_teleport
 from runtime_storage import RuntimeWorkspace
 from plugin_protocol import wire_properties, menu_checks, send_native
+from project_metadata import artifact_name
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get('TANDEMOUNT_CACHE', ROOT / '.agents/cache'))
@@ -379,8 +380,9 @@ def main():
     if not args.accept_eula:
         parser.error('--accept-eula is required; this runner does not accept legal terms implicitly.')
     if args.plugin is None:
-        args.plugin = ROOT / ('.agents/plugin-build/tandemount-1.0.0-' + args.minecraft + '-plugin.jar')
-        if not args.plugin.is_file(): args.plugin = ROOT / '.agents/plugin-fixture-build/tandemount-1.0.0-plugin.jar'
+        args.plugin = ROOT / '.agents/plugin-build' / artifact_name('bukkit', args.minecraft)
+        if not args.plugin.is_file():
+            parser.error('Build the exact plugin first or supply its path with --plugin: ' + str(args.plugin))
     metadata = json.loads((CACHE / 'servers' / args.platform / args.minecraft / 'distribution.json').read_text())
     sdk = Path(metadata['file']).parent
     workspace = RuntimeWorkspace(CACHE / 'plugin-runs' / args.platform / args.minecraft,

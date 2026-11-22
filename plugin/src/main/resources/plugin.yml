@@ -1,5 +1,5 @@
 name: Tandemount
-version: 1.0.0
+version: '${projectVersion}'
 main: dev.eyecrasher.tandemount.TandemountPlugin
 author: EyeCrasher
 description: Share an ordinary horse with a second rider. Server only.

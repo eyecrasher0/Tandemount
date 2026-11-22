@@ -69,10 +69,12 @@ class RunnerFingerprintTest(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
         names = ('plugin-build.py', 'plugin-runtime.py', 'vanilla_protocol.py', 'runtime_storage.py',
-                 'cache_servers.py', 'modern-build.py', 'modern-native.py', 'modern-client.py')
+                 'cache_servers.py', 'modern-build.py', 'modern-native.py', 'modern-client.py',
+                 'project_metadata.py')
         for name in names:
             self.write('tools/' + name, 'initial runner input')
         self.write('platforms.json', '{}')
+        self.write('project.json', '{"version":"1.0.0"}')
         self.write('LICENSE', 'license fixture')
         self.write('plugin/src/test/client/ClientProbe.java', 'initial standalone client probe input')
         self.patch = patch('matrix_verify.ROOT', self.root)
@@ -83,6 +85,15 @@ class RunnerFingerprintTest(unittest.TestCase):
         path = self.root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(value)
+
+    def test_project_version_is_an_input_to_both_matrix_fingerprints(self):
+        for mode in ('plugins', 'modern'):
+            with self.subTest(mode=mode):
+                self.write('project.json', '{"version":"1.0.0"}')
+                before = sources(mode), runner_sources(mode)
+                self.write('project.json', '{"version":"1.0.1"}')
+                self.assertNotEqual(before[0], sources(mode))
+                self.assertNotEqual(before[1], runner_sources(mode))
 
     def test_changed_standalone_client_probe_changes_plugin_runner_only(self):
         before = runner_sources('plugins'), sources('plugins'), runner_sources('modern'), sources('modern')

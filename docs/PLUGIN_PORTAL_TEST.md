@@ -15,7 +15,7 @@ disposable test:
 
 ```sh
 python3 tools/plugin-portal-test.py \
-  --plugin /path/to/tandemount-1.0.0-26.3-plugin.jar \
+  --plugin /path/to/tandemount-bukkit-1.0.0+26.3.jar \
   --protocol-export /path/to/TandemountNativeFixture/protocol.properties \
   --scenario return --accept-eula --output /path/to/portal-return.json
 ```

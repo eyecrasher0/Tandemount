@@ -12,6 +12,7 @@ import sys
 import threading
 
 from cache_servers import ROOT
+from project_metadata import artifact_name
 
 
 def sha(path):
@@ -47,7 +48,8 @@ def sources(mode):
     else:
         files += modern_runner_helpers()
     files += attachment_runner_helpers()
-    files += [ROOT / "platforms.json", ROOT / "LICENSE"]
+    files += [ROOT / "platforms.json", ROOT / "project.json", ROOT / "LICENSE",
+              ROOT / "tools/project_metadata.py"]
     hasher = hashlib.sha256()
     for path in sorted(set(files)):
         hasher.update(path.relative_to(ROOT).as_posix().encode() + b"\0")
@@ -59,7 +61,8 @@ def sources(mode):
 def runner_sources(mode):
     names = (["modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py", "cache_servers.py"]
              if mode == "modern" else ["plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
-    files = [ROOT / "tools" / name for name in names] + [ROOT / "platforms.json"]
+    files = [ROOT / "tools" / name for name in names] + [
+        ROOT / "platforms.json", ROOT / "project.json", ROOT / "tools/project_metadata.py"]
     if mode == "plugins":
         files += plugin_runner_helpers()
     else:
@@ -168,7 +171,7 @@ def main():
             artifact = ROOT / "mods/modern/build" / f"tandemount-1.0.0-{platform}-{version}.jar"
             native_path = ROOT / ".agents/modern-native" / (key + ".json")
         else:
-            artifact = ROOT / ".agents/plugin-build" / f"tandemount-1.0.0-{version}-plugin.jar"
+            artifact = ROOT / ".agents/plugin-build" / artifact_name("bukkit", version)
             native_path = ROOT / ".agents/plugin-evidence" / (key + ".json")
         fixture = ROOT / ".agents/plugin-build/tandemount-1.0.0-fixture.jar" if args.mode == "plugins" else None
         previous = None
