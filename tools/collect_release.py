@@ -221,8 +221,7 @@ def main():
         raise SystemExit("Commit release source before collecting evidence")
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     matrix = json.loads((ROOT / "platforms.json").read_text())
-    legacy = {r["minecraft"]: r for r in json.loads(args.legacy.read_text())["targets"]}
-    test_sha = legacy_fixture_digest(ROOT)
+    legacy = None
     args.evidence.mkdir(parents=True, exist_ok=True)
     artifacts, reports, errors = {}, [], []
     output_root = ROOT / "build/release/binaries"
@@ -238,6 +237,9 @@ def main():
                     raw, native_path, artifact = load_matrix_record(args.plugins, key, "plugins")
                     family, identifier = "plugin", "plugin-" + mc
                 elif mc in {"1.7.10", "1.8.9", "1.12.2"}:
+                    if legacy is None:
+                        test_sha = legacy_fixture_digest(ROOT)
+                        legacy = {r["minecraft"]: r for r in json.loads(args.legacy.read_text())["targets"]}
                     raw, native_path = legacy[mc], args.legacy
                     artifact = Path(raw["artifact"])
                     if raw.get("test_sources_sha256") != test_sha:
