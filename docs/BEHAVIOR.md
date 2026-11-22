@@ -13,6 +13,9 @@ implementation. Implementers must not open predecessor sources or archives.
 - Two players can share one adult, tamed, saddled horse. The first player drives
   using the ordinary horse controls. The second player right-clicks the occupied
   horse to join and uses the normal dismount action to leave.
+- A shared ride retains the horse's vanilla client-side movement prediction,
+  mouse response, and jump controls, including the native jump charge meter.
+  Verify those controls with the second rider seated behind the driver.
 - Exactly two riders; reject a third rider without disrupting the ride.
 - Ordinary riding is available without operator status or administrative
   privileges. A cancelled interaction or dismount stays cancelled. Respect

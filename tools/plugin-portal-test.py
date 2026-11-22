@@ -68,6 +68,7 @@ def assertions(result, scenario):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plugin", type=Path, required=True)
+    parser.add_argument("--config", type=Path, help="Tandemount YAML to copy into this isolated run")
     parser.add_argument("--protocol-export", type=Path, required=True,
                         help="Exact loaded native protocol.properties from the standard plugin fixture")
     parser.add_argument("--with-portallinked", type=Path)
@@ -100,6 +101,10 @@ def main():
     directory = workspace.directory
     (directory / "plugins").mkdir()
     shutil.copy2(args.plugin, directory / "plugins/Tandemount.jar")
+    if args.config is not None:
+        config = directory / "plugins/Tandemount/config.yml"
+        config.parent.mkdir()
+        shutil.copy2(args.config, config)
     shutil.copy2(fixture, directory / "plugins/PortalTransferFixture.jar")
     if args.with_portallinked:
         shutil.copy2(args.with_portallinked, directory / "plugins/PortalLinked.jar")
@@ -114,7 +119,9 @@ def main():
     clients, result = [], {"kind": "native-portal-regression", "status": "failed", "minecraft": "26.3", "platform": "paper",
                           "server": metadata, "native_sdk_sha256": digest(sdk / "versions/26.3/paper-26.3.jar"),
                           "portallinked_sha256": digest(args.with_portallinked) if args.with_portallinked else None,
-                          "artifact_sha256": digest(args.plugin), "fixture_sha256": digest(fixture), "fixture_source_sha256": digest(source),
+                          "artifact_sha256": digest(args.plugin),
+                          "config_sha256": digest(config) if args.config is not None else None,
+                          "fixture_sha256": digest(fixture), "fixture_source_sha256": digest(source),
                           "protocol_export_sha256": digest(args.protocol_export), "scenario": args.scenario, "run_directory": str(directory)}
     state_path = directory / "plugins/PortalDiagnosis/state.json"
 
