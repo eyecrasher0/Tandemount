@@ -840,6 +840,54 @@ These measurements establish stationary placement after pairing. During
 turns the driver predicts horse yaw locally and receives the carrier yaws
 from the server, so delayed-turn alignment requires its own runtime check.
 
+### Paper 26.3 driver carrier interpolation
+
+The official 26.3 client listed above handles rotation-only movement through
+`ClientPacketListener.handleMoveEntity` and `SteppedInterpolationHandler`.
+That path uses a three-tick interpolation interval. A stepped position path
+with a distinct endpoint uses its encoded duration. The Paper 26.3 adapter
+substitutes a one-tick `ClientboundMoveEntityPacket.PosRot` for each existing
+llama rotation packet addressed to its own ride's driver. It retains the
+packed yaw, pitch, ground state and entity ID. The path alternates one native
+vertical coordinate quantum, and native passenger positioning resolves the
+llama's world position. The ordinary horse and passenger packets retain their
+existing order. Other players keep the original tracker packets.
+
+The same Paper 26.3 build 249 and official 26.3 client bytes were used for the
+stationary-pairing baseline JAR `0a26ffae0fcc48e85b3a0cbb838b21a07c4da12d973ad87529f9715c3e1093b2`
+and the driver interpolation JAR `bdb5346b83a0b0a0ec331fff7a94e05a30e142ca4f3462e4bb848ff450b44a0d`.
+Rendered vanilla client sampling collected the driver, rider and observer
+views at each loopback driver RTT setting. The driver maintained native
+horse control in each run, and the rider stayed at the configured
+half-block rear distance during straight motion.
+
+| Driver RTT | Turn | Mean driver horizontal error, before → after (blocks) | Longest driver rendered error above 0.125 blocks, before → after (ms) |
+|---|---|---|---|
+| 0 ms | Ordinary | 0.048 → 0.033 | 0 → 0 |
+| 0 ms | Rapid | 0.100 → 0.084 | 218 → 127 |
+| 100 ms | Ordinary | 0.069 → 0.055 | 213 → 127 |
+| 100 ms | Rapid | 0.160 → 0.115 | 388 → 272 |
+| 400 ms | Ordinary | 0.108 → 0.103 | 493 → 394 |
+| 400 ms | Rapid | 0.369 → 0.311 | 601 → 567 |
+
+The rapid-turn driver peak at 400 ms remained about 0.715 blocks. The passive
+views varied between runs, including about 67 ms above 0.125 blocks in the
+100 ms driver trial. In the 400 ms driver trial, their peaks were about
+0.082 blocks. A separate test expedited native carrier tracking on yaw
+changes and sent 68 updates per llama over the captured curve, compared with
+39 in the driver-only trial. It brought the 400 ms ordinary-turn duration
+to 308 ms, while rapid-turn duration rose to 600 ms and the passive peaks
+rose to 0.194 and 0.178 blocks. The retained driver-only implementation uses
+the ordinary native tracker cadence.
+
+The driver-only artifact passed `tools/plugin-runtime.py --platform paper
+--minecraft 26.3 --accept-eula` and `tools/plugin-owner-regression.py
+--accept-eula` with its matching fixture. The latter passed all 15 assertions.
+Its captured 120-step turn received 39 position-plus-rotation updates per
+llama on the driver connection and 39 rotation-only updates per llama on
+each passive connection. The `test_plugin_protocol.py` and
+`test_attachment_evidence.py` unit suites also passed.
+
 ### Paper 26.3 Nether passenger transfer audit
 
 A fresh clean-room implementer consulted the independent runtime and behavioral
