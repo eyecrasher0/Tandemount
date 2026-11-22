@@ -20,7 +20,9 @@ python3 tools/modern-build.py --all --platform neoforge
 Each jar declares exactly one Minecraft release and one loader. The build reads
 the exact official mappings and loader SDK, then generates full native method
 descriptors. Narrow native hooks fail when an expected signature is absent.
-Artifacts are written to `mods/modern/build/`.
+Runtime files use `tandemount-LOADER-1.0.0+MINECRAFT.jar` in
+`mods/modern/build/`. The native test runner loads a separate exact fixture
+from `.agents/modern-build/`.
 
 Prepare an official disposable server distribution using the project's cache
 tools before native execution. Local execution requires explicit EULA
@@ -48,7 +50,7 @@ uses vanilla operator permission level 2 as the native default for
 Cancelled native operations are not rescheduled. Seats use native tracking and
 do not send direct visibility overrides or force-load chunks.
 
-The second rider's final vehicle is a vanilla `BlockDisplay` carrying the
+Starting with 1.19.4, the second rider's final vehicle is a vanilla `BlockDisplay` carrying the
 invisible-render-shape `BARRIER` state. It is a nonliving entity, so the native
 player renderer can turn the rider's head and body independently. The horse
 retains the first player as its first passenger and controlling passenger. All
@@ -87,19 +89,20 @@ The colored chat menu provides height/rear adjustment, save, reload, reset,
 and enable/disable buttons; text commands have the same behavior. Adjustments
 save immediately, and `save` explicitly writes the current settings again.
 
-Versions before Interaction and BlockDisplay require a different native graph.
-That capability is still under investigation. A missing native height primitive
-is an explicit verification failure; an independent following seat is not
-substituted, and earlier follower-based reports do not establish compatibility
-with the final attachment contract. Do not publish a target until its final
-artifact has passed that contract.
+Earlier modern releases use a vanilla marker armor stand and an area-effect
+cloud as a separate following seat. The horse retains its ordinary driver.
+Client lifetime, unobstructed interaction, late observers, motion quality, and
+cleanup still require exact-version tests. The release verification requirements
+for this case are in the [behavioral specification](BEHAVIOR.md).
 
 The native fixture distinguishes synthetic entities and tracker collections
 from actual loopback clients. `--network-test` now connects ordinary protocol
 players, right-clicks the horse, inspects received existing/late observer
-passenger graphs, executes the received adjustment command, and records
-absence of periodic helper position packets. Original-client component probes
-are separate:
+passenger graphs and executes the received adjustment command. For the native
+horse-root variant it also checks for periodic world-position packets. The
+runner replays the original native packets in an independently measured
+original-client test for 1.19.4 and later. The metadata component probes can
+also be run separately:
 
 ```sh
 python3 tools/modern-client-components.py --minecraft 1.19.4
