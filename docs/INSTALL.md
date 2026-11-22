@@ -64,6 +64,20 @@ On legacy Forge, an existing explicit vertical value saved before the
 native riding height. Reset switches to the feet-based defaults. All variants
 support ordinary horses. Invalid numbers and unsupported horse types are rejected.
 
+For plugins, put exact Bukkit world names in the `excluded-worlds` YAML list.
+The default `[]` allows shared rides in every world. For example, use
+`excluded-worlds: ['world_nether', 'Event World']`. Capitalization and spaces
+must match the world name. Each entry must be a unique, nonblank string with
+no control characters. You can list unloaded worlds.
+
+Use `/tandemount reload` to apply file edits and `/tandemount status` to see the
+active settings and exclusions. The plugin expects a single YAML mapping with
+string keys, boolean `enabled` and `debug` values, and numeric offsets in the
+ranges above. Missing entries use defaults. Syntax errors, duplicate keys, and
+invalid settings reject the reload and preserve the active settings and file.
+Reload ends shared rides in newly excluded worlds while drivers stay on their
+horses. Players can still ride ordinary horses there.
+
 Disable ends active shared rides. Death, disconnect, horse removal, teleport,
 world change, unload, shutdown, and restart must leave no extra seat in the
 world; exact native verification remains a release requirement.

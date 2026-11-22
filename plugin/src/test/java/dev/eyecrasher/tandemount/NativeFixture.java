@@ -10,6 +10,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.io.*;
 import java.lang.reflect.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /** Disposable runtime fixture. It is never included in the release plugin. */
@@ -366,20 +369,23 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private boolean mount(Entity vehicle, Entity passenger) { return (Boolean)invoke(field(tandem, "nativeAccess"), "mount", vehicle, passenger); }
     private Snapshot settings() { return new Snapshot(field(tandem, "settings")); }
-    private void verifyDefaults() throws ReflectiveOperationException {
-        Class<?> type = Class.forName("dev.eyecrasher.tandemount.Settings", true, tandem.getClass().getClassLoader());
-        Method read = type.getDeclaredMethod("read", org.bukkit.configuration.file.FileConfiguration.class);
-        org.bukkit.configuration.file.YamlConfiguration missing = new org.bukkit.configuration.file.YamlConfiguration();
-        missing.set("supported-horse-types", Collections.singletonList("HORSE"));
-        Snapshot fallback = new Snapshot(Probe.call(read, (Object)null, missing));
-        require("missing-settings-use-owner-defaults", fallback.vertical == 0.8125 && fallback.rearward == 0.5);
-        missing.set("vertical", 1.375); missing.set("rearward", 0.6875);
-        Snapshot saved = new Snapshot(Probe.call(read, (Object)null, missing));
-        require("saved-settings-remain-preserved", saved.vertical == 1.375 && saved.rearward == 0.6875);
+    private void verifyDefaults() {
         require("fresh-config-uses-owner-defaults", settings().vertical == 0.8125 && settings().rearward == 0.5);
-        configure(getServer().getConsoleSender(), "vertical 1.5");
-        configure(getServer().getConsoleSender(), "rearward 1.0");
-        configure(getServer().getConsoleSender(), "reset");
+        Path file = tandem.getDataFolder().toPath().resolve("config.yml");
+        byte[] original = configBytes(file);
+        CommandSender console = getServer().getConsoleSender();
+        String horseTypes = "supported-horse-types: [HORSE]\n";
+        writeConfig(file, (horseTypes + "vertical: 1.375\nrearward: 0.6875\n").getBytes(StandardCharsets.UTF_8));
+        configure(console, "reload");
+        require("saved-settings-remain-preserved", settings().vertical == 1.375 && settings().rearward == 0.6875);
+        writeConfig(file, horseTypes.getBytes(StandardCharsets.UTF_8));
+        configure(console, "reload");
+        require("missing-settings-use-owner-defaults", settings().vertical == 0.8125 && settings().rearward == 0.5);
+        writeConfig(file, original);
+        configure(console, "reload");
+        configure(console, "vertical 1.5");
+        configure(console, "rearward 1.0");
+        configure(console, "reset");
         require("reset-restores-owner-defaults", settings().vertical == 0.8125 && settings().rearward == 0.5);
     }
     private void configure(CommandSender sender, String text) {
@@ -620,7 +626,124 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         state("lifecycle", "0");
         sequence(
             new Runnable() { public void run() { mount(horse, driver); interact(rider); } },
-            new Runnable() { public void run() { require("lifecycle-ride-started", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); configure(getServer().getConsoleSender(), "disable"); } },
+            new Runnable() { public void run() {
+                require("lifecycle-ride-started", rider.isInsideVehicle() && countSeats() == 1);
+                trackSeat();
+                verifyConfigurationReload();
+            } }
+        );
+    }
+    private void verifyConfigurationReload() {
+        final Path file = tandem.getDataFolder().toPath().resolve("config.yml");
+        final byte[] original = configBytes(file);
+        final Entity seat = rider.getVehicle();
+        String horseTypes = "supported-horse-types: [HORSE]\n";
+        String[][] invalid = {
+            {"malformed-yaml", horseTypes + "vertical: [0.8125\n"},
+            {"duplicate-key", horseTypes + "vertical: 1.375\n'vertical': 1.25\n"},
+            {"nested-duplicate-key", horseTypes + "metadata: {item: 1, 'item': 2}\n"},
+            {"enabled-string", horseTypes + "enabled: 'true'\n"},
+            {"debug-number", horseTypes + "debug: 1\n"},
+            {"explicit-null", horseTypes + "enabled: null\n"},
+            {"merged-null", horseTypes + "defaults: &defaults {vertical: ~}\n<<: *defaults\n"},
+            {"nonfinite", horseTypes + "vertical: .nan\n"},
+            {"out-of-bounds", horseTypes + "rearward: 3.0\n"},
+            {"wrong-number-type", horseTypes + "rearward: '0.75'\n"},
+            {"mixed-horse-types", "supported-horse-types: [HORSE, {}]\n"},
+            {"wrong-exclusion-type", horseTypes + "excluded-worlds: world\n"},
+            {"mixed-exclusions", horseTypes + "excluded-worlds: [world, 17]\n"},
+            {"duplicate-exclusions", horseTypes + "excluded-worlds: [world, world]\n"},
+            {"blank-exclusion", horseTypes + "excluded-worlds: [' ']\n"},
+            {"null-exclusion", horseTypes + "excluded-worlds: [world, null]\n"}
+        };
+        CommandSender console = getServer().getConsoleSender();
+        for (String[] sample : invalid) {
+            Object active = field(tandem, "settings");
+            byte[] contents = sample[1].getBytes(StandardCharsets.UTF_8);
+            writeConfig(file, contents);
+            configure(console, "reload");
+            require("configuration-rejects-" + sample[0], field(tandem, "settings") == active
+                    && Arrays.equals(contents, configBytes(file)) && rider.getVehicle() == seat);
+        }
+        final String world = horse.getWorld().getName();
+        byte[] edited = (horseTypes + "# Keep this administrator comment\n"
+                + "defaults: &seat {vertical: 1.375, rearward: 0.6875}\n<<: *seat\n"
+                + "excluded-worlds: ['" + world.toUpperCase(Locale.ROOT) + "', 'Unloaded World']\n")
+                .getBytes(StandardCharsets.UTF_8);
+        writeConfig(file, edited);
+        Object beforeUnauthorized = field(tandem, "settings");
+        configure(driver, "reload");
+        require("configuration-denies-non-op-reload", field(tandem, "settings") == beforeUnauthorized
+                && Arrays.equals(edited, configBytes(file)));
+        configure(console, "reload");
+        require("configuration-reloads-without-rewriting-file", Arrays.equals(edited, configBytes(file))
+                && settings().vertical == 1.375 && settings().rearward == 0.6875);
+        later(6, guarded("configuration-exclusion-reload", new Runnable() { public void run() {
+                require("configuration-reload-preserves-ride-with-different-world-case",
+                        rider.getVehicle() == seat && driver.getVehicle() == horse && countSeats() == 1);
+                Location at = rider.getLocation(), root = horse.getLocation();
+                double yaw = Math.toRadians(root.getYaw());
+                require("configuration-reload-applies-geometry-to-active-ride",
+                        Math.abs(at.getY() - root.getY() - 1.375) < 0.02
+                        && Math.abs(at.getX() - root.getX() - Math.sin(yaw) * 0.6875) < 0.02
+                        && Math.abs(at.getZ() - root.getZ() + Math.cos(yaw) * 0.6875) < 0.02);
+                final byte[] excluded = ("supported-horse-types: [HORSE]\nexcluded-worlds: ['" + world + "']\n")
+                        .getBytes(StandardCharsets.UTF_8);
+                writeConfig(file, excluded);
+                Runnable reload = guarded("configuration-console-dispatch", new Runnable() { public void run() {
+                    require("configuration-dispatches-console-reload", getServer().dispatchCommand(
+                            getServer().getConsoleSender(), "tandemount reload"));
+                    afterOwned(horse, 1, new Runnable() { public void run() {
+                        verifyExclusion(file, original, excluded, seat);
+                    }});
+                }});
+                if (folia()) invoke(invoke(getServer(), "getGlobalRegionScheduler"), "execute", NativeFixture.this, reload);
+                else reload.run();
+        }}));
+    }
+    private void verifyExclusion(final Path file, final byte[] original, final byte[] excluded, final Entity seat) {
+        final CommandSender console = getServer().getConsoleSender();
+        sequence(
+            new Runnable() { public void run() {
+                require("configuration-exclusion-cleans-active-seat",
+                        !seat.isValid() && !rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 0);
+                interact(rider);
+            } },
+            new Runnable() { public void run() {
+                require("configuration-exclusion-blocks-new-share",
+                        !rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 0);
+                writeConfig(file, original);
+                configure(console, "reload");
+                if (!rider.isInsideVehicle()) interact(rider);
+                writeConfig(file, excluded);
+                configure(console, "reload");
+            } },
+            new Runnable() { public void run() {
+                require("configuration-exclusion-blocks-deferred-share",
+                        !rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 0);
+                writeConfig(file, original);
+                configure(console, "reload");
+                if (!rider.isInsideVehicle()) interact(rider);
+            } },
+            new Runnable() { public void run() {
+                require("configuration-removing-exclusion-allows-retry",
+                        rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 1);
+                trackSeat();
+                lifecycleAfterReload();
+            } }
+        );
+    }
+    private byte[] configBytes(Path file) {
+        try { return Files.readAllBytes(file); }
+        catch (IOException failure) { throw new UncheckedIOException(failure); }
+    }
+    private void writeConfig(Path file, byte[] bytes) {
+        try { Files.write(file, bytes); }
+        catch (IOException failure) { throw new UncheckedIOException(failure); }
+    }
+    private void lifecycleAfterReload() {
+        configure(getServer().getConsoleSender(), "disable");
+        sequence(
             new Runnable() { public void run() { require("configuration-disable-cleans-active-seat", !rider.isInsideVehicle() && countSeats() == 0); configure(getServer().getConsoleSender(), "enable"); interact(rider); } },
             new Runnable() { public void run() { require("configuration-enable-allows-retry", rider.isInsideVehicle() && countSeats() == 1); trackSeat(); cancelTeleport = true; transport(rider, horse.getLocation().add(0.5, 0, 0.5)); } },
             new Runnable() { public void run() {

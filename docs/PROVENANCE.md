@@ -831,3 +831,65 @@ preventing automatic reentry while the unmounted player touches the exit.
 Cancelled horse portal events do not enter this override, and a cancelled second-player
 teleport is not retried. This audit makes no new compatibility claim for other
 versions or platforms. Private SDK listings and native reports remain ignored.
+
+### Bukkit settings reload audit
+
+A fresh clean-room inspection used Paper 26.3 build 249, its official Bukkit
+API JAR and bundled SnakeYAML 2.2. The runtime and API hashes are recorded above.
+The SnakeYAML JAR SHA-256 is
+`1467931448a0817696ae2805b7b8b20bfb082652bf9c4efaed528930dc49389b`.
+The upstream configuration API documents a fallback for wrongly typed booleans
+and conversion or omission of elements in typed list getters. The exact API
+bytecode shows that `YamlConfiguration` composes and flattens YAML nodes before
+copying the values into Bukkit sections. `MemorySection.set` removes null
+values, while duplicate keys collapse during conversion. The settings loader
+inspects SnakeYAML's composed mapping keys before Bukkit converts them, keeps
+Bukkit's own file decoding and merge semantics, and validates raw setting
+values. [Paper configuration API](https://jd.papermc.io/paper/26.3/org/bukkit/configuration/ConfigurationSection.html),
+[Paper file configuration API](https://jd.papermc.io/paper/26.3/org/bukkit/configuration/file/FileConfiguration.html),
+[YAML merge key definition](https://yaml.org/type/merge.html).
+
+The same node composition API exists in the official patched Paper 1.7.10
+build 2025 SDK, SHA-256
+`eb9b87e987c03492ae32709ab3bad4a4bb1aeadd2c906f848473c793487b9ba3`.
+The implementation uses Bukkit's exact world names and lets the existing
+entity-owner tick retire affected seats. The reload command can run on the
+Folia global region. It marks affected rides using the world names captured
+while the horse was owned by its region. [Official Paper 1.7.10 distribution](https://fill-data.papermc.io/v1/objects/33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185/paper-1.7.10-2025.jar),
+[Bukkit world name API](https://jd.papermc.io/paper/26.3/org/bukkit/generator/WorldInfo.html#getName()),
+[PaperMC Folia scheduling](https://docs.papermc.io/paper/dev/folia-support/#entity-scheduler).
+
+The Paper 26.3 settings fixture reproduced acceptance of duplicate keys, wrong
+boolean and list types, and null settings on baseline `6d65245`. It also
+reproduced a file rewrite on successful reload and continued riding after an
+exclusion was added. The candidate artifact SHA-256 is
+`3133fce605eb5de1976aa7a08e2ba9e2b7fb8f7f1fbd0fd48de590298c1036b6`.
+The separate fixture SHA-256 is
+`0da15da015b4697026745632320117673899a85e2833096cd280dfc2f10eb8a7`.
+The Bukkit build compiled using the Paper 1.12.2 API and again using the exact
+Paper 26.3 API and its bundled dependencies. The two 26.3 plugin JARs matched
+byte for byte. The oldest Paper SDK also passed a standalone Java 8 settings
+load using its bundled Bukkit and SnakeYAML classes.
+
+Paper 26.3 build 249 and Folia 26.3 build 6 each passed 102 native assertions,
+including 27 configuration assertions, plus 10 loopback packet checks, two
+clickable menu checks, live serialization refusal, a scan of 2,188 saved chunks
+and native restart. The exclusion test dispatched `/tandemount reload` from
+Folia's global region, checked cleanup on the horse's region, confirmed that a
+pending join was rejected, and confirmed that the first rider kept the horse.
+The Folia distribution SHA-256 is
+`3d0a694905ddd9ec956af52259d555274ab8d3191871296d7094c290b686920d` and its
+bootstrapped server SDK SHA-256 is
+`4268a906fe28842ee8566a908c8486e656f6baf9d5947f512791c2a635cd3df6`.
+[Official Folia distribution](https://fill-data.papermc.io/v1/objects/3d0a694905ddd9ec956af52259d555274ab8d3191871296d7094c290b686920d/folia-26.3-6.jar).
+
+The aggregate runner still reports a standalone original-client geometry
+failure. The baseline Paper capture and both candidate captures measure
+`0.537499988` blocks rearward against `0.5` configured with `0.03125` tolerance.
+The native settings results are independent of that failure. Human visual
+verification remains pending.
+
+Reproduction uses `python3 tools/plugin-build.py --all --fixture` and
+`python3 tools/plugin-runtime.py --platform paper --minecraft 26.3 --accept-eula`.
+Select `--platform folia` for the Folia check. The artifact-bound logs, SDK
+listings, and client replay reports are retained in ignored evidence storage.

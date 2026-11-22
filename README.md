@@ -21,5 +21,6 @@ See [installation and commands](docs/INSTALL.md),
 [modern mod builds](docs/MODERN_BUILD.md), and
 [legacy Forge builds](docs/LEGACY.md). Plugin builds use
 `python3 tools/plugin-build.py --all` against a real Bukkit/Paper API; use
-`--api /path/to/api.jar` when the SDK cache is not prepared.
+`--api /path/to/api.jar` to select an SDK and `--classpath` for separately
+provided SDK dependencies, including SnakeYAML.
 Please do not install development fixtures on a live server.

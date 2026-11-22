@@ -7,4 +7,6 @@ rearward: 0.5
 # Only ordinary horses have been implemented. Unknown entries are rejected.
 supported-horse-types:
   - HORSE
+# Exact, case-sensitive Bukkit world names. An empty list allows every world.
+excluded-worlds: []
 debug: false

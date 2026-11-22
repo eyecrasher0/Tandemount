@@ -3,6 +3,7 @@ package dev.eyecrasher.tandemount;
 
 import org.bukkit.*;
 import org.bukkit.command.*;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.*;
 import org.bukkit.event.*;
@@ -11,6 +12,7 @@ import org.bukkit.event.player.*;
 import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.inventory.ItemStack;
+import org.yaml.snakeyaml.error.YAMLException;
 import java.io.*;
 import java.lang.reflect.*;
 import java.nio.file.*;
@@ -35,8 +37,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     @Override public void onEnable() {
         try {
             saveDefaultConfig();
-            configuration = loadConfiguration();
-            settings = Settings.read(configuration);
+            reloadSettings();
             scheduler = new OwnerScheduler(this);
             nativeAccess = new NativeAccess(getServer());
             packets = new PacketBridge(this);
@@ -67,10 +68,24 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         pending.clear();
     }
 
-    private YamlConfiguration loadConfiguration() throws Exception {
-        YamlConfiguration yaml = new YamlConfiguration();
-        yaml.load(new File(getDataFolder(), "config.yml"));
-        return yaml;
+    private void reloadSettings() throws IOException {
+        ConfigYaml yaml = new ConfigYaml();
+        try {
+            yaml.load(new File(getDataFolder(), "config.yml"));
+        } catch (InvalidConfigurationException | YAMLException invalid) {
+            throw new IllegalArgumentException("config.yml contains invalid YAML");
+        }
+        applySettings(yaml, yaml.loadedSettings);
+    }
+
+    // Publish alongside ride registration without holding the region during
+    // file I/O. The owning entity tick performs cleanup, including on Folia.
+    private void applySettings(YamlConfiguration yaml, Settings next) {
+        synchronized (horses) {
+            for (Ride ride : horses.values()) if (!next.allows(ride.worldName)) ride.closing = true;
+            configuration = yaml;
+            settings = next;
+        }
     }
 
     @SuppressWarnings("unchecked") private Collection<Player> onlinePlayers() throws ReflectiveOperationException {
@@ -144,17 +159,19 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void interact(final PlayerInteractEntityEvent event) {
-        if (stopping || settings == null || !settings.enabled || !packetHealthy || !(event.getRightClicked() instanceof Horse)) return;
+        Settings active = settings;
+        if (stopping || active == null || !packetHealthy || !(event.getRightClicked() instanceof Horse)) return;
         final Player player = event.getPlayer();
         final Horse horse = (Horse)event.getRightClicked();
-        if (!eligible(horse) || nativeAccess.passengers(horse).isEmpty() || player.isInsideVehicle()) return;
+        if (!active.allows(horse.getWorld().getName()) || !eligible(horse)
+                || nativeAccess.passengers(horse).isEmpty() || player.isInsideVehicle()) return;
         if (!pending.add(player.getUniqueId())) return;
         // The event object is checked after the COMPLETE synchronous dispatch,
         // including later MONITOR listeners. Cancelled interactions never mount.
         scheduler.next(horse, new Runnable() {
             public void run() {
                 try {
-                    if (!event.isCancelled() && !stopping && isEnabled() && settings.enabled && packetHealthy
+                    if (!event.isCancelled() && !stopping && isEnabled() && packetHealthy
                             && scheduler.owns(player)) join(horse, player);
                 } finally { pending.remove(player.getUniqueId()); }
             }
@@ -172,7 +189,8 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     }
 
     private void join(Horse horse, Player player) {
-        if (!player.isOnline() || player.isDead() || player.isInsideVehicle() || !eligible(horse)
+        if (!settings.allows(horse.getWorld().getName()) || !player.isOnline() || player.isDead()
+                || player.isInsideVehicle() || !eligible(horse)
                 || !player.getWorld().equals(horse.getWorld()) || player.getLocation().distanceSquared(horse.getLocation()) > 36.0
                 || horses.containsKey(horse.getUniqueId()) || riders.containsKey(player.getUniqueId())) return;
         List<Entity> passengers = nativeAccess.passengers(horse);
@@ -186,7 +204,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
                     || (!nativeAccess.oldest && (!packets.installed(player) || !packets.installed(driver)))) return;
             seat = nativeAccess.createSeat(horse);
             ride = new Ride(this, horse, driver, player, seat, Reflect.handle(seat));
-            if (horses.putIfAbsent(horse.getUniqueId(), ride) != null) { seat.remove(); return; }
+            if (!registerRide(ride)) { seat.remove(); return; }
             riders.put(driver.getUniqueId(), ride); riders.put(player.getUniqueId(), ride);
             NativeSeat.RIDES.put(ride.nativeSeat, ride);
             packets.addSeat(seat.getEntityId(), nativeAccess.legacySeatType);
@@ -214,6 +232,13 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         }
     }
 
+    private boolean registerRide(Ride ride) {
+        UUID horseId = ride.horse.getUniqueId();
+        synchronized (horses) {
+            return settings.allows(ride.worldName) && horses.putIfAbsent(horseId, ride) == null;
+        }
+    }
+
     private void follow(final Ride ride) {
         scheduler.next(ride.horse, new Runnable() {
             public void run() {
@@ -231,7 +256,8 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             ride.driverExit = null; ride.riderExit = null;
             if (driverExit != null && driverExit.isCancelled()) nativeAccess.preserveCancelledExit(ride.horse, ride.driver);
             if (riderExit != null && riderExit.isCancelled()) nativeAccess.preserveCancelledExit(ride.seat, ride.rider);
-            if (stopping || !isEnabled() || ride.closing || !settings.enabled || !ride.horse.isValid()
+            if (stopping || !isEnabled() || ride.closing || !ride.horse.isValid()
+                    || !settings.allows(ride.horse.getWorld().getName())
                     || ride.horse.isDead() || !ride.seat.isValid() || !ride.driver.isOnline() || !ride.rider.isOnline()
                     || ride.driver.isDead() || ride.rider.isDead() || ride.driver.getVehicle() != ride.horse
                     || ride.rider.getVehicle() != ride.seat || !ride.horse.getWorld().equals(ride.rider.getWorld())
@@ -312,22 +338,31 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             try {
                 String action = args[0].toLowerCase(Locale.ROOT);
                 if (action.equals("status")) { status(sender); return true; }
-                Settings next = settings;
-                YamlConfiguration nextYaml = configuration;
-                if (action.equals("reload") && args.length == 1) { nextYaml = loadConfiguration(); next = Settings.read(nextYaml); }
-                else if (action.equals("reset") && args.length == 1)
-                    next = new Settings(settings.enabled, Settings.DEFAULT_VERTICAL, Settings.DEFAULT_REARWARD, settings.debug);
+                if (action.equals("reload") && args.length == 1) {
+                    reloadSettings();
+                    status(sender);
+                    return true;
+                }
+                Settings next;
+                if (action.equals("reset") && args.length == 1)
+                    next = new Settings(settings.enabled, Settings.DEFAULT_VERTICAL, Settings.DEFAULT_REARWARD,
+                            settings.debug, settings.excludedWorlds);
                 else if ((action.equals("enable") || action.equals("disable")) && args.length == 1)
-                    next = new Settings(action.equals("enable"), settings.vertical, settings.rearward, settings.debug);
+                    next = new Settings(action.equals("enable"), settings.vertical, settings.rearward,
+                            settings.debug, settings.excludedWorlds);
                 else if (action.equals("debug") && args.length == 2 && (args[1].equalsIgnoreCase("on") || args[1].equalsIgnoreCase("off")))
-                    next = new Settings(settings.enabled, settings.vertical, settings.rearward, args[1].equalsIgnoreCase("on"));
+                    next = new Settings(settings.enabled, settings.vertical, settings.rearward,
+                            args[1].equalsIgnoreCase("on"), settings.excludedWorlds);
                 else if ((action.equals("vertical") || action.equals("rearward")) && args.length == 2) {
                     double current = action.equals("vertical") ? settings.vertical : settings.rearward;
                     double value = args[1].equals("+") ? current + Settings.STEP
                             : args[1].equals("-") ? current - Settings.STEP : Double.parseDouble(args[1]);
                     next = settings.coordinate(action, value);
                 } else { sender.sendMessage("Usage: /tandemount [help|status|vertical <+|-|number>|rearward <+|-|number>|enable|disable|reload|reset|debug <on|off>]"); return true; }
-                save(nextYaml, next); configuration = nextYaml; settings = next;
+                YamlConfiguration nextYaml = new YamlConfiguration();
+                nextYaml.loadFromString(configuration.saveToString());
+                save(nextYaml, next);
+                applySettings(nextYaml, next);
                 status(sender);
             } catch (IllegalArgumentException invalid) { sender.sendMessage("Setting rejected: " + invalid.getMessage()); }
             catch (Exception failure) { sender.sendMessage("Could not save or reload settings; existing ride settings remain active."); debug("Configuration details", failure); }
@@ -346,12 +381,15 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         } finally { Files.deleteIfExists(temporary); }
     }
     private void status(CommandSender sender) {
+        Settings active = settings;
         sender.sendMessage(ChatColor.GOLD + "Tandemount " + ChatColor.DARK_GRAY + "| "
-                + (settings.enabled ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled")
-                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Height: " + ChatColor.WHITE + settings.vertical
-                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Back: " + ChatColor.WHITE + settings.rearward);
+                + (active.enabled ? ChatColor.GREEN + "Enabled" : ChatColor.RED + "Disabled")
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Height: " + ChatColor.WHITE + active.vertical
+                + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Back: " + ChatColor.WHITE + active.rearward);
         sender.sendMessage(ChatColor.GRAY + "Horse types: " + ChatColor.WHITE + "HORSE" + ChatColor.DARK_GRAY + " | "
-                + ChatColor.GRAY + "Debug: " + ChatColor.WHITE + (settings.debug ? "on" : "off"));
+                + ChatColor.GRAY + "Debug: " + ChatColor.WHITE + (active.debug ? "on" : "off"));
+        sender.sendMessage(ChatColor.GRAY + "Excluded worlds: " + ChatColor.WHITE
+                + (active.excludedWorlds.isEmpty() ? "(none)" : String.join(", ", active.excludedWorlds)));
     }
     private void help(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD.toString() + ChatColor.BOLD + "Tandemount" + ChatColor.DARK_GRAY + " | " + ChatColor.GRAY + "Share the ride");
