@@ -42,14 +42,22 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private volatile boolean unloadObserved, unloadContainedHelper;
     private volatile String currentPhase;
     private boolean saveProbePending;
-    private boolean wireMode;
+    private boolean wireMode, wirePreciseOnly;
     private int wireInteractions, wireCancelledInteractions, wireThirdInteractions;
+    private String wireCancelledEvent;
     private org.bukkit.permissions.PermissionAttachment wireAdmin;
     private Snapshot wireSettings;
 
     @Override public void onEnable() {
         tandem = (TandemountPlugin)getServer().getPluginManager().getPlugin("Tandemount");
         getServer().getPluginManager().registerEvents(this, this);
+        Class<?> separate = (Class<?>)invoke(tandem, "separatePreciseInteractionType");
+        if (separate != null) {
+            Class<? extends PlayerInteractEntityEvent> precise = separate.asSubclass(PlayerInteractEntityEvent.class);
+            getServer().getPluginManager().registerEvent(precise, this, EventPriority.MONITOR, (listener, event) -> {
+                if (precise.isInstance(event)) cancelled(precise.cast(event));
+            }, this, false);
+        }
         getDataFolder().mkdirs();
         try {
             File saved = new File(getDataFolder(), "seat-uuids.txt");
@@ -81,7 +89,10 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         if (cancelInteraction && event.getRightClicked() == horse) event.setCancelled(true);
         if (wireMode && event.getPlayer() == rider && event.getRightClicked() == horse) {
             wireInteractions++;
-            if (event.isCancelled()) wireCancelledInteractions++;
+            if (event.isCancelled()) {
+                wireCancelledInteractions++;
+                wireCancelledEvent = event.getClass().getSimpleName();
+            }
         }
         if (wireMode && event.getPlayer() == third && event.getRightClicked() == horse) wireThirdInteractions++;
     }
@@ -307,7 +318,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 getLogger().info("START_LOCATIONS horse=" + horse.getLocation() + " rider=" + rider.getLocation() + " driver=" + driver.getLocation());
                 cancelInteraction = true;
                 if (wireMode) {
-                    new NativeFixtureProtocol((Class<?>)field(field(tandem,"nativeAccess"),"entityClass"), Probe.handle(horse)).export(getDataFolder(), Probe.handle(horse));
+                    Properties wire = new NativeFixtureProtocol((Class<?>)field(field(tandem,"nativeAccess"),"entityClass"),
+                            Probe.handle(horse)).export(getDataFolder(), Probe.handle(horse));
+                    wirePreciseOnly = wire.containsKey("interact.0.at") && !wire.containsKey("interact.0.plain");
                     state("wire-cancel", Integer.toString(horse.getEntityId())); return;
                 }
                 interact(rider);
@@ -323,13 +336,20 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     private void wireCancelled() {
         later(3,new Runnable(){public void run(){
-            require("cancelled-final-interaction-does-not-mount",wireCancelledInteractions > 0 && !rider.isInsideVehicle() && countSeats()==0);
+            boolean preciseCancelled = !wirePreciseOnly || (wireInteractions == 1 && wireCancelledInteractions == 1
+                    && "PlayerInteractAtEntityEvent".equals(wireCancelledEvent));
+            record("cancelled-final-interaction-does-not-mount",
+                    preciseCancelled && wireCancelledInteractions > 0 && !rider.isInsideVehicle() && countSeats() == 0,
+                    "native callbacks=" + wireInteractions + ", cancelled=" + wireCancelledInteractions
+                            + ", last cancelled event=" + wireCancelledEvent);
             cancelInteraction=false;state("wire-mount",Integer.toString(horse.getEntityId()));
         }});
     }
     private void wireMounted() {
         later(4,new Runnable(){public void run(){
-            require("real-client-right-click-mount-persists",wireInteractions > wireCancelledInteractions && rider.isInsideVehicle() && rider.getVehicle()!=horse && countSeats()==1 && !rider.isOp());
+            int accepted = wireInteractions - wireCancelledInteractions;
+            require("real-client-right-click-mount-persists", accepted > 0 && (!wirePreciseOnly || accepted == 1)
+                    && rider.isInsideVehicle() && rider.getVehicle() != horse && countSeats() == 1 && !rider.isOp());
             if (!rider.isInsideVehicle()) { state("failed","wire-no-seat");return; }
             Location player = rider.getLocation(), root = horse.getLocation(); double yaw = Math.toRadians(root.getYaw());
             require("default-native-rider-height", Math.abs(player.getY()-root.getY()-Settings.DEFAULT_VERTICAL)<0.02);

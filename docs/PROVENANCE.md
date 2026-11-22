@@ -742,6 +742,50 @@ codecs and controlled attachment components for both existing and late
 observers. Rendered client review and delayed local driver prediction remain
 open for these exact artifacts.
 
+### Spigot 26.1 right-click event audit
+
+`javap -p -c` on the native Spigot 26.1 SDK, SHA-256
+`221b3241510f6c283784c020c23c37557782b4117ba24278956eff76a13c2f43`,
+shows that `ServerGamePacketListenerImpl.handleInteract` constructs a
+`PlayerInteractAtEntityEvent` from the target, hand and clicked location,
+calls the Bukkit plugin manager and checks that event's cancellation before
+the native interaction. The exact `ServerboundInteractPacket` has a single
+payload with an entity identifier, hand, location and secondary-action flag.
+The isolated baseline received the packet with the player loaded, in reach
+and able to resolve the horse, and its ordinary listener received zero calls.
+
+| Exact SDK | API or patched SDK SHA-256 | Precise interaction handler list |
+|---|---|---|
+| [Spigot 26.1 revision 4609](https://hub.spigotmc.org/versions/4609.json) | `9c164d8df34dca6ec9513ce55b69907dac3265f2f4b076532dfc897e921c4332` | Declares its own list and overrides `getHandlers()` |
+| [Spigot 26.1.1 revision 4616](https://hub.spigotmc.org/versions/4616.json) | `158b4115c86e43593851e1a47c9c6d689177c2d83689e8f933d3c6b1395991ff` | Inherits the ordinary list |
+| [Paper 26.3 build 249](https://fill-data.papermc.io/v1/objects/4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a/paper-26.3-249.jar) | `d004db09ebb3ab27c960aed8daf0a9679abf834a586096fc8b3e13afc8cd7aba` | Inherits the ordinary list |
+| [Paper 1.21.4 build 232](https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar) | `30a428c5105e2c1020a94db4e332557bab4bed52003076d329b1d5328153c66d` | Declares its own list and also handles ordinary packets |
+| [Paper 1.7.10 build 2025](https://fill-data.papermc.io/v1/objects/33772078d92e9dbb027602da016524ef29af5b4c12eaddac1fe2465b01108185/paper-1.7.10-2025.jar) | `eb9b87e987c03492ae32709ab3bad4a4bb1aeadd2c906f848473c793487b9ba3` | Uses only the ordinary event |
+
+On exact 26.1 the plugin registers its existing seat protection and mounting
+callbacks on the separate list if present. The existing mounting callback
+checks the same event again on the owning tick after synchronous dispatch.
+The fixture uses the separate list on 26.1 for its late cancellation listener.
+For SDK exports with one precise packet, the wire test requires one callback
+on the actual precise event class with cancellation, then a single accepted
+callback that mounts the ordinary rider.
+
+| Exact runtime | Tested Bukkit JAR SHA-256 | Single cancelled wire event |
+|---|---|---|
+| Spigot 26.1 revision 4609 | `8510b294cc2878ae8d3abbb2509195bfdb63216c7d060fe4b7da3c70142f0d80` | `PlayerInteractAtEntityEvent` |
+| Spigot 26.1.1 revision 4616 | `5d41c5142335db63d179c71c224b0b8e35cf48b7963fd7193e0129a91763a481` | `PlayerInteractAtEntityEvent` |
+| Paper 26.3 build 249 | `72608f0bc9fb2a0cd19bdc60dcfaef2c29619b895b6fe907c1e146fd42733aac` | `PlayerInteractAtEntityEvent` |
+| Paper 1.21.4 build 232 | `49ed5740ebab69dcbcd8baf7de1426a7035441a06942753b815cd3a072e4e367` | `PlayerInteractEntityEvent` |
+| Paper 1.7.10 build 2025 | `a3a82ea0520ca4ee1e4616dd3695959b7bb7cee780824ff0c80788e530ddee0a` | `PlayerInteractEntityEvent` |
+
+The five runs passed the native cancellation and accepted-click assertions.
+Paper 1.21.4 exported both interaction packet forms and the fixture's ordinary
+listener received one callback. The 26.1, 26.1.1 and 26.3 artifacts passed all
+native assertions and restart checks. Their original-client component replay
+measured `0.5375` blocks rearward at the configured default `0.5`, outside
+that probe's `0.03125`-block tolerance. The event audit leaves that separate
+client geometry result open.
+
 ### Horse passenger rotation at pairing from 1.21.9
 
 The stationary placement audit used the current Tandemount sources, exact

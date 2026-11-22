@@ -19,7 +19,7 @@ final class NativeFixtureProtocol {
             try{return Class.forName(name);}catch(ClassNotFoundException absent){/* Next audited mapping family. */}
         throw new ClassNotFoundException(modern);
     }
-    void export(File directory,Object horse) throws ReflectiveOperationException,IOException {
+    Properties export(File directory,Object horse) throws ReflectiveOperationException,IOException {
         Properties properties=new Properties();Class<?> packet=gameClass("ServerboundInteractPacket","PacketPlayInUseEntity");
         properties.setProperty("interact.class",packet.getSimpleName());
         for(int hand=0;hand<2;hand++)for(boolean at:new boolean[]{false,true}) {
@@ -34,6 +34,7 @@ final class NativeFixtureProtocol {
             properties.setProperty("command."+i+".body",Base64.getEncoder().encodeToString(encode(value)));
         }
         try(Writer writer=new OutputStreamWriter(new FileOutputStream(new File(directory,"wire-packets.properties")),"UTF-8")){properties.store(writer,"Exact loaded upstream native factories and packet encoders");}
+        return properties;
     }
     private Object interaction(Class<?> packet,Object horse,int hand,boolean at) throws ReflectiveOperationException {
         for(Constructor<?> constructor:packet.getDeclaredConstructors()) {

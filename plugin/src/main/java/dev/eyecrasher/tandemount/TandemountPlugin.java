@@ -10,6 +10,7 @@ import org.bukkit.event.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.player.*;
 import org.bukkit.event.world.ChunkUnloadEvent;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.inventory.ItemStack;
 import org.yaml.snakeyaml.error.YAMLException;
@@ -42,6 +43,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             nativeAccess = new NativeAccess(getServer());
             packets = new PacketBridge(this);
             getServer().getPluginManager().registerEvents(this, this);
+            registerPreciseInteractionEvents();
             PluginCommand command = getCommand("tandemount");
             if (command == null) throw new IllegalStateException("Missing /tandemount command declaration");
             command.setExecutor(this); command.setTabCompleter(this);
@@ -54,6 +56,29 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             debug("Initialization details", failure);
             getServer().getPluginManager().disablePlugin(this);
         }
+    }
+
+    private void registerPreciseInteractionEvents() throws ReflectiveOperationException {
+        Class<? extends PlayerInteractEntityEvent> precise = separatePreciseInteractionType();
+        if (precise == null) return;
+        PluginManager manager = getServer().getPluginManager();
+        manager.registerEvent(precise, this, EventPriority.HIGHEST, (listener, event) -> {
+            if (precise.isInstance(event)) interactSeat(precise.cast(event));
+        }, this, true);
+        manager.registerEvent(precise, this, EventPriority.MONITOR, (listener, event) -> {
+            if (precise.isInstance(event)) interact(precise.cast(event));
+        }, this, true);
+    }
+
+    private Class<? extends PlayerInteractEntityEvent> separatePreciseInteractionType() throws ReflectiveOperationException {
+        // 26.1 sends only the precise packet. Earlier clients can follow it
+        // with an ordinary interaction, whose cancellation controls mounting.
+        if (!"26.1".equals(nativeAccess.minecraft)) return null;
+        Class<?> type;
+        try { type = Class.forName("org.bukkit.event.player.PlayerInteractAtEntityEvent"); }
+        catch (ClassNotFoundException absent) { return null; }
+        if (type.getMethod("getHandlerList").invoke(null) == PlayerInteractEntityEvent.getHandlerList()) return null;
+        return type.asSubclass(PlayerInteractEntityEvent.class);
     }
 
     @Override public void onDisable() {
