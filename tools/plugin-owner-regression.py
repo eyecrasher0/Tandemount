@@ -143,7 +143,7 @@ def main():
               and abs(initial['riderY']-initial['horseY']-.8125)<.002
               and abs(initial['riderZ']-initial['horseZ']+.5)<.002, initial)
         check('server-native-attachment-root-and-first-driver', initial['seatRoot']==initial['horse'] and initial['riderRoot']==initial['horse']
-              and initial['horseController']==int(values['driver']) and len(initial['helpers'])==5, initial)
+              and initial['horseController']==int(values['driver']) and len(initial['helpers'])==6, initial)
         click(clients[2]);time.sleep(.3)
         check('real-client-third-rider-rejected',state()['thirdVehicle']==-1 and state()['mounted'],state())
         for _ in range(3):click(clients[1]);click(clients[1],'OFF_HAND');time.sleep(.15)

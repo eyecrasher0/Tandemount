@@ -3,27 +3,27 @@
 The helper seat is a native vanilla nonliving entity. The adapter for 1.19.4 and
 later uses a BARRIER
 block display in the same native vehicle graph on the server and vanilla client,
-with the ordinary horse as its shared root:
+with the ordinary horse as its shared root.
 
 ```text
 horse ─ first player (ordinary driver)
       └ zero-width Interaction anchor
         └ invisible NoAI llama for rear offset
-          └ invisible NoAI opposing llama for the zero-offset baseline
-            └ zero-width Interaction lift
-              └ BARRIER block display ─ second player
+          └ zero-height Interaction separator (1.21.9 and later)
+            └ invisible NoAI opposing llama for the zero-offset baseline
+              └ zero-width Interaction lift
+                └ BARRIER block display ─ second player
 ```
 
-The scale-capable family, beginning with 1.20.5, has five helpers. The
-1.19.4–1.20.4 family uses eight ordinary adult llamas with alternating native
-rotations, separated by seven zero-height Interactions, for eighteen helpers.
-Their horizontal vectors cancel sideways and sum to the configured rearward
-distance. The separators keep each carrier's direct vehicle nonliving, so
-vanilla horse passenger body rotation cannot erase the alternating directions.
-Original native mount methods position every
-edge. This path does not hide an edge or broadcast recurring absolute world
-positions for a follower. The first player remains the horse's controlling
-passenger. The second player's direct vehicle remains nonliving.
+The scale-capable family has six helpers from 1.21.9 onward and five from
+1.20.5 through 1.21.8. The newer separator preserves the opposing llama's
+yaw when the client mounts it. The 1.19.4–1.20.4 family uses eight adult llamas
+with alternating rotations, separated by seven zero-height Interactions,
+for eighteen helpers. Their horizontal vectors cancel sideways and sum to
+the configured rearward distance. The separators give each carrier a
+nonliving direct vehicle to preserve its own orientation. Original native
+mount methods position every edge. The first player controls the horse, and
+the second player's direct vehicle remains nonliving.
 
 Vanilla horse attachments alone place the player's feet about 0.84375 blocks
 above the horse with no rear offset. Real synchronized llama scale attributes
@@ -35,7 +35,7 @@ An invisible living carrier still has a client pick box. The anchor places
 the carriers 64 blocks below the horse, and the lift restores the display
 beside the player. This keeps ordinary interaction rays away from their boxes.
 The final display is separate from the lift because vanilla dismount searches
-near the direct vehicle's origin. Neither Interaction spacer has width. All
+near the direct vehicle's origin. All Interactions have zero width. All
 helpers have no gravity, empty server bounds and refused native save entry
 points. The carrier server ticks run only the ride validator; AI, collision,
 sound and persistence are disabled. No entity type is created or registered.
@@ -254,7 +254,7 @@ controlled horse and remotely received helper rotations during a turn. They
 do not establish the cause of an observed lag or verify a repair.
 
 `ClientAttachmentLatencyProbe` isolates that rotation dependency using the
-unchanged official 26.3 client entity classes. It advances the five-helper
+unchanged official 26.3 client entity classes. It advances the earlier five-helper
 vehicle graph with native passenger ticks, injects the requested horse path,
 and delays helper rotations before submitting them to the native stepped
 interpolator. For a gradual turn of two degrees per tick at the default

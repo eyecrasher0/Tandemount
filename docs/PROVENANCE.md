@@ -692,6 +692,60 @@ retain exact distribution refs, mapping URLs and hashes, native/client class
 hashes and declaration listings. Compilation, real server/network assertions,
 original client execution and human visual review remain separate evidence.
 
+### Horse passenger rotation at pairing from 1.21.9
+
+The stationary placement audit used the current Tandemount sources, exact
+Paper 1.21.9 build 59 and 26.3 build 249, and original Mojang client artifacts.
+
+| Official client | Client SHA-256 | Official client mappings |
+|---|---|---|
+| [1.21.8](https://piston-data.mojang.com/v1/objects/a19d9badbea944a4369fd0059e53bf7286597576/client.jar) | `ea74e9c5e92d01f95f3d39196ddb734e19a077a58b4c433c34109487d600276f` | [Client mapping](https://piston-data.mojang.com/v1/objects/bdeb624c3aefba11d9d40f34bc96176350b549b6/client.txt) SHA-256 `dce035fedcc047ce0306c69892176b5eb9036bcc2845c87198163f12bb1d67ca` |
+| [1.21.9](https://piston-data.mojang.com/v1/objects/ce92fd8d1b2460c41ceda07ae7b3fe863a80d045/client.jar) | `40c0a32c46601f71f6a61dae9f126202ded5cc453cfb8da6e42ae73f2a3f5c1b` | [Client mapping](https://piston-data.mojang.com/v1/objects/3641ccb54eac2153c7e8274823c5a8e046beaba0/client.txt) SHA-256 `f223e9775abb66b6712c505cb1a73b48d615efebaf43a9f81dd58df9a9b1c7b3` |
+| [26.3](https://piston-data.mojang.com/v1/objects/e877b6a07acd633fb3bb475002175cec036e7b87/client.jar) | `4508d006323f24fa02876310c192d739af56516eb259000ac50f0909a68c9a2d` | Named client classes |
+
+The baseline Paper 1.21.9 and 26.3 packet replays both measured about
+`0.5375` blocks rearward at the `0.5` default. The 26.3 trace encoded both
+llama spawn rotations correctly. During native replay, the first llama's
+passenger packet reset the second llama's yaw from −180° to 0°. Official client
+bytecode on 1.21.9 and 26.3 maps that write to
+`AbstractHorse.addPassenger` calling `Entity.absSnapRotationTo` with the
+vehicle's view rotation. The 1.21.8 class inherits the ordinary entity
+passenger method. The server's placement pass restores the opposing yaws after
+mounting. The client's native
+pairing thus leaves both rearward vectors pointing in the same direction,
+adding twice the minimum-scale offset.
+
+The 1.21.9+ graph keeps a zero-width, zero-height vanilla Interaction between
+the llamas from the time the ride is created. This makes the preceding
+llama's native rotation snap apply to the Interaction, whose passenger
+attachment is at its origin. The opposing llama retains its own yaw through
+the native mount operation. The existing pose metadata refresh gives the
+separator's zero height to initial and late trackers. The horse and the
+helpers retain their normal vehicle edges and use native tracking.
+
+The patched artifacts passed the native and original-client checks in
+`tools/plugin-runtime.py --accept-eula` on exact [Paper 1.21.9 build 59](https://fill-data.papermc.io/v1/objects/aec002e77c7566e49494fdf05430b96078ffd1d7430e652d4f338fef951e7a10/paper-1.21.9-59.jar),
+[Paper 26.3 build 249](https://fill-data.papermc.io/v1/objects/4c734aeb4da98845934af1e5481f0df7c80ad3ca50d272319ffe2b0e8a187c8a/paper-26.3-249.jar),
+and [Folia 26.3 build 6](https://fill-data.papermc.io/v1/objects/3d0a694905ddd9ec956af52259d555274ab8d3191871296d7094c290b686920d/folia-26.3-6.jar),
+with the corresponding `--platform`, `--minecraft`, `--plugin` and
+`--fixture` arguments. The Tandemount JAR SHA-256 values were
+`49962354d07092a7fc8a1eb364ade1d7adefba48f85608c2cba9b86efdaef85d` for 1.21.9
+and `0a26ffae0fcc48e85b3a0cbb838b21a07c4da12d973ad87529f9715c3e1093b2` for
+26.3. All three runs passed 77 native assertions, 11 packet assertions and
+restart checks. Each original-client replay measured the existing observer's
+default feet height as `0.8125011` and rearward distance as `0.49999999`.
+The late observer measured `0.9374982` vertically and `0.56249996` rearward
+after independent settings changes. Both captured graphs retained all nodes
+and the horse root across 1,200 ticks, with zero helper ray hits.
+The 26.3 `tools/plugin-owner-regression.py --accept-eula` protocol fixture
+also passed all 15 assertions. With the horse turned to −136.36°, native
+server position error remained under 0.000059 blocks for rear settings
+0, 2 and 0.5 and their paired vertical settings 0.25, 3 and 0.8125.
+
+These measurements establish stationary placement after pairing. During
+turns the driver predicts horse yaw locally and receives the carrier yaws
+from the server, so delayed-turn alignment requires its own runtime check.
+
 ### Paper 26.3 Nether passenger transfer audit
 
 A fresh clean-room implementer consulted the independent runtime and behavioral

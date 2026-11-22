@@ -15,7 +15,7 @@ final class NativeAttachment {
     private final NativeAccess access;
     private final Constructor<?> carrier, spacer;
     private final Object llamaType, interactionType, scale;
-    private final int carriers, helperCount;
+    private final int carriers, carrierStride, helperCount;
     private final Properties mappings = new Properties();
 
     NativeAttachment(NativeAccess access) throws ReflectiveOperationException, java.io.IOException {
@@ -48,7 +48,15 @@ final class NativeAttachment {
         catch (NoSuchFieldException beforeScale) { }
         scale = scaleAttribute;
         carriers = scale == null ? 8 : 2;
-        helperCount = scale == null ? 18 : 5;
+        carrierStride = scale == null || snapsHorsePassengerRotation(access.minecraft) ? 2 : 1;
+        helperCount = 4 + (carriers - 1) * carrierStride;
+    }
+
+    private static boolean snapsHorsePassengerRotation(String minecraft) {
+        String[] parts = minecraft.split("\\.");
+        int major = Integer.parseInt(parts[0]), minor = Integer.parseInt(parts[1]);
+        return major > 1 || minor > 21
+                || (minor == 21 && parts.length == 3 && Integer.parseInt(parts[2]) >= 9);
     }
 
     private Class<?> handleType(Class<?> wrapper) throws NoSuchMethodException {
@@ -78,10 +86,10 @@ final class NativeAttachment {
             Entity anchor = wrapper(spacer.newInstance(interactionType, world)); created.add(anchor);
             for (int i = 0; i < carriers; i++) {
                 created.add(wrapper(carrier.newInstance(llamaType, world)));
-                // Older LivingEntity attachment positions use body yaw. A
-                // nonliving direct vehicle prevents the native horse rider
-                // body clamp from erasing alternating carrier directions.
-                if (scale == null && i + 1 < carriers) created.add(wrapper(spacer.newInstance(interactionType, world)));
+                // Older carriers use body yaw. Starting in 1.21.9, horses
+                // and llamas also snap the passenger's yaw when paired.
+                // Keep the opposing carriers on nonliving direct vehicles.
+                if (carrierStride == 2 && i + 1 < carriers) created.add(wrapper(spacer.newInstance(interactionType, world)));
             }
             Entity lift = wrapper(spacer.newInstance(interactionType, world)); created.add(lift);
             created.add(ride.seat);
@@ -89,7 +97,12 @@ final class NativeAttachment {
             for (Entity helper : ride.helpers) NativeSeat.RIDES.put(Reflect.handle(helper), ride);
             for (Entity helper : ride.helpers) {
                 if (helper.getType().name().equals("LLAMA")) configureCarrier(helper);
-                else if (helper.getType().name().equals("INTERACTION")) configureSpacer(helper);
+                else if (helper.getType().name().equals("INTERACTION")) {
+                    configureSpacer(helper);
+                    // Pairing must refresh the separator's zero-height
+                    // attachment dimensions just like the anchor and lift.
+                    if (scale != null && helper != anchor && helper != lift) height(ride, helper, 0F);
+                }
             }
             Location at = ride.horse.getLocation();
             for (Entity helper : ride.helpers) Reflect.call(access.position, Reflect.handle(helper), at.getX(), at.getY(), at.getZ());
@@ -233,7 +246,7 @@ final class NativeAttachment {
         ride.attachmentVertical = settings.vertical;
     }
 
-    private Entity carrier(Ride ride, int index) { return ride.helpers[1 + index * (scale == null ? 2 : 1)]; }
+    private Entity carrier(Ride ride, int index) { return ride.helpers[1 + index * carrierStride]; }
 
     private double passengerHeight(Entity parent, Entity child) throws ReflectiveOperationException {
         Object nativeParent = Reflect.handle(parent), nativeChild = Reflect.handle(child);
