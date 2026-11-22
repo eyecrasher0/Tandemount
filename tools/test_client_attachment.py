@@ -52,7 +52,7 @@ class CaptureInputTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
             protocol=root/"protocol.properties"
-            protocol.write_text("game.clientbound.minecraft:set_passengers=30\n")
+            protocol.write_text("game.clientbound.minecraft\\:set_passengers=30\n")
             source=root/"trace.json";first=root/"first.tsv";second=root/"second.tsv"
             source.write_text(json.dumps({"packets":[["game",30,"01ff00"]],"received_monotonic_ns":[10],"errors":[]}))
             received_state(source,protocol,first)

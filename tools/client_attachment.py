@@ -21,6 +21,7 @@ import uuid
 import zipfile
 
 from cache_servers import java_for
+from vanilla_protocol import load_ids
 
 ROOT=Path(__file__).resolve().parents[1]
 CACHE=Path(os.environ.get("TANDEMOUNT_CACHE", ROOT/".agents/cache"))
@@ -214,19 +215,16 @@ def received_state(trace, protocol, output, end_ns=None):
     original native graph ticks start with decoded received helper state.
     """
     ids={}
-    for line in protocol.read_text().splitlines():
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key,value=line.rsplit("=",1)
+    for key,identifier in load_ids(protocol).items():
         if not key.startswith(("game.clientbound.","play.clientbound.")):
             continue
         name=key.split(".clientbound.",1)[1].removeprefix("minecraft:").removeprefix("class.")
         if name in PACKET_CLASSES:
-            ids[int(value)]=PACKET_CLASSES[name]
+            ids[identifier]=PACKET_CLASSES[name]
         elif name in PACKET_CLASSES.values():
-            ids[int(value)]=name
+            ids[identifier]=name
         elif name in PLUGIN_PACKET_CLASSES:
-            ids[int(value)]=PLUGIN_PACKET_CLASSES[name]
+            ids[identifier]=PLUGIN_PACKET_CLASSES[name]
     raw=json.loads(trace.read_text())
     if raw.get("errors"):
         raise ValueError("Captured observer has protocol errors")
