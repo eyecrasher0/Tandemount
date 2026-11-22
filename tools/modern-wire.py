@@ -184,22 +184,25 @@ def main():
              and late.parents.get(value["driver"]) == value["horse"], "late observer native graph")
         checks.append("late-observer-received-native-attachment-shares-horse-root" if mounted["nativeAttachment"] else "late-observer-received-complete-early-follower-graph")
         request("admin")
+        menu_started = time.monotonic_ns()
         existing.command("tandemount")
         chat_id = existing.packet("game", "clientbound", "system_chat", "ClientboundSystemChatPacket")
         if chat_id is None:
             chat_id = existing.packet("game", "clientbound", "chat", "ClientboundChatPacket")
         def command_chat():
-            return b"\n".join(body for _, identifier, body in existing.raw if identifier == chat_id)
-        wait(lambda value: b"/tandemount height +" in command_chat(), "actual command menu response")
+            return b"\n".join(body for when, identifier, body in existing.raw
+                              if identifier == chat_id and when >= menu_started)
+        pattern = rb"/tandemount (?:height|rear) [+-]"
+        expected_commands = {b"/tandemount " + axis + b" " + step
+                             for axis in (b"height", b"rear") for step in (b"+", b"-")}
+        wait(lambda value: expected_commands <= set(re.findall(pattern, command_chat())),
+             "all four clickable adjustment commands")
         chat = command_chat()
         if not any(color in chat for color in (b"#55FF55", b"#55ff55", b"green")):
             raise AssertionError("Actual command chat has no control color")
         checks.append("command-chat-has-color-and-style")
-        commands = re.findall(rb"/tandemount (?:height|rear) [+-]", chat)
-        if len(set(commands)) != 4:
-            raise AssertionError("Actual command chat lacks adjustment click events")
         checks.append("command-chat-has-clickable-adjustments")
-        chosen = next(command for command in commands if command.endswith(b"height +"))
+        chosen = next(command for command in re.findall(pattern, chat) if command.endswith(b"height +"))
         existing.command(chosen.decode())
         wait(lambda value: value.get("height") == .875 and value.get("rear") == .5, "actual clicked adjustment command")
         checks.append("command-click-adjustment-applies")
