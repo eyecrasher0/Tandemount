@@ -168,14 +168,17 @@ def main():
         key = platform + "-" + version
         record_path = output / (key + ".json")
         if args.mode == "modern":
-            artifact = ROOT / "mods/modern/build" / f"tandemount-1.0.0-{platform}-{version}.jar"
+            artifact = ROOT / "mods/modern/build" / artifact_name(platform, version)
             native_path = ROOT / ".agents/modern-native" / (key + ".json")
+            build_record = ROOT / ".agents/modern-build" / key / "artifact.json"
+            previous_fixture = json.loads(build_record.read_text()).get("fixture") if build_record.is_file() else None
+            fixture = ROOT / previous_fixture if previous_fixture else None
         else:
             artifact = ROOT / ".agents/plugin-build" / artifact_name("bukkit", version)
             native_path = ROOT / ".agents/plugin-evidence" / (key + ".json")
-        fixture = ROOT / ".agents/plugin-build/tandemount-1.0.0-fixture.jar" if args.mode == "plugins" else None
+            fixture = ROOT / ".agents/plugin-build/tandemount-1.0.0-fixture.jar"
         previous = None
-        if args.resume and record_path.is_file() and artifact.is_file():
+        if args.resume and record_path.is_file() and artifact.is_file() and fixture is not None:
             previous = json.loads(record_path.read_text())
             cached = same_source_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
             if cached is not None:
@@ -191,6 +194,7 @@ def main():
                 result["build_exit_code"] = code
                 record_path.write_text(json.dumps(result, indent=2) + "\n")
                 return result
+            fixture = ROOT / json.loads(build_record.read_text())["fixture"]
         if previous and sources(args.mode) == target_fingerprint:
             cached = rebuilt_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
             if cached is not None:
