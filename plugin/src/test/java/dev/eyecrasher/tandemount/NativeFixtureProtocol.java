@@ -79,6 +79,8 @@ final class NativeFixtureProtocol {
     private Object empty(Class<?> type,int depth) throws ReflectiveOperationException {
         if(type==boolean.class)return false;if(type==long.class)return 0L;if(type==int.class)return 0;
         if(type==Instant.class)return Instant.now();if(type==BitSet.class)return new BitSet();
+        if(type==Map.class)return Collections.emptyMap();
+        if(type==Optional.class)return Optional.empty();
         if(List.class.isAssignableFrom(type))return Collections.emptyList();
         for(Field field:type.getDeclaredFields())if(Modifier.isStatic(field.getModifiers())&&field.getType()==type){field.setAccessible(true);Object value=field.get(null);if(value!=null)return value;}
         if(depth>=3)throw new NoSuchMethodException("Native empty command argument "+type);
