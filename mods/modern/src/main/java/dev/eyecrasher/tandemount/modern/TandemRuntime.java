@@ -83,11 +83,10 @@ public final class TandemRuntime {
             if (passengers.size() != 1 || !Names.type("ServerPlayer").isInstance(passengers.get(0))) return original;
             for (Ride ride : RIDES.values()) if (ride.rider == player || ride.driver == player) return original;
             Object level = Names.call("entity.level", horse);
+            if (excluded(level)) return original;
             if (!loaded(level, Names.call("entity.blockPosition", horse))) return original;
             if (!NativeAttachment.available()) {
-                // This capability difference is explicit; an independent follower
-                // is never substituted for a native passenger attachment.
-                debug("Native attachment unavailable: pre-Interaction height capability unresolved");
+                debug("Exact seat capability unavailable");
                 return original;
             }
             if (!destinationLoaded(horse, level)) return original;
@@ -112,7 +111,7 @@ public final class TandemRuntime {
         return !Names.has("level.loaded") || Boolean.TRUE.equals(Names.call("level.loaded", level, position));
     }
     private static boolean valid(Ride ride) throws Exception {
-        if (!SETTINGS.enabled) return false;
+        if (!SETTINGS.enabled || excluded(ride.level)) return false;
         for (Object entity : new Object[] {ride.horse, ride.driver, ride.rider, ride.seat}) {
             if (!(Boolean) Names.call("entity.alive", entity)) return false;
             if (Names.has("entity.removed") && (Boolean) Names.call("entity.removed", entity)) return false;
@@ -138,11 +137,11 @@ public final class TandemRuntime {
         double rearX = x + Math.sin(yaw) * SETTINGS.rear;
         double rearZ = z - Math.cos(yaw) * SETTINGS.rear;
         if (!loaded(level, blockPosition(rearX, y + SETTINGS.height, rearZ))) return false;
-        if (Names.hasField("Attributes.SCALE")) {
+        if (NativeAttachment.nativeAvailable() && Names.hasField("Attributes.SCALE")) {
             double reach = SETTINGS.rear + (double)0.3F / 16;
             if (!loaded(level, blockPosition(x + Math.sin(yaw)*reach, y, z-Math.cos(yaw)*reach))) return false;
         }
-        if (!Names.hasField("Attributes.SCALE")) {
+        if (NativeAttachment.nativeAvailable() && !Names.hasField("Attributes.SCALE")) {
             // A paired angular chain has a bounded temporary lateral excursion.
             double spread = Math.acos(SETTINGS.rear / (8 * (double) 0.3F));
             double dx = Math.sin(yaw + spread) * (double) 0.3F;
@@ -153,6 +152,9 @@ public final class TandemRuntime {
             }
         }
         return true;
+    }
+    static boolean excluded(Object level) throws Exception {
+        return SETTINGS.excludedDimensions.contains(Names.call("dimension.location", Names.call("level.dimension", level)).toString());
     }
     private static Object blockPosition(double x, double y, double z) throws Exception {
         return Names.type("BlockPos").getConstructor(int.class, int.class, int.class)
@@ -165,7 +167,7 @@ public final class TandemRuntime {
     }
     public static boolean allowHelperPassenger(Object horse, Object passenger) {
         Ride ride = RIDES.get(horse);
-        if (ride == null || ride.attachment.anchor != passenger) return false;
+        if (ride == null || !ride.attachment.nativeGraph || ride.attachment.anchor != passenger) return false;
         try {
             List<?> occupants = (List<?>) Names.call("entity.passengers", horse);
             return occupants.size() == 1 && occupants.get(0) == ride.driver;
@@ -196,13 +198,46 @@ public final class TandemRuntime {
             try { if (!valid(ride)) remove(ride); }
             catch (Exception exception) { remove(ride); error("Ride lifecycle", exception); }
         }
-        if (Boolean.getBoolean("tandemount.networktest")) ProtocolEvidence.tick(server, ticks);
-        if (Boolean.getBoolean("tandemount.selftest")) NativeTests.tick(server, ticks);
-        if (Boolean.getBoolean("tandemount.networktest")) ModernWireTests.tick(server, ticks);
+        if (Boolean.getBoolean("tandemount.networktest")) fixture("ProtocolEvidence", server);
+        if (Boolean.getBoolean("tandemount.selftest")) fixture("NativeTests", server);
+        if (Boolean.getBoolean("tandemount.networktest")) fixture("ModernWireTests", server);
+    }
+    private static void fixture(String name, Object server) {
+        try { Class.forName("dev.eyecrasher.tandemount.modern.fixture." + name).getMethod("tick", Object.class, long.class).invoke(null, server, ticks); }
+        catch (Exception failure) { throw new IllegalStateException("Install the separate exact test fixture JAR for opt-in testing", failure); }
     }
     public static void stop(Object server) {
         for (Ride ride : new ArrayList<Ride>(RIDES.values())) remove(ride);
         SERVERS.remove(server);
+    }
+    public static boolean helperTransfer(Object entity, Object transition) {
+        if (!isSeat(entity)) return false;
+        try {
+            if (Names.call("transition.level", transition) == Names.call("entity.level", entity)) return false;
+            for (Ride ride : new ArrayList<Ride>(RIDES.values())) {
+                if (ride.attachment.anchor != entity) continue;
+                Object destination = Boolean.TRUE.equals(Names.call("transition.passenger", transition))
+                        && Names.call("entity.vehicle", ride.rider) == ride.seat
+                        && Names.call("entity.level", ride.rider) == ride.level
+                        ? ride.attachment.passengerTransition(transition) : null;
+                remove(ride);
+                // This invokes the player's own exact native loader transfer,
+                // including its cancellation and the original native callback.
+                if (destination != null) Names.call("entity.transfer", ride.rider, destination);
+                return true;
+            }
+        } catch (Exception failure) { error("Shared native transfer", failure); }
+        for (Ride ride : new ArrayList<Ride>(RIDES.values()))
+            for (Object helper : ride.attachment.helpers) if (helper == entity) { remove(ride); return true; }
+        return true; // A managed helper must never become an ordinary clone.
+    }
+    public static boolean earlyTransfer(Object entity, Object destination) {
+        Ride ride = RIDES.get(entity);
+        if (ride != null) remove(ride);
+        if (!isSeat(entity)) return false;
+        for (Ride candidate : new ArrayList<Ride>(RIDES.values()))
+            for (Object helper : candidate.attachment.helpers) if (helper == entity) { remove(candidate); return true; }
+        return true;
     }
     private static void remove(Ride ride) {
         RIDES.remove(ride.horse);
@@ -222,8 +257,8 @@ public final class TandemRuntime {
     public static int rideCount() { return RIDES.size(); }
     public static int seatCount() { return RIDES.size(); }
     public static int helperCount() { return SEATS.size(); }
-    static Object[] helpersFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? new Object[0] : ride.attachment.helpers.clone(); }
-    static Object seatFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? null : ride.seat; }
+    public static Object[] helpersFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? new Object[0] : ride.attachment.helpers.clone(); }
+    public static Object seatFor(Object horse) { Ride ride = RIDES.get(horse); return ride == null ? null : ride.seat; }
     public static void applySettings() {
         failed = false;
         for (Ride ride : new ArrayList<Ride>(RIDES.values())) {
@@ -231,7 +266,7 @@ public final class TandemRuntime {
             catch (Exception exception) { remove(ride); error("Settings application", exception); }
         }
     }
-    static void log(String message) { System.out.println("[Tandemount] " + message); }
+    public static void log(String message) { System.out.println("[Tandemount] " + message); }
     private static void debug(String message) { if (SETTINGS.debug) log(message); }
     static void error(String action, Exception exception) {
         // Do not log entity names, identifiers, positions, chat, credentials or authentication data.

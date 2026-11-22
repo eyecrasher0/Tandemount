@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
-package dev.eyecrasher.tandemount.modern;
+package dev.eyecrasher.tandemount.modern.fixture;
+
+import dev.eyecrasher.tandemount.modern.*;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -9,13 +11,13 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 /** Opt-in loopback fixture. All riding and admin requests come over real sockets. */
-final class ModernWireTests {
+public final class ModernWireTests {
     private static Object horse, driver, rider, observer, late;
     private static String request = "", error = "";
     private static int sequence;
     private static boolean initialized;
     private ModernWireTests() {}
-    static void tick(Object server, long ticks) {
+    public static void tick(Object server, long ticks) {
         if (ticks < 20 || Boolean.getBoolean("tandemount.selftest.restart")) return;
         try {
             Path input = Paths.get("tandemount-wire-request.txt");
@@ -50,6 +52,7 @@ final class ModernWireTests {
             if (driver == null || rider == null || observer == null) throw new IllegalStateException("Wire fixture clients are not connected");
             TandemRuntime.stop(server);
             Object level = Names.call("server.overworld", server);
+            Names.call("level.chunk", level, 0, 0); // Isolated fixture preparation only.
             for (Object player : new Object[]{driver, rider, observer}) NativeTests.teleport(player, level, 8.5, 80, 10.5);
             horse = NativeTests.horse(level, 8.5);
             // Keep this isolated air-level fixture in interaction reach while
@@ -81,17 +84,20 @@ final class ModernWireTests {
             .append(",\"driverRoot\":").append(root(driver)).append(",\"riderRoot\":").append(root(rider)).append(",\"horsePosition\":").append(location(horse)).append(",\"riderPosition\":").append(location(rider))
             .append(",\"horseYaw\":").append(horse == null ? 0 : Names.call("entity.yaw", horse))
             .append(",\"horseBodyYaw\":").append(horse == null ? 0 : Names.field("LivingEntity.yBodyRot", horse))
+            .append(",\"nativeAttachment\":").append(NativeAttachment.nativeAvailable())
             .append(",\"height\":").append(TandemRuntime.SETTINGS.height).append(",\"rear\":").append(TandemRuntime.SETTINGS.rear).append(",\"helpers\":[");
         boolean first = true;
         for (Object helper : TandemRuntime.helpersFor(horse)) {
             if (!first) out.append(','); first = false;
-            boolean interaction = Names.type("Interaction").isInstance(helper);
+            boolean interaction = Names.TABLE.containsKey("c.Interaction") && Names.type("Interaction").isInstance(helper);
             boolean living = Names.type("LivingEntity").isInstance(helper);
             out.append("{\"id\":").append(id(helper)).append(",\"vehicle\":").append(vehicle(helper)).append(",\"position\":").append(location(helper))
-                .append(",\"type\":\"").append(interaction ? "interaction" : living ? "llama" : "block_display").append("\",\"yaw\":").append(Names.call("entity.yaw", helper))
+                .append(",\"type\":\"").append(interaction ? "interaction" : Names.type("ArmorStand").isInstance(helper) ? "armor_stand" : living ? "llama" : Names.type("AreaEffectCloud").isInstance(helper) ? "area_effect_cloud" : "block_display").append("\",\"yaw\":").append(Names.call("entity.yaw", helper))
                 .append(",\"pose\":\"").append(((Enum<?>)Names.call("entity.getPose", helper)).name()).append('"');
             if (interaction) out.append(",\"height\":").append(Names.call("interaction.getHeight", helper)).append(",\"width\":").append(Names.call("interaction.getWidth", helper));
-            if (living) out.append(",\"scale\":").append(Names.call("living.scale", helper));
+            if (living) out.append(",\"scale\":").append(Names.has("living.scale") ? Names.call("living.scale", helper) : 1);
+            if (Names.type("ArmorStand").isInstance(helper)) out.append(",\"marker\":").append(Names.call("stand.isMarker", helper));
+            if (Names.type("AreaEffectCloud").isInstance(helper)) out.append(",\"radius\":").append(Names.call("cloud.getRadius", helper));
             out.append('}');
         }
         out.append("]}\n");

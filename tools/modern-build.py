@@ -17,6 +17,7 @@ import struct
 import urllib.request
 import zipfile
 from cache_servers import java_for
+from project_metadata import metadata, artifact_name
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get("TANDEMOUNT_CACHE", ROOT / ".agents" / "cache")) / "modern"
@@ -27,7 +28,8 @@ def fetch(url, target, sha1=None):
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.exists():
-        req = urllib.request.Request(url, headers={"User-Agent": "Tandemount/1.0 (+https://github.com/EyeCrasher)"})
+        identity = metadata()
+        req = urllib.request.Request(url, headers={"User-Agent": identity["name"] + "/" + identity["version"] + " (+https://github.com/" + identity["github"] + ")"})
         try:
             with urllib.request.urlopen(req, timeout=120) as response:
                 data = response.read()
@@ -274,6 +276,22 @@ ALIASES = {
     "entity.getBounds": ("Entity", "getBoundingBox", ""),
     "helper.hurt": ("Entity", "hurtServer", "net.minecraft.server.level.ServerLevel,net.minecraft.world.damagesource.DamageSource,float"),
     "mob.noAi": ("Mob", "setNoAi", "boolean"),
+    "stand.marker": ("ArmorStand", "setMarker", "boolean"),
+    "stand.isMarker": ("ArmorStand", "isMarker", ""),
+    "stand.basePlate": ("ArmorStand", "setNoBasePlate", "boolean"),
+    "entity.transfer": ("Entity", "teleport", "net.minecraft.world.level.portal.TeleportTransition"),
+    "entity.passengerTransition": ("Entity", "calculatePassengerTransition", "net.minecraft.world.level.portal.TeleportTransition,net.minecraft.world.entity.Entity"),
+    "transition.level": ("TeleportTransition", "newLevel", ""),
+    "transition.passenger": ("TeleportTransition", "asPassenger", ""),
+    "transition.relatives": ("TeleportTransition", "relatives", ""),
+    "transition.post": ("TeleportTransition", "postTeleportTransition", ""),
+    "movement.entity": ("PositionMoveRotation", "of", "net.minecraft.world.entity.Entity"),
+    "movement.transition": ("PositionMoveRotation", "of", "net.minecraft.world.level.portal.TeleportTransition"),
+    "movement.absolute": ("PositionMoveRotation", "calculateAbsolute", "net.minecraft.world.entity.PositionMoveRotation,net.minecraft.world.entity.PositionMoveRotation,java.util.Set"),
+    "movement.position": ("PositionMoveRotation", "position", ""),
+    "movement.velocity": ("PositionMoveRotation", "deltaMovement", ""),
+    "movement.yaw": ("PositionMoveRotation", "yRot", ""),
+    "movement.pitch": ("PositionMoveRotation", "xRot", ""),
     "interaction.width": ("Interaction", "setWidth", "float"),
     "interaction.height": ("Interaction", "setHeight", "float"),
     "interaction.getWidth": ("Interaction", "getWidth", ""),
@@ -328,6 +346,7 @@ ALIASES = {
     "component.setStyle": ("MutableComponent", "setStyle", "net.minecraft.network.chat.Style"),
     "style.click": ("Style", "withClickEvent", "net.minecraft.network.chat.ClickEvent"),
     "style.color": ("Style", "withColor", "int"),
+    "color.rgb": ("TextColor", "fromRgb", "int"),
     "style.getColor": ("Style", "getColor", ""),
     "style.getClick": ("Style", "getClickEvent", ""),
     "click.command": ("ClickEvent", "getValue", ""),
@@ -377,6 +396,10 @@ CLASSES = {
     "Horse": "net.minecraft.world.entity.animal.horse.Horse",
     "AbstractHorse": "net.minecraft.world.entity.animal.horse.AbstractHorse",
     "AreaEffectCloud": "net.minecraft.world.entity.AreaEffectCloud",
+    "ArmorStand": "net.minecraft.world.entity.decoration.ArmorStand",
+    "TeleportTransition": "net.minecraft.world.level.portal.TeleportTransition",
+    "PostTeleportTransition": "net.minecraft.world.level.portal.TeleportTransition$PostTeleportTransition",
+    "PositionMoveRotation": "net.minecraft.world.entity.PositionMoveRotation",
     "Interaction": "net.minecraft.world.entity.Interaction",
     "Display": "net.minecraft.world.entity.Display",
     "BlockDisplay": "net.minecraft.world.entity.Display$BlockDisplay",
@@ -424,6 +447,7 @@ CLASSES = {
     "TextComponent": "net.minecraft.network.chat.TextComponent",
     "MutableComponent": "net.minecraft.network.chat.MutableComponent",
     "Style": "net.minecraft.network.chat.Style",
+    "TextColor": "net.minecraft.network.chat.TextColor",
     "ClickEvent": "net.minecraft.network.chat.ClickEvent",
     "ClickAction": "net.minecraft.network.chat.ClickEvent$Action",
     "RunCommand": "net.minecraft.network.chat.ClickEvent$RunCommand",
@@ -521,9 +545,13 @@ def mapped_table(target, platform):
                 new_name += "|" + official_names[0]
         return runtime_classes.get(old_owner, old_owner).replace("/", ".") + "#" + new_name + "#" + remap_desc(desc, runtime_classes)
 
+    def present(member):
+        return member is not None and any(name == member[1] and desc == member[2]
+                                         for name, desc, access in declared.get(member[0].replace('.', '/'), (None, None, [], None))[2])
+
     for key, (owner, name, params) in ALIASES.items():
         member = methods.get((CLASSES[owner], name, params))
-        if member:
+        if present(member):
             table["m." + key] = mapped_member(member)
     # Vanilla names changed while behavior stayed the same.
     fallbacks = {
@@ -536,9 +564,9 @@ def mapped_table(target, platform):
         "entity.riderOffset": [("Entity", "getMyRidingOffset", "net.minecraft.world.entity.Entity")],
         "entity.source": [("ServerPlayer", "createCommandSourceStack", "")],
         "player.interact": [("Player", "interactOn", "net.minecraft.world.entity.Entity,net.minecraft.world.InteractionHand,net.minecraft.world.phys.Vec3")],
-        "entity.yaw": [("Entity", "getYHeadRot", "")],
         "entity.discard": [("Entity", "remove", "")],
         "source.message": [("CommandSourceStack", "sendSuccess", "net.minecraft.network.chat.Component,boolean")],
+        "style.color": [("Style", "withColor", "net.minecraft.network.chat.TextColor")],
         "player.message": [("ServerPlayer", "sendMessage", "net.minecraft.network.chat.Component,java.util.UUID")],
         "horse.saddle": [("AbstractHorse", "equipSaddle", "net.minecraft.sounds.SoundSource")],
         "horse.saddled": [("Mob", "isSaddled", "")],
@@ -552,7 +580,7 @@ def mapped_table(target, platform):
             continue
         for owner, name, params in choices:
             member = methods.get((CLASSES[owner], name, params))
-            if member:
+            if present(member):
                 table["m." + key] = mapped_member(member)
                 break
     if platform == "neoforge" and version != "1.20.1":
@@ -583,10 +611,14 @@ def mapped_table(target, platform):
             if pairing[2] != expected:
                 raise ValueError("Unexpected vanilla pairing descriptor for NeoForge: " + version)
             table["c.PairingAcceptor"] = acceptor
-            accepts = [(name, desc) for name, desc, access in acceptor_declaration[2]
-                       if name == "accept" and desc == "(Lnet/minecraft/network/protocol/Packet;)V" and access & 1]
-            if accepts:
-                table["m.pairing.accept"] = acceptor + "#accept#" + accepts[0][1]
+            packet_parameter = "(Lnet/minecraft/network/protocol/Packet;)"
+            collector_return = "L" + acceptor.replace(".", "/") + ";"
+            accepts = [desc for name, desc, access in acceptor_declaration[2]
+                       if name == "accept" and access & 1 and not access & 8
+                       and desc in {packet_parameter + "V", packet_parameter + collector_return}]
+            if len(accepts) != 1:
+                raise ValueError("Unsupported exact NeoForge pairing collector accept method: " + version)
+            table["m.pairing.accept"] = acceptor + "#accept#" + accepts[0]
             pairing[2] = expected.replace("Ljava/util/function/Consumer;", "L" + acceptor.replace(".", "/") + ";")
             table["m.tracker.pairing"] = "#".join(pairing)
     for owner, fields_wanted in {"Entity": ["noPhysics", "level", "yRot", "removed", "position", "blockPosition", "chunkPosition"], "Level": ["isClientSide"], "LivingEntity": ["yBodyRot"], "InteractionResult": ["PASS", "SUCCESS"], "EntityType": ["HORSE"], "InteractionHand": ["MAIN_HAND"], "PacketFlow": ["SERVERBOUND"], "ServerPlayer": ["connection"], "ServerEntity": ["updateInterval", "entity"], "Connection": ["channel"], "ClickAction": ["RUN_COMMAND"], "SoundSource": ["PLAYERS"], "Items": ["SADDLE"], "EquipmentSlot": ["SADDLE"], "Permissions": ["COMMANDS_GAMEMASTER"], "ConnectionProtocol": ["LOGIN", "CONFIGURATION", "PLAY", "flows"], "PacketFlow": ["CLIENTBOUND", "SERVERBOUND"], "ProtocolPacketSet": ["classToId"], "IdDispatchCodec": ["toId", "byId"], "LoginProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "ConfigurationProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"], "GameProtocols": ["CLIENTBOUND_TEMPLATE", "SERVERBOUND_TEMPLATE", "CLIENTBOUND", "SERVERBOUND"]}.items():
@@ -596,16 +628,17 @@ def mapped_table(target, platform):
             if member is None and owner == "EntityType": member = fields.get((CLASSES["EntityTypes"], name))
             if member:
                 table["f." + owner + "." + name] = mapped_member(member, True)
-    for owner, wanted in {"EntityType": ("LLAMA", "INTERACTION", "BLOCK_DISPLAY"),
+    for owner, wanted in {"EntityType": ("LLAMA", "INTERACTION", "BLOCK_DISPLAY", "ARMOR_STAND", "AREA_EFFECT_CLOUD"),
                           "Attributes": ("SCALE",), "Blocks": ("BARRIER",),
                           "Pose": ("STANDING", "SITTING"), "Entity": ("DATA_POSE",),
                           "Vec3": ("x", "y", "z"),
+                          "TeleportTransition": ("DO_NOTHING",),
                           "ServerEntity": ("synchronizer",)}.items():
         for name in wanted:
             member = fields.get((CLASSES[owner], name))
             if member is None and owner == "EntityType": member = fields.get((CLASSES["EntityTypes"], name))
             if member: table["f." + owner + "." + name] = mapped_member(member, True)
-    for name in ("INFINITE_DURATION", "effects", "potionContents"):
+    for name in ("INFINITE_DURATION", "effects", "potionContents", "durationOnUse"):
         member = fields.get((CLASSES["AreaEffectCloud"], name))
         if member:
             table["f.AreaEffectCloud." + name] = mapped_member(member, True)
@@ -617,7 +650,7 @@ def mapped_table(target, platform):
             if member:
                 table["f." + owner + "." + name] = mapped_member(member, True)
     for canonical in names:
-        if canonical.startswith("net.minecraft.network.protocol.") and canonical.endswith("Packet"):
+        if canonical.startswith("net.minecraft.network.protocol.") and canonical.split("$")[0].endswith("Packet"):
             runtime = runtime_classes.get(names[canonical].replace(".", "/"), names[canonical].replace(".", "/")).replace("/", ".")
             table["p." + runtime] = canonical
     # Every hook is generated from an exact official signature, not a fuzzy match.
@@ -649,7 +682,7 @@ def mapped_table(target, platform):
     # Every native helper is damage guarded at each relevant override. The
     # native mount still runs normally, including the loader's cancellation bus;
     # only the horse's one-passenger capacity admits the registered anchor.
-    for owner in ("Entity", "LivingEntity", "AbstractHorse", "Interaction", "Display"):
+    for owner in ("Entity", "LivingEntity", "AbstractHorse", "Interaction", "Display", "ArmorStand"):
         for (declaring, name, params), member in methods.items():
             if declaring == CLASSES[owner] and name in ("hurt", "hurtServer", "isPickable"):
                 if not any(native_name == member[1] and native_desc == member[2] and not access & 0x0400
@@ -664,12 +697,21 @@ def mapped_table(target, platform):
     if member is None: raise ValueError("Exact native capacity hook unavailable: " + version)
     table["h.capacity"] = mapped_member(member)
     table["h.helperInteract"] = table["m.player.interact"]
+    if "m.entity.transfer" in table:
+        table["h.helperTransfer"] = table["m.entity.transfer"]
+    else:
+        for params in ("net.minecraft.world.level.portal.DimensionTransition", "net.minecraft.server.level.ServerLevel"):
+            member = methods.get((CLASSES["Entity"], "changeDimension", params))
+            if member:
+                table["h.earlyTransfer"] = mapped_member(member)
+                break
+        if "h.earlyTransfer" not in table: raise ValueError("Exact native transfer guard unavailable: " + version)
     table["h.pairing"] = table["m.tracker.pairing"]
     dirty = methods.get((CLASSES["ServerEntity"], "sendDirtyEntityData", ""))
     if dirty is not None: table["h.dirtyData"] = mapped_member(dirty)
     table["attachment"] = ("scaled-native-chain" if "f.Attributes.SCALE" in table
                            else "angular-native-chain" if "c.Interaction" in table
-                           else "unresolved-pre-interaction-height")
+                           else "marker-stand-cloud-follower")
     # Select only a complete, known constructor signature that is actually
     # declared in this exact official server. Parameter count is insufficient:
     # 1.19's nullable profile key shares arity with game mode and client info.
@@ -759,6 +801,7 @@ def forge_sdk(target, platform):
 
 def build(target, platform):
     version = target["minecraft"]
+    identity = metadata()
     if not target["platforms"][platform]["available"]:
         raise ValueError(f"No upstream: {platform} {version}")
     table = mapped_table(target, platform)
@@ -794,7 +837,7 @@ public abstract class ForgeConfigShutdown {
     (classes / "tandemount-names.properties").write_text("\n".join(k + "=" + v for k, v in sorted(table.items())) + "\n")
     mixin_config = {"required": True, "minVersion": "0.8", "package": "dev.eyecrasher.tandemount.modern.mixin", "compatibilityLevel": "JAVA_8", "plugin": "dev.eyecrasher.tandemount.modern.NativeHooks", "mixins": mixins, "injectors": {"defaultRequire": 1}}
     (classes / "tandemount.mixins.json").write_text(json.dumps(mixin_config, indent=2) + "\n")
-    mod = {"schemaVersion": 1, "id": "tandemount", "version": "1.0.0", "name": "Tandemount", "description": "Independent server-side tandem horse riding.", "authors": ["EyeCrasher"], "license": "GPL-3.0-only", "environment": "server", "entrypoints": {"main": ["dev.eyecrasher.tandemount.modern.FabricEntrypoint"]}, "mixins": ["tandemount.mixins.json"], "depends": {"fabricloader": ">=" + target["platforms"]["fabric"]["loader"], "minecraft": "=" + version, "java": ">=" + str(target["java"])}}
+    mod = {"schemaVersion": 1, "id": identity["id"], "version": identity["version"], "name": identity["name"], "description": "Independent server-side tandem horse riding.", "authors": [identity["author"]], "license": identity["license"], "environment": "server", "entrypoints": {"main": ["dev.eyecrasher.tandemount.modern.FabricEntrypoint"]}, "mixins": ["tandemount.mixins.json"], "depends": {"fabricloader": ">=" + target["platforms"]["fabric"]["loader"], "minecraft": "=" + version, "java": ">=" + str(target["java"])}}
     if platform == "fabric":
         (classes / "fabric.mod.json").write_text(json.dumps(mod, indent=2) + "\n")
     else:
@@ -808,12 +851,12 @@ public abstract class ForgeConfigShutdown {
         loader_range = "[1,)" # The SDK is pinned externally; the Minecraft dependency is exact.
         toml = f'''modLoader="javafml"
 loaderVersion="{loader_range}"
-license="GPL-3.0-only"
+license="{identity['license']}"
 [[mods]]
 modId="tandemount"
-version="1.0.0"
-displayName="Tandemount"
-authors="EyeCrasher"
+version="{identity['version']}"
+displayName="{identity['name']}"
+authors="{identity['author']}"
 displayTest="IGNORE_ALL_VERSION"
 description="Independent server-side tandem horse riding."
 [[dependencies.tandemount]]
@@ -831,7 +874,22 @@ config="tandemount.mixins.json"
     sources = [p for p in (ROOT / "mods" / "modern" / "src" / "main" / "java").rglob("*.java") if platform == "fabric" or p.name != "FabricEntrypoint.java"] + list((work / "generated").rglob("*.java"))
     compiler = Path(os.environ.get("TANDEMOUNT_JAVA") or java_for(max(21, target["java"]))).with_name("javac")
     subprocess.run([str(compiler), "-proc:none", "--release", "8", "-cp", os.pathsep.join(map(str, sdk)), "-d", str(classes), *map(str, sources)], check=True)
-    out = ROOT / "mods" / "modern" / "build" / f"tandemount-1.0.0-{platform}-{version}.jar"
+    fixture_classes = work / "fixture-classes"
+    if fixture_classes.exists(): shutil.rmtree(fixture_classes)
+    fixture_classes.mkdir()
+    fixture_sources = list((ROOT / "mods/modern/src/test/java").rglob("*.java"))
+    if platform == "fabric":
+        fixture_metadata = dict(mod, id="tandemount_fixture", name=identity["name"] + " disposable test fixture", entrypoints={}, mixins=[])
+        fixture_metadata["depends"] = dict(mod["depends"], tandemount="=" + identity["version"])
+        (fixture_classes / "fabric.mod.json").write_text(json.dumps(fixture_metadata, indent=2) + "\n")
+    else:
+        fixture_adapter = work / "FixtureEntrypoint.java"
+        fixture_adapter.write_text('package dev.eyecrasher.tandemount.modern.fixture;\n@' + annotation + '("tandemount_fixture") public final class FixtureEntrypoint {}\n')
+        fixture_sources.append(fixture_adapter)
+        (fixture_classes / "META-INF").mkdir()
+        (fixture_classes / "META-INF" / metadata_name).write_text(toml[:toml.index("[[dependencies.tandemount]]")].replace('modId="tandemount"', 'modId="tandemount_fixture"').replace('displayName="' + identity['name'] + '"', 'displayName="' + identity['name'] + ' disposable test fixture"'))
+    subprocess.run([str(compiler), "-proc:none", "--release", "8", "-cp", os.pathsep.join(map(str, [classes, *sdk])), "-d", str(fixture_classes), *map(str, fixture_sources)], check=True)
+    out = ROOT / "mods" / "modern" / "build" / artifact_name(platform, version)
     out.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
         def write_entry(name, data):
@@ -845,7 +903,11 @@ config="tandemount.mixins.json"
         license_file = ROOT / "LICENSE"
         if license_file.exists():
             write_entry("LICENSE", license_file.read_bytes())
-    record = {"minecraft": version, "platform": platform, "artifact": str(out.relative_to(ROOT)), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(), "evidence": "compiled-against-real-loader-sdk", "attachment_capability": table["attachment"], "native": "not-run", "visual": "not-run"}
+    fixture_out = work / ("tandemount-fixture-" + platform + "-" + identity['version'] + "+" + version + ".jar")
+    with zipfile.ZipFile(fixture_out, "w", zipfile.ZIP_DEFLATED) as archive:
+        for file in sorted(fixture_classes.rglob("*")):
+            if file.is_file(): write_entry(file.relative_to(fixture_classes), file.read_bytes())
+    record = {"minecraft": version, "platform": platform, "artifact": str(out.relative_to(ROOT)), "sha256": hashlib.sha256(out.read_bytes()).hexdigest(), "fixture": str(fixture_out.relative_to(ROOT)), "fixture_sha256": hashlib.sha256(fixture_out.read_bytes()).hexdigest(), "evidence": "compiled-against-real-loader-sdk", "attachment_capability": table["attachment"], "native": "not-run", "visual": "not-run"}
     (work / "artifact.json").write_text(json.dumps(record, indent=2) + "\n")
     print(json.dumps(record), flush=True)
     return record

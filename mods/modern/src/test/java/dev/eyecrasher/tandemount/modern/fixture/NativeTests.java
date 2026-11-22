@@ -1,4 +1,6 @@
-package dev.eyecrasher.tandemount.modern;
+package dev.eyecrasher.tandemount.modern.fixture;
+
+import dev.eyecrasher.tandemount.modern.*;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -26,7 +28,7 @@ public final class NativeTests {
                 Object level = Names.call("server.overworld", server);
                 if (Names.has("level.chunk")) Names.call("level.chunk", level, 0, 0);
                 int clouds = 0;
-                for (Object entity : (Iterable<?>) Names.call("level.entities", level)) if (Names.type("AreaEffectCloud").isInstance(entity) || (NativeAttachment.available() && (Names.type("Interaction").isInstance(entity) || Names.type("BlockDisplay").isInstance(entity) || Names.type("Llama").isInstance(entity)))) clouds++;
+                for (Object entity : (Iterable<?>) Names.call("level.entities", level)) if (Names.type("AreaEffectCloud").isInstance(entity) || (NativeAttachment.nativeAvailable() && (Names.type("Interaction").isInstance(entity) || Names.type("BlockDisplay").isInstance(entity) || Names.type("Llama").isInstance(entity)))) clouds++;
                 check(clouds == 0, "restart-has-no-persisted-seat-artifact");
                 empty("restart-has-no-stale-ride-state");
             } else run(server);
@@ -258,9 +260,9 @@ public final class NativeTests {
         check(passengerEdge(packets, seat, rider), "late-observer-native-seat-passenger-edge");
         check(passengerEdge(pairingPackets(level, horse, observer), horse, driver), "late-observer-native-horse-driver-edge");
         List<Object> all = new ArrayList<Object>(pairingPackets(level, horse, observer));
-        Object parent = horse;
+        Object parent = NativeAttachment.nativeAvailable() ? horse : null;
         for (Object helper : TandemRuntime.helpersFor(horse)) {
-            check(passengerEdge(pairingPackets(level, parent, observer), parent, helper), "late-observer-native-helper-passenger-edge");
+            if (parent != null) check(passengerEdge(pairingPackets(level, parent, observer), parent, helper), "late-observer-native-helper-passenger-edge");
             all.addAll(pairingPackets(level, helper, observer));
             parent = helper;
         }
@@ -271,14 +273,50 @@ public final class NativeTests {
         }
         int root = ((Number) Names.call("entity.id", rider)).intValue(), depth = 0;
         while (received.containsKey(root) && depth++ < 32) root = received.get(root);
-        check(depth < 32 && root == ((Number) Names.call("entity.id", horse)).intValue(), "native-observer-received-passenger-graph-shares-horse-root");
+        check(depth < 32 && root == ((Number) Names.call("entity.id", rideRoot(horse))).intValue(), NativeAttachment.nativeAvailable() ? "native-observer-received-passenger-graph-shares-horse-root" : "early-observer-received-complete-follower-graph");
+    }
+    private static Object rideRoot(Object horse) { return NativeAttachment.nativeAvailable() ? horse : TandemRuntime.helpersFor(horse)[0]; }
+    private static void nativeHelperTransfer(Object server, Object source) throws Exception {
+        if (!Names.has("entity.transfer")) return;
+        Object target = null;
+        for (Object level : (Iterable<?>)Names.call("server.levels", server)) if (!dimension(level).equals(dimension(source))) { target = level; break; }
+        check(target != null, "native-helper-transfer-has-destination-world");
+        Names.call("level.chunk", source, 0, 0); Names.call("level.chunk", target, 0, 0);
+        Object horse = horse(source, 4.5), driver = player(server, source, 71), rider = player(server, source, 72);
+        Names.call("level.addPlayer", source, driver); Names.call("level.addPlayer", source, rider);
+        check(Names.mount(driver, horse), "native-helper-transfer-driver-mount");
+        interact(rider, horse, Names.field("InteractionHand.MAIN_HAND", null));
+        Object[] helpers = TandemRuntime.helpersFor(horse);
+        check(helpers.length > 0, "native-helper-transfer-starts-with-active-graph");
+        Object zero = Names.type("Vec3").getConstructor(double.class, double.class, double.class).newInstance(0D, 0D, 0D);
+        Object position = Names.type("Vec3").getConstructor(double.class, double.class, double.class).newInstance(8.5, 80D, 8.5);
+        Object transition = Names.type("TeleportTransition").getConstructor(Names.type("ServerLevel"), Names.type("Vec3"), Names.type("Vec3"), float.class, float.class, Names.type("PostTeleportTransition"))
+                .newInstance(target, position, zero, 0F, 0F, Names.field("TeleportTransition.DO_NOTHING", null));
+        Object expected = Names.call("entity.passengerTransition", horse, transition, rider);
+        Object absolute = Names.call("movement.absolute", null, Names.call("movement.entity", null, rider), Names.call("movement.transition", null, expected), Names.call("transition.relatives", expected));
+        Object expectedPosition = Names.call("movement.position", absolute);
+        Object replacement = Names.call("entity.transfer", horse, transition);
+        check(replacement != null && Names.call("entity.level", replacement) == target, "native-helper-transfer-horse-reaches-destination");
+        check(Names.call("entity.level", rider) == target && Names.call("entity.vehicle", rider) == null,
+                "native-helper-transfer-rider-uses-own-native-transfer-and-detaches");
+        for (String axis : new String[]{"x", "y", "z"}) check(Math.abs(((Number)Names.call("entity." + axis, rider)).doubleValue() - ((Number)Names.field("Vec3." + axis, expectedPosition)).doubleValue()) < .002,
+                "native-helper-transfer-player-coordinate-matches-native-destination");
+        check(TandemRuntime.seatFor(horse) == null, "native-helper-transfer-closes-source-ride");
+        for (Object helper : helpers) check(!TandemRuntime.isSeat(helper) && !Boolean.TRUE.equals(Names.call("entity.alive", helper)), "native-helper-transfer-removes-every-source-helper");
+        for (Object entity : (Iterable<?>)Names.call("level.entities", target)) {
+            for (Object helper : helpers) check(!Names.call("entity.uuid", entity).equals(Names.call("entity.uuid", helper)), "native-helper-transfer-does-not-clone-helper");
+        }
+        Names.call("entity.discard", replacement);
+        teleport(driver, source, 0.5, 80D, 8.5); teleport(rider, source, 0.5, 80D, 8.5);
+        Names.call("entity.discard", driver); Names.call("entity.discard", rider);
     }
     private static void run(Object server) throws Exception {
-        check(NativeAttachment.available(), "exact-game-supports-continuous-native-attachment-height");
+        check(NativeAttachment.available(), NativeAttachment.nativeAvailable() ? "exact-game-supports-continuous-native-attachment-height" : "exact-game-supports-marker-cloud-follower");
         settingsDefaults();
         Object level = Names.call("server.overworld", server);
         // Acquire an already-generated spawn chunk for this disposable fixture only.
         if (Names.has("level.chunk")) Names.call("level.chunk", level, 0, 0);
+        nativeHelperTransfer(server, level);
         Object driver = player(server, level, 1), rider = player(server, level, 2), third = player(server, level, 3);
         Object horse = horse(level, 0.5);
         Object hand = Names.field("InteractionHand.MAIN_HAND", null);
@@ -303,9 +341,9 @@ public final class NativeTests {
         if (TandemRuntime.rideCount() == 0) TandemRuntime.log("Native interaction diagnostics: pass=" + (result == pass) + ", horseAlive=" + Names.call("entity.alive", horse) + ", playerAlive=" + Names.call("entity.alive", rider) + ", sameLevel=" + (Names.call("entity.level", horse) == Names.call("entity.level", rider)) + ", playerUnmounted=" + (Names.call("entity.vehicle", rider) == null) + ", passengers=" + ((List<?>) Names.call("entity.passengers", horse)).size());
         check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatCount() == 1, "native-interaction-opens-second-seat");
         Object seat = TandemRuntime.seatFor(horse);
-        check(Names.type("BlockDisplay").isInstance(seat), "seat-uses-vanilla-block-display");
+        check(Names.type(NativeAttachment.nativeAvailable() ? "BlockDisplay" : "AreaEffectCloud").isInstance(seat), NativeAttachment.nativeAvailable() ? "seat-uses-vanilla-block-display" : "seat-uses-vanilla-zero-radius-cloud");
         check(!Names.type("LivingEntity").isInstance(seat), "seat-skips-living-vehicle-renderer-branch");
-        check(Names.call("display.getBlock", seat).equals(Names.call("block.state", Names.field("Blocks.BARRIER", null))), "seat-native-barrier-state-is-invisible");
+        if (NativeAttachment.nativeAvailable()) check(Names.call("display.getBlock", seat).equals(Names.call("block.state", Names.field("Blocks.BARRIER", null))), "seat-native-barrier-state-is-invisible");
         check(Boolean.TRUE.equals(Names.call("entity.noGravity", seat)), "seat-has-no-gravity");
         check(Boolean.TRUE.equals(Names.field("Entity.noPhysics", seat)), "seat-has-no-physics");
         for (Object helper : TandemRuntime.helpersFor(horse)) {
@@ -323,7 +361,12 @@ public final class NativeTests {
                         && Boolean.FALSE.equals(Names.call("entity.savePassenger", helper, helperTag)), "all-native-helpers-reject-saving");
             } else check(Boolean.FALSE.equals(Names.call("entity.shouldSave", helper)), "all-native-helpers-reject-saving");
         }
-        check(Names.call("entity.rootVehicle", rider) == horse && Names.call("entity.rootVehicle", driver) == horse, "server-native-attachment-shares-horse-root");
+        check(Names.call("entity.rootVehicle", rider) == rideRoot(horse) && Names.call("entity.rootVehicle", driver) == horse, NativeAttachment.nativeAvailable() ? "server-native-attachment-shares-horse-root" : "early-follower-root-and-native-driver-preserved");
+        if (!NativeAttachment.nativeAvailable()) {
+            check(Boolean.TRUE.equals(Names.call("stand.isMarker", rideRoot(horse))), "early-follower-root-is-zero-dimension-marker");
+            check(((Number)Names.call("cloud.getRadius", seat)).floatValue() == 0F && !Boolean.TRUE.equals(Names.call("cloud.isWaiting", seat))
+                    && ((Number)Names.call("cloud.getDuration", seat)).intValue() == Integer.MAX_VALUE, "early-cloud-has-no-particles-and-persistent-native-lifetime");
+        }
         double initialYaw = Math.toRadians(((Number)Names.call("entity.yaw", horse)).doubleValue());
         double initialDx = ((Number)Names.call("entity.x", rider)).doubleValue() - ((Number)Names.call("entity.x", horse)).doubleValue();
         double initialDz = ((Number)Names.call("entity.z", rider)).doubleValue() - ((Number)Names.call("entity.z", horse)).doubleValue();
@@ -342,7 +385,7 @@ public final class NativeTests {
         check(Names.call("entity.vehicle", driver) == horse, "driver-control-vehicle-preserved");
         check(Names.call("entity.vehicle", rider) == seat, "second-rider-uses-native-vehicle");
         List<?> horsePassengers = (List<?>) Names.call("entity.passengers", horse);
-        check(horsePassengers.size() == 2 && horsePassengers.get(0) == driver
+        check(horsePassengers.size() == (NativeAttachment.nativeAvailable() ? 2 : 1) && horsePassengers.get(0) == driver
                 && Names.call("entity.controller", horse) == driver, "server-native-horse-keeps-first-driver-control");
         check(originalHorseHealth.equals(Names.call("living.health", horse)) && originalRiderHealth.equals(Names.call("living.health", rider)), "mount-preserves-native-health");
         if (Names.has("seat.hurt")) {
@@ -384,11 +427,11 @@ public final class NativeTests {
             Names.field("LivingEntity.yBodyRot", horse, 90.0f);
             Names.call("entity.rotation", horse, 90.0f);
             TandemRuntime.entityTick(horse);
-            check(Math.abs(((Number) Names.call("entity.x", seat)).doubleValue() - 5.0 - TandemRuntime.SETTINGS.rear) < .002, "native-attachment-turns-with-horse-without-independent-follower");
+            check(Math.abs(((Number) Names.call("entity.x", seat)).doubleValue() - 5.0 - TandemRuntime.SETTINGS.rear) < .002, NativeAttachment.nativeAvailable() ? "native-attachment-turns-with-horse-without-independent-follower" : "early-follower-turns-with-horse");
         }
         Names.call("entity.dismount", rider);
         interact(rider, horse, hand);
-        check(TandemRuntime.rideCount() == 1 && Names.call("entity.rootVehicle", rider) == horse, "immediate-dismount-retry-reclaims-stale-graph-synchronously");
+        check(TandemRuntime.rideCount() == 1 && Names.call("entity.rootVehicle", rider) == rideRoot(horse), "immediate-dismount-retry-reclaims-stale-graph-synchronously");
         Names.call("entity.dismount", rider);
         TandemRuntime.entityTick(horse);
         check(TandemRuntime.rideCount() == 0 && TandemRuntime.seatCount() == 0, "rider-dismount-cleans-seat");
@@ -421,6 +464,15 @@ public final class NativeTests {
         check(Files.exists(TandemRuntime.SETTINGS.file), "admin-settings-saved-immediately");
         check(command(console, "rear Infinity") == 0 && TandemRuntime.SETTINGS.rear == rear, "admin-rejects-nonfinite-without-mutation");
         check(command(console, "reload") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625, "admin-reload-restores-saved-settings");
+        check(command(console, "status") == 1, "admin-status-reports-active-settings");
+        byte[] validConfig = Files.readAllBytes(TandemRuntime.SETTINGS.file);
+        for (String invalid : new String[]{"height=NaN\n", "height=4\n", "enabled=perhaps\n", "height\n", "excluded-dimensions=Overworld\n", "excluded-dimensions=minecraft:overworld,\n", "config-version=99\n"}) {
+            byte[] bytes = invalid.getBytes(StandardCharsets.ISO_8859_1);
+            Files.write(TandemRuntime.SETTINGS.file, bytes);
+            check(command(console, "reload") == 0 && TandemRuntime.SETTINGS.height == height + 0.0625
+                    && java.util.Arrays.equals(bytes, Files.readAllBytes(TandemRuntime.SETTINGS.file)), "invalid-reload-preserves-active-config-and-invalid-file");
+        }
+        Files.write(TandemRuntime.SETTINGS.file, validConfig);
         check(command(console, "reset") == 1 && TandemRuntime.SETTINGS.height == Settings.DEFAULT_HEIGHT && TandemRuntime.SETTINGS.rear == Settings.DEFAULT_REAR, "reset-restores-owner-defaults");
         Object otherDriver = player(server, level, 4), otherRider = player(server, level, 5);
         horse = horse(level, 0.5);
@@ -429,6 +481,12 @@ public final class NativeTests {
         interact(rider, horse, hand);
         interact(otherRider, otherHorse, hand);
         check(TandemRuntime.rideCount() == 2 && TandemRuntime.seatFor(horse) != TandemRuntime.seatFor(otherHorse), "multiple-rides-own-independent-seats");
+        check(command(console, "exclusions " + dimension(level)) == 1 && TandemRuntime.rideCount() == 0, "dimension-exclusion-cleans-newly-excluded-rides");
+        interact(rider, horse, hand);
+        check(TandemRuntime.rideCount() == 0 && Names.call("entity.vehicle", rider) == null, "dimension-exclusion-rejects-new-ride");
+        check(command(console, "exclusions clear") == 1, "dimension-exclusion-clear-saves");
+        interact(rider, horse, hand); interact(otherRider, otherHorse, hand);
+        check(TandemRuntime.rideCount() == 2, "dimension-exclusion-clear-allows-new-rides");
         Names.call("living.setHealth", rider, 0.0f);
         TandemRuntime.entityTick(horse);
         check(TandemRuntime.rideCount() == 1 && TandemRuntime.seatFor(otherHorse) != null, "rider-death-cleans-only-own-ride");

@@ -46,7 +46,19 @@ public final class NativeHooks implements IMixinConfigPlugin, Opcodes {
         return new MethodInsnNode(INVOKESTATIC, RUNTIME, method, descriptor, false);
     }
     private static void patch(MethodNode method, String kind) {
-        if (kind.equals("helperInteract")) {
+        if (kind.equals("helperTransfer") || kind.equals("earlyTransfer")) {
+            InsnList guard = new InsnList();
+            LabelNode ordinary = new LabelNode();
+            guard.add(new VarInsnNode(ALOAD, 0));
+            guard.add(new VarInsnNode(ALOAD, 1));
+            guard.add(call(kind.equals("helperTransfer") ? "helperTransfer" : "earlyTransfer", "(Ljava/lang/Object;Ljava/lang/Object;)Z"));
+            guard.add(new JumpInsnNode(IFEQ, ordinary));
+            guard.add(new InsnNode(ACONST_NULL));
+            guard.add(new InsnNode(ARETURN));
+            guard.add(ordinary);
+            guard.add(new FrameNode(F_SAME, 0, null, 0, null));
+            method.instructions.insert(guard);
+        } else if (kind.equals("helperInteract")) {
             InsnList guard = new InsnList();
             LabelNode ordinary = new LabelNode();
             guard.add(new VarInsnNode(ALOAD, 1));

@@ -17,6 +17,7 @@ import time
 import uuid
 from cache_servers import java_for
 from runtime_storage import RuntimeWorkspace
+from project_metadata import metadata as project_metadata, artifact_name
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get("TANDEMOUNT_CACHE", ROOT / ".agents" / "cache")) / "modern"
@@ -30,7 +31,11 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
     if not (distribution / "distribution.json").exists():
         raise FileNotFoundError("Prepare official loader distribution first: " + str(distribution))
     metadata = json.loads((distribution / "distribution.json").read_text())
-    artifact = ROOT / "mods" / "modern" / "build" / f"tandemount-1.0.0-{platform}-{version}.jar"
+    artifact = ROOT / "mods" / "modern" / "build" / artifact_name(platform, version)
+    build_record = json.loads((ROOT / ".agents/modern-build" / (platform + "-" + version) / "artifact.json").read_text())
+    fixture = ROOT / build_record['fixture']
+    if hashlib.sha256(fixture.read_bytes()).hexdigest() != build_record['fixture_sha256']:
+        raise ValueError("The exact disposable fixture hash changed")
     artifact_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
     # Every run gets its own directory; an earlier world is never silently reused.
     workspace = RuntimeWorkspace(CACHE / os.environ.get("TANDEMOUNT_NATIVE_NAMESPACE", "native"), platform + "-" + version + "-"
@@ -38,6 +43,7 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
     run_dir = workspace.directory
     (run_dir / "mods").mkdir()
     shutil.copy2(artifact, run_dir / "mods" / artifact.name)
+    shutil.copy2(fixture, run_dir / "mods" / fixture.name)
     (run_dir / "eula.txt").write_text("eula=true\n")
     port = int(os.environ.get("TANDEMOUNT_TEST_PORT", "0"))
     if network_test and port == 0:
@@ -91,7 +97,7 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
             code = "timeout"
     fixture = run_dir / "tandemount-native-result.json"
     result = {"minecraft": version, "platform": platform, "artifact": str(artifact.relative_to(ROOT)), "sha256": artifact_hash, "run_directory": str(run_dir), "java": target["java"], "seconds": round(time.monotonic()-started, 2), "exit_code": code, "bootstrap": "unverified", "native_fixture": False, "connected_clients": False, "visual": "not-run",
-              "server": metadata, "distribution_sha256": hashlib.sha256((distribution / "distribution.json").read_bytes()).hexdigest()}
+              "server": metadata, "fixture_sha256": build_record['fixture_sha256'], "distribution_sha256": hashlib.sha256((distribution / "distribution.json").read_bytes()).hexdigest()}
     if fixture.exists():
         result.update(json.loads(fixture.read_text()))
         result["bootstrap"] = "passed"

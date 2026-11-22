@@ -690,6 +690,13 @@ passenger method to retain older llama positioning overrides. Living carrier
 body/head rotation is synchronized explicitly, and angular carriers have
 nonliving separators to preserve their independent directions.
 
+The modern mod adapter uses `ServerEntity.sendPairingData` for the same native
+pose refresh. The NeoForge 1.20.6 userdev patch replaces the vanilla collector
+with `PacketAndPayloadAcceptor`. Its `accept(Packet)` overload returns the
+collector in NeoForge 20.6.144. The generator reads the exact method descriptor
+from the official universal JAR, SHA-256
+`d92959aad10d9af0a83ced9cb1dc0f075ee0058ba8ca86ba64459da972d1bf0a`.
+
 Private SDK audit records under the task-specific plugin-final-port cache
 retain exact distribution refs, mapping URLs and hashes, native/client class
 hashes and declaration listings. Compilation, real server/network assertions,

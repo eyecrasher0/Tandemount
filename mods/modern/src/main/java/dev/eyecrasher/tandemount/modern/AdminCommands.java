@@ -21,12 +21,12 @@ public final class AdminCommands {
         dispatcher.register(root);
     }
     public static int execute(Object source, String command) {
-        String[] args = command.trim().split("\\s+");
+        String[] args = command.trim().isEmpty() ? new String[0] : command.trim().split("\\s+");
         try {
             if (args.length == 0 || args[0].equals("help")) {
                 send(source, styled("Tandemount — shared horse riding", 0x55FFFF));
                 message(source, "Right-click an occupied adult, tamed, saddled horse to join. Use the normal dismount key to leave.");
-                message(source, "Admin: /tandemount height <0..3> | rear <0..2> | height +/- | rear +/- | enable | disable | save | reload | reset | debug <true|false>");
+                message(source, "Admin: /tandemount status | height <0..3> | rear <0..2> | height +/- | rear +/- | enabled <true|false> | debug <true|false> | exclusions <dimension,...|clear> | save | reload | reset");
                 if (allowed(source)) {
                     for (Object control : controls()) send(source, control);
                     message(source, "Height=" + TandemRuntime.SETTINGS.height + ", rear=" + TandemRuntime.SETTINGS.rear + " blocks; step=1/16.");
@@ -34,7 +34,12 @@ public final class AdminCommands {
                 return 1;
             }
             if (!allowed(source)) { message(source, "You do not have permission tandemount.admin (operator level 2 on this loader)."); return 0; }
-            Settings settings = TandemRuntime.SETTINGS;
+            Settings active = TandemRuntime.SETTINGS;
+            if (args.length == 1 && args[0].equals("status")) {
+                message(source, "Tandemount: enabled=" + active.enabled + ", debug=" + active.debug + ", height=" + active.height + ", rear=" + active.rear + " blocks; horse-types=horse; excluded-dimensions=" + (active.excludedDimensions.isEmpty() ? "(none)" : active.excludedText()) + "; active-rides=" + TandemRuntime.rideCount() + ".");
+                return 1;
+            }
+            Settings settings = active.copy();
             if (args[0].equals("height") || args[0].equals("rear")) {
                 if (args.length != 2) throw new IllegalArgumentException("Specify a value, +, or -");
                 boolean height = args[0].equals("height");
@@ -51,10 +56,16 @@ public final class AdminCommands {
             } else if (args.length == 1 && args[0].equals("save")) {
                 settings.save();
             } else if (args.length == 1 && args[0].equals("reset")) {
-                settings.enabled = true; settings.debug = false; settings.height = Settings.DEFAULT_HEIGHT; settings.rear = Settings.DEFAULT_REAR; settings.save();
+                settings.enabled = true; settings.debug = false; settings.height = Settings.DEFAULT_HEIGHT; settings.rear = Settings.DEFAULT_REAR;
+                settings.excludedDimensions = java.util.Collections.emptySet(); settings.save();
             } else if (args.length == 2 && args[0].equals("debug") && (args[1].equals("true") || args[1].equals("false"))) {
                 settings.debug = Boolean.parseBoolean(args[1]); settings.save();
+            } else if (args.length == 2 && args[0].equals("enabled") && (args[1].equals("true") || args[1].equals("false"))) {
+                settings.enabled = Boolean.parseBoolean(args[1]); settings.save();
+            } else if (args.length == 2 && args[0].equals("exclusions")) {
+                settings.excludedDimensions = Settings.exclusions(args[1].equals("clear") ? "" : args[1]); settings.save();
             } else throw new IllegalArgumentException("Unknown command; use /tandemount help");
+            active.replace(settings);
             TandemRuntime.applySettings();
             message(source, "Tandemount settings saved. Height=" + settings.height + ", rear=" + settings.rear + ", enabled=" + settings.enabled + ".");
             return 1;
@@ -82,14 +93,17 @@ public final class AdminCommands {
     static Object styled(String text, int color) throws Exception {
         Object component = component(text);
         Object style = Names.call("component.style", component);
-        Names.call("component.setStyle", component, Names.call("style.color", style, color));
+        Object nativeColor = Names.method("style.color").getParameterTypes()[0] == int.class ? color : Names.call("color.rgb", null, color);
+        Names.call("component.setStyle", component, Names.call("style.color", style, nativeColor));
         return component;
     }
-    static List<Object> controls() throws Exception {
+    public static List<Object> controls() throws Exception {
         List<Object> controls = new ArrayList<Object>();
         String[][] values = {{"Height [-]", "height -"}, {"Height [+]", "height +"},
                 {"Rear [-]", "rear -"}, {"Rear [+]", "rear +"},
                 {"Save current settings", "save"}, {"Reload saved settings", "reload"}, {"Reset defaults", "reset"},
+                {"Show active settings", "status"},
+                {TandemRuntime.SETTINGS.debug ? "Disable debug" : "Enable debug", "debug " + !TandemRuntime.SETTINGS.debug},
                 {TandemRuntime.SETTINGS.enabled ? "Disable riding" : "Enable riding", TandemRuntime.SETTINGS.enabled ? "disable" : "enable"}};
         for (String[] value : values) {
             Object component = styled(value[0] + " ", value[1].equals("reset") ? 0xFFAA00 : 0x55FF55);

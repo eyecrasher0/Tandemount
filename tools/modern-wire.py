@@ -25,6 +25,7 @@ class Client(VanillaClient):
         if identifier == self.packet("game", "clientbound", "login", "ClientboundLoginPacket"):
             self.known_entities.add(struct.unpack_from(">i", body)[0])
         if identifier in {self.packet("game", "clientbound", "add_entity", "ClientboundAddEntityPacket"),
+                          self.packet("game", "clientbound", "add_mob", "ClientboundAddMobPacket"),
                           self.packet("game", "clientbound", "add_player", "ClientboundAddPlayerPacket")}:
             entity, _ = read_varint(body)
             self.known_entities.add(entity)
@@ -54,6 +55,12 @@ class Client(VanillaClient):
                 else:
                     self.skipped_unknown_edges += 1
         super().play(identifier, body)
+        if (tuple(map(int, self.version.split("."))) < (1, 19, 4)
+                and identifier == self.packet("game", "clientbound", "player_position", "ClientboundPlayerPositionPacket")):
+            # Older chunk tracking applies the acknowledged client's first
+            # ordinary movement update before sending its new view entities.
+            self.send(self.packet("game", "serverbound", "move_player_pos_rot", "ServerboundMovePlayerPacket$PosRot"),
+                      struct.pack(">dddffB", *self.position, 0))
 
     def root(self, entity):
         seen = set()
@@ -69,8 +76,16 @@ class Client(VanillaClient):
                   varint(entity) + varint(0) + varint(0) + b"\0")
 
     def command(self, value):
+        version = tuple(map(int, self.version.split(".")))
+        if version < (1, 19):
+            self.send(self.packet("game", "serverbound", "chat", "ServerboundChatPacket"), text("/" + value.lstrip("/")))
+            return
         payload = text(value.lstrip("/"))
-        if tuple(map(int, self.version.split("."))) < (1, 20, 5):
+        if version == (1, 19):
+            payload += struct.pack(">qq", int(time.time() * 1000), 0) + varint(0) + b"\0"
+        elif version < (1, 19, 3):
+            payload += struct.pack(">qq", int(time.time() * 1000), 0) + varint(0) + b"\0" + varint(0) + b"\0"
+        elif version < (1, 20, 5):
             # Exact unsigned argument-signature/last-seen layout used by these
             # vanilla releases. The command contains no signed chat arguments.
             payload += struct.pack(">qq", int(time.time() * 1000), 0) + varint(0) + varint(0) + b"\0\0\0"
@@ -139,6 +154,11 @@ def main():
             client.send(loaded)
         return client
 
+    def ride_root(value):
+        if value.get("nativeAttachment", True):
+            return value["horse"]
+        return value["helpers"][0]["id"] if value.get("helpers") else -3
+
     result = {"kind": "real-loopback-native-passenger-graph", "minecraft": args.minecraft,
               "visual": "not-run", "checks": checks, "result": "fail", "errors": []}
     try:
@@ -149,10 +169,10 @@ def main():
         wait(lambda value: value.get("driverVehicle") == initial["horse"], "ordinary driver right click")
         mount_started = time.monotonic_ns()
         rider.click(initial["horse"])
-        mounted = wait(lambda value: value.get("riderRoot") == initial["horse"], "ordinary second rider right click")
-        wait(lambda value: existing.root(value["rider"]) == value["horse"]
+        mounted = wait(lambda value: value.get("riderRoot") == ride_root(value), "ordinary second rider right click")
+        wait(lambda value: existing.root(value["rider"]) == ride_root(value)
              and existing.parents.get(value["driver"]) == value["horse"], "existing observer native graph")
-        checks.append("existing-observer-received-native-attachment-shares-horse-root")
+        checks.append("existing-observer-received-native-attachment-shares-horse-root" if mounted["nativeAttachment"] else "existing-observer-received-complete-early-follower-graph")
         mount_finished = time.monotonic_ns()
         existing.click(initial["horse"])
         time.sleep(.25)
@@ -160,12 +180,14 @@ def main():
             raise AssertionError("Third rider mounted")
         checks.append("real-client-third-rider-rejected")
         late = connect("TmWireLate")
-        wait(lambda value: late.root(value["rider"]) == value["horse"]
+        wait(lambda value: late.root(value["rider"]) == ride_root(value)
              and late.parents.get(value["driver"]) == value["horse"], "late observer native graph")
-        checks.append("late-observer-received-native-attachment-shares-horse-root")
+        checks.append("late-observer-received-native-attachment-shares-horse-root" if mounted["nativeAttachment"] else "late-observer-received-complete-early-follower-graph")
         request("admin")
         existing.command("tandemount")
         chat_id = existing.packet("game", "clientbound", "system_chat", "ClientboundSystemChatPacket")
+        if chat_id is None:
+            chat_id = existing.packet("game", "clientbound", "chat", "ClientboundChatPacket")
         def command_chat():
             return b"\n".join(body for _, identifier, body in existing.raw if identifier == chat_id)
         wait(lambda value: b"/tandemount height +" in command_chat(), "actual command menu response")
@@ -195,7 +217,7 @@ def main():
             time.sleep(.05)
         driver.steer(False)
         driven = wait(lambda value: abs(value["horsePosition"][2] - start[2]) > .5
-                      and value["riderRoot"] == value["horse"] and value["driverVehicle"] == value["horse"], "native first-driver vehicle movement")
+                      and value["riderRoot"] == ride_root(value) and value["driverVehicle"] == value["horse"], "native first-driver vehicle movement")
         checks.append("real-client-first-driver-controls-native-horse")
         time.sleep(1)
         motion_end = time.monotonic_ns()
@@ -209,9 +231,11 @@ def main():
                 entity, _ = read_varint(body)
                 if entity in helpers:
                     follow.append({"entity": entity, "id": identifier})
-        if follow:
+        if mounted["nativeAttachment"] and follow:
             raise AssertionError("Independent helper position packets: " + json.dumps(follow))
-        checks.append("attachment-has-no-periodic-position-follow-packets")
+        if not mounted["nativeAttachment"] and (not follow or any(row["entity"] != ride_root(mounted) for row in follow)):
+            raise AssertionError("Early follower must move only its native interpolated marker root: " + json.dumps(follow))
+        checks.append("attachment-has-no-periodic-position-follow-packets" if mounted["nativeAttachment"] else "early-follower-moves-only-interpolated-native-root")
         result.update(result="pass", joined_play=True, connection_held=True, initial_state=initial,
                       mounted_state=mounted, before_motion_state=before_motion, final_state=state(),
                       mount_window={"start_ns": mount_started, "end_ns": mount_finished},
