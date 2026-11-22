@@ -28,16 +28,44 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def mounted_graph(snapshot, tree):
+    """Check the single horse and the complete helper chain in the fixture."""
+    driver, rider = snapshot["driver"], snapshot["rider"]
+    by_id = {entity["id"]: entity for entity in tree}
+    horse = by_id.get(driver["vehicle"])
+    if horse is None or horse["type"] != "HORSE" or horse["vehicle"] != -1 or not horse["valid"]:
+        return False
+
+    helpers = []
+    seen = {driver["id"], rider["id"], horse["id"]}
+    vehicle = rider["vehicle"]
+    while vehicle not in seen and vehicle in by_id:
+        entity = by_id[vehicle]
+        if not entity["valid"] or not entity["noPhysics"] or entity["world"] != horse["world"]:
+            return False
+        helpers.append(entity["type"])
+        seen.add(vehicle)
+        vehicle = entity["vehicle"]
+
+    # The two supported graph shapes differ only by a neutral separator.
+    expected = ["BLOCK_DISPLAY", "INTERACTION", "LLAMA", "LLAMA", "INTERACTION"]
+    separated = [*expected[:3], "INTERACTION", *expected[3:]]
+    return (vehicle == horse["id"] and helpers in (expected, separated)
+            and snapshot["nativeRideEntries"] == len(helpers)
+            and seen == by_id.keys() and len(seen) == len(tree))
+
+
 def assertions(result, scenario):
     """Evaluate actual server positions and ownership, not a fixture PASS label."""
     before = result["beforePortal"]
     checks = {"second-rider-mounted-before-portal": before["rider"]["vehicle"] != -1,
-              "native-helper-graph-present-before-portal": before["nativeRideEntries"] == 5,
+              "native-helper-graph-present-before-portal": mounted_graph(before, result["treeBeforePortal"]),
               "driver-keeps-native-horse-before-portal": before["driver"]["vehicle"] != -1}
     if scenario == "cancel-portal":
         after = result["afterCancelled"]
         checks.update({"cancelled-portal-keeps-source-world": all(after[p]["world"] == before[p]["world"] for p in ("driver", "rider")),
-                       "cancelled-portal-preserves-ride": after["nativeRideEntries"] == 5 and after["rider"]["vehicle"] != -1})
+                       "cancelled-portal-preserves-ride": after["nativeRideEntries"] == before["nativeRideEntries"]
+                       and all(after[p]["vehicle"] == before[p]["vehicle"] for p in ("driver", "rider"))})
         return checks
     after = result["after10Ticks"]
     target = result["nativeExit"]
@@ -58,7 +86,9 @@ def assertions(result, scenario):
                        "native-arrival-cooldown-applied": result["afterSynchronous"]["rider"]["portalCooldown"] == result["afterSynchronous"]["rider"]["nativeArrivalCooldown"] > 0})
     if scenario == "return":
         retry, back = result["remountState"], result["returnState"]
-        checks["second-rider-can-remount-after-portal"] = retry["rider"]["vehicle"] != -1 and retry["nativeRideEntries"] == 5
+        checks["second-rider-can-remount-after-portal"] = (retry["driver"]["vehicle"] != -1
+            and retry["rider"]["vehicle"] not in (-1, retry["driver"]["vehicle"])
+            and retry["nativeRideEntries"] == before["nativeRideEntries"])
         checks["return-keeps-correct-world-and-height"] = (back["after10Ticks"]["rider"]["world"] == before["rider"]["world"]
             and abs(back["after10Ticks"]["rider"]["xyz"][1] - back["nativeExit"][1] - .8125) < .002
             and back["after10Ticks"]["nativeRideEntries"] == 0)
