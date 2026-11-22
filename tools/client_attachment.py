@@ -14,6 +14,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -42,7 +43,7 @@ def normalize_capture(raw):
     result["height"]=state.get("height",state.get("vertical"))
     result["rear"]=state.get("rear",state.get("rearward"))
     result["helpers"]=[{**helper,"type":helper["type"].lower(),
-                        "vehicle":helper.get("vehicle",helper.get("parent")),
+                        "vehicle":helper.get("vehicle",helper.get("parent")) if helper.get("vehicle",helper.get("parent")) is not None else -1,
                         "position":helper.get("position",[helper.get(key) for key in ("x","y","z")])}
                        for helper in state["helpers"]]
     required={"horse","driver","rider","riderVehicle","height","rear","helpers"}
@@ -59,19 +60,21 @@ def generate_world(mc, jar, mp, out):
     else:
      declarations={name[:-6]:b.classfile(z.read(name)) for name in z.namelist() if name.endswith('.class')}
      c,m,f=b.identity_mappings(declarations)
-    # Keep the probe's canonical API spelling across the EntityTypes rename.
-    if 'net.minecraft.world.entity.EntityType' not in c:
-     old='net.minecraft.world.entity.EntityTypes';new='net.minecraft.world.entity.EntityType';c[new]=c[old]
-     m.update({(new,name,params):value for (owner,name,params),value in list(m.items()) if owner==old})
-     f.update({(new,name):value for (owner,name),value in list(f.items()) if owner==old})
+    # 26.2 moves only the static registry fields to EntityTypes. EntityType and
+    # its native factory methods remain a distinct original game class.
+    for (owner,name),value in list(f.items()):
+     if owner=='net.minecraft.world.entity.EntityTypes':
+      f.setdefault(('net.minecraft.world.entity.EntityType',name),value)
     decs={}
     def dec(name):
+     name=name.replace('.','/')
      if name not in decs:decs[name]=b.classfile(z.read(name+'.class'))
      return decs[name]
     def cls(name):return c.get(name,name).replace('$','.')
-    def fld(owner,name):return cls(owner)+'.'+f[(owner,name)][1]
+    def fld(owner,name):
+     value=f[(owner,name)];return value[0].replace('$','.')+'.'+value[1]
     def meth(owner,name,params=''):return m[(owner,name,params)][1]
-    rev={(v[0],v[1],v[2]):(owner,name,params) for (owner,name,params),v in m.items()}
+    rev={(v[0].replace('.','/'),v[1],v[2]):(owner,name,params) for (owner,name,params),v in m.items()}
     def methods(internal):
      result={}
      def visit(name):
@@ -79,7 +82,7 @@ def generate_world(mc, jar, mp, out):
       _,parents,declared,_=dec(name)
       for parent in reversed(parents):visit(parent)
       for name,desc,access in declared:
-       if name.startswith('<') or access&0xa:continue
+       if name.startswith('<') or access&0x104a:continue
        result[(name,desc.split(')')[0]+')')]=(name,desc,access,internal)
      visit(internal)
      return result
@@ -101,25 +104,45 @@ def generate_world(mc, jar, mp, out):
     def semantic(name,desc):
      for owner in hierarchy:
       if (owner,name,desc) in rev:return rev[(owner,name,desc)]
+     # Published mappings can collapse a covariant bridge onto the same
+     # canonical method key. Only accept an unambiguous signature meaning.
+     candidates={value for (owner,n,d),value in rev.items()
+                 if owner in hierarchy and n==name and d.split(')')[0]==desc.split(')')[0]}
+     if len(candidates)==1:return candidates.pop()
+     if desc.startswith('()L'):
+      result=desc[3:-1].replace('/','.')
+      if result in {c.get('net.minecraft.world.attribute.EnvironmentAttributeSystem'),c.get('net.minecraft.world.attribute.EnvironmentAttributeReader')}:
+       return level,'environmentAttributes',''
      return None,'',''
     level='net.minecraft.world.level.Level';writable='net.minecraft.world.level.storage.WritableLevelData'
     hierarchy=[]
     def collect(i):
+     i=i.replace('.','/')
      hierarchy.append(i)
      for par in dec(i)[1]:
       if not par.startswith('java/') and par not in hierarchy:collect(par)
     collect(c[level])
-    abstract=methods(c[level])
+    abstract=methods(c[level].replace('.','/'))
+    biome_type = 'net.minecraft.core.Holder' if 'net.minecraft.core.Holder' in c else 'net.minecraft.world.level.biome.Biome'
     statics='''final java.util.Map<Integer,%s> entities=new java.util.LinkedHashMap<>();
     final java.util.Map<Long,%s> chunks=new java.util.HashMap<>();
     final %s border=new %s();
     final %s scoreboard=new %s();
     final %s biome;
-    '''%(cls('net.minecraft.world.entity.Entity'),cls('net.minecraft.world.level.chunk.LevelChunk'),cls('net.minecraft.world.level.border.WorldBorder'),cls('net.minecraft.world.level.border.WorldBorder'),cls('net.minecraft.world.scores.Scoreboard'),cls('net.minecraft.world.scores.Scoreboard'),cls('net.minecraft.core.Holder'))
+    final %s registries;
+    '''%(cls('net.minecraft.world.entity.Entity'),cls('net.minecraft.world.level.chunk.LevelChunk'),cls('net.minecraft.world.level.border.WorldBorder'),cls('net.minecraft.world.level.border.WorldBorder'),cls('net.minecraft.world.scores.Scoreboard'),cls('net.minecraft.world.scores.Scoreboard'),cls(biome_type),cls('net.minecraft.core.RegistryAccess'))
     if 'net.minecraft.world.TickRateManager' in c:statics+='final %s tickrate=new %s();\n'%(cls('net.minecraft.world.TickRateManager'),cls('net.minecraft.world.TickRateManager'))
+    environment='net.minecraft.world.attribute.EnvironmentAttributeSystem'
+    if environment in c:
+     statics+='final '+cls(environment)+' environment='+cls(environment)+'.'+meth(environment,'builder')+'().'+meth(environment+'$Builder','build')+'();\n'
+    clock='net.minecraft.world.clock.ClockManager'
+    if clock in c:
+     client_clock='net.minecraft.client.ClientClockManager'
+     if (client_clock,'<init>','') not in m:raise ValueError('No exact native client clock manager: '+mc)
+     statics+='final '+cls(clock)+' clocks=new '+cls(client_clock)+'();\n'
     body=[]
     # Abstract declarations plus concrete environment queries used by untouched entity ticks.
-    override_names={'getBlockState','getFluidState','getBlockEntity','getChunkForCollisions','hasChunk','getSeaLevel','getUncachedNoiseBiome','enabledFeatures','getWorldBorder','players','getEntities','getEntity','getScoreboard','getChunk','tickRateManager','gameEvent','playSeededSound','addParticle','levelEvent','getBlockTicks','getFluidTicks','getBrightness','getRawBrightness','getSkyDarken'}
+    override_names={'getBlockState','getFluidState','getBlockEntity','getChunkForCollisions','hasChunk','getSeaLevel','getUncachedNoiseBiome','enabledFeatures','getWorldBorder','players','getEntities','getEntity','getScoreboard','getChunk','tickRateManager','gameEvent','playSeededSound','addParticle','levelEvent','getBlockTicks','getFluidTicks','getBrightness','getRawBrightness','getSkyDarken','registryAccess'}
     existing=[]
     for key,(name,desc,access,_) in abstract.items():
      _,semantic_name,params=semantic(name,desc)
@@ -142,15 +165,35 @@ def generate_world(mc, jar, mp, out):
      elif semantic_name in {'players','getEntities'} and result=='java.util.List':stmt='return java.util.List.of();' 
      elif semantic_name=='getEntity':stmt='return entities.get(p0);'
      elif semantic_name=='getScoreboard':stmt='return scoreboard;'
+     elif semantic_name=='registryAccess':stmt='return registries;'
      elif semantic_name=='tickRateManager':stmt='return tickrate;'
-     elif semantic_name=='getChunk' and len(args)==4:stmt='long key=((long)p0&0xffffffffL)|((long)p1<<32);return chunks.computeIfAbsent(key,k->new '+cls('net.minecraft.world.level.chunk.EmptyLevelChunk')+'(this,new '+cls('net.minecraft.world.level.ChunkPos')+'(p0,p1),biome));'
-     elif semantic_name in {'gameEvent','playSeededSound','addParticle','levelEvent','sendBlockUpdated','destroyBlockProgress','disconnect','setMapData'}:stmt=''
+     elif semantic_name=='environmentAttributes' and environment in c:stmt='return environment;'
+     elif semantic_name=='clockManager' and clock in c:stmt='return clocks;'
+     elif semantic_name=='getChunk' and len(args)==4:
+      empty='net.minecraft.world.level.chunk.EmptyLevelChunk'
+      tail=',biome' if (empty,'<init>','net.minecraft.world.level.Level,net.minecraft.world.level.ChunkPos,'+biome_type) in m else ''
+      stmt='long key=((long)p0&0xffffffffL)|((long)p1<<32);return chunks.computeIfAbsent(key,k->new '+cls(empty)+'(this,new '+cls('net.minecraft.world.level.ChunkPos')+'(p0,p1)'+tail+'));'
+     elif semantic_name in {'gameEvent','playSound','playSeededSound','addParticle','levelEvent','sendBlockUpdated','destroyBlockProgress','disconnect','setMapData'}:stmt=''
      elif semantic_name in {'gatherChunkSourceStats'}:stmt='return "controlled-empty-client-world";'
      elif semantic_name=='getMapData':stmt='return null;'
      elif semantic_name=='getBlockTicks' or semantic_name=='getFluidTicks':stmt='return null;'
      body.append('public '+result+' '+name+'('+argdecl+'){'+stmt+'}')
      existing.append([semantic_name,desc])
-    ctor='World(Object data,Object registry,Object dimension,Object plains){super(('+cls(writable)+')data,'+fld(level,'OVERWORLD')+',('+cls('net.minecraft.core.RegistryAccess')+')registry,('+cls('net.minecraft.core.Holder')+')dimension,()->'+fld('net.minecraft.util.profiling.InactiveProfiler','INSTANCE')+',true,false,0L,1000000);biome=('+cls('net.minecraft.core.Holder')+')plains;}'
+    constructors=[params for (owner,name,params) in m if owner==level and name=='<init>']
+    if len(constructors)!=1:raise ValueError('Unsupported exact client Level constructor: '+mc)
+    ctor_arguments=[];booleans=iter(('true','false'))
+    for typ in constructors[0].split(','):
+     if typ==writable:value='('+cls(typ)+')data'
+     elif typ=='net.minecraft.resources.ResourceKey':value=fld(level,'OVERWORLD')
+     elif typ=='net.minecraft.core.RegistryAccess':value='('+cls(typ)+')registry'
+     elif typ in {'net.minecraft.core.Holder','net.minecraft.world.level.dimension.DimensionType'}:value='('+cls(typ)+')dimension'
+     elif typ=='java.util.function.Supplier':value='()->'+fld('net.minecraft.util.profiling.InactiveProfiler','INSTANCE')
+     elif typ=='boolean':value=next(booleans)
+     elif typ=='long':value='0L'
+     elif typ=='int':value='1000000'
+     else:raise ValueError('Unsupported exact client Level argument '+typ+': '+mc)
+     ctor_arguments.append(value)
+    ctor='World(Object data,Object registry,Object dimension,Object plains){super('+','.join(ctor_arguments)+');biome=('+cls(biome_type)+')plains;registries=('+cls('net.minecraft.core.RegistryAccess')+')registry;}'
     world='public class World extends '+cls(level)+'{\n'+statics+ctor+'\n'+'\n'.join(body)+'\n}'
     world_path=out/'World.java'
     world_path.write_text(world)
@@ -159,6 +202,42 @@ def generate_world(mc, jar, mp, out):
     for (owner,name,params),(obf,newname,desc) in m.items():properties['method.'+owner+'#'+name+'#'+params]=obf+'#'+newname+'#'+desc
     for (owner,name),(obf,newname,desc) in f.items():properties['field.'+owner+'#'+name]=obf+'#'+newname
     properties['minecraft']=mc
+    player='net.minecraft.world.entity.player.Player'
+    if 'net.minecraft.world.entity.EntityAttachment' not in c:
+     # Bind the old native constant to the exact original client bytecode rather
+     # than assuming an offset from a version label or an ArmorStand subject.
+     member=next((m[(player,'getMyRidingOffset',p)] for p in ('', 'net.minecraft.world.entity.Entity')
+                  if (player,'getMyRidingOffset',p) in m),None)
+     if member is None:
+      # The later pre-attachment clients inherit a scaling wrapper around
+      # Player.ridingOffset. Let that wrapper run on a real adult Player.
+      block_pos='net.minecraft.core.BlockPos'
+      player_ctor=level+','+block_pos+',float,com.mojang.authlib.GameProfile'
+      if (player,'<init>',player_ctor) not in m or (player,'ridingOffset','net.minecraft.world.entity.Entity') not in m:
+       raise ValueError('No exact native Player riding offset: '+mc)
+      world_path.write_text('import com.mojang.authlib.GameProfile;\n'+world+f'''
+final class FixturePlayer extends {cls(player)} {{
+    FixturePlayer({cls(level)} level) {{
+        super(level, {fld(block_pos, 'ZERO')}, 0F,
+            new GameProfile(new java.util.UUID(0L, 1L), "FixturePlayer"));
+    }}
+    @Override public boolean {meth(player, 'isSpectator')}() {{ return false; }}
+    @Override public boolean {meth(player, 'isCreative')}() {{ return false; }}
+}}
+''')
+      properties['probe.useNativePlayerOffset']='true'
+     else:
+      java=Path(java_for(25 if mc.startswith('26.') else 21))
+      listing=subprocess.check_output([str(java.with_name('javap')),'-c','-p','-classpath',str(jar),member[0]],text=True)
+      blocks=re.split(r'\n(?=  (?:public|protected|private))',listing)
+      selected=[block for block in blocks if re.search(r'\b'+re.escape(member[1])+r'\([^)]*\);',block.splitlines()[0])
+                and (' double ' in block.splitlines()[0] or ' float ' in block.splitlines()[0])]
+      constants=[re.search(r'Code:\s*0: ldc(?:2?_w)?\s+[^\n]*// (?:double|float) (-?[0-9.]+)[df]?\s+\d+: [df]return\s*$',block) for block in selected]
+      constants=[match for match in constants if match]
+      if len(constants)!=1:raise ValueError('Player riding offset is not a verified simple native constant: '+mc)
+      properties['probe.playerOwnOffset']=constants[0][1]
+      properties['probe.playerOffsetBytecodeSha256']=hashlib.sha256(selected[0].encode()).hexdigest()
+      (out/'player-offset-bytecode.txt').write_text(selected[0])
     symbols_path=out/'all-symbols.properties'
     symbols_path.write_text('\n'.join(k+'='+v for k,v in properties.items())+'\n')
     (out/'world-methods.json').write_text(json.dumps(existing,indent=2))
@@ -178,7 +257,9 @@ def prepare(version, folder):
         item=metadata["downloads"][kind]
         suffix="-client.jar" if kind=="client" else "-client_mappings.txt"
         candidates=[CACHE/"plugin-renderer-audit"/(version+suffix),
-                    CACHE/"client-attachment-api"/version/("client.jar" if kind=="client" else "client_mappings.txt")]
+                    CACHE/"client-attachment-api"/version/("client.jar" if kind=="client" else "client_mappings.txt"),
+                    CACHE/"modern-client-lifetime"/version/("client.jar" if kind=="client" else "client_mappings.txt"),
+                    CACHE/"modern-client-api26"/(version+suffix)]
         path=next((p for p in candidates if p.is_file()),folder/(kind+(".jar" if kind=="client" else ".txt")))
         artifacts[kind]=b.fetch(item["url"],path,item["sha1"])
     libraries=[]
@@ -195,8 +276,10 @@ def prepare(version, folder):
 
 PACKET_CLASSES={
     "add_entity":"ClientboundAddEntityPacket", "add_player":"ClientboundAddPlayerPacket",
+    "add_mob":"ClientboundAddMobPacket",
     "set_entity_data":"ClientboundSetEntityDataPacket", "update_attributes":"ClientboundUpdateAttributesPacket",
     "set_passengers":"ClientboundSetPassengersPacket", "rotate_head":"ClientboundRotateHeadPacket",
+    "move_entity_rot":"ClientboundMoveEntityPacket$Rot",
 }
 PLUGIN_PACKET_CLASSES={
     "PacketPlayOutSpawnEntity":"ClientboundAddEntityPacket",
