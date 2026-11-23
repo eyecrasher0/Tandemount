@@ -22,13 +22,13 @@ def sha(path):
 def plugin_runner_helpers():
     names = ("plugin-owner-regression.py", "plugin_protocol.py", "client_lifetime.py")
     return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
-            + [path for path in (ROOT / "plugin/src/test/client").rglob("*") if path.is_file()])
+            + [path for path in (ROOT / "bukkit/src/test/client").rglob("*") if path.is_file()])
 
 
 def modern_runner_helpers():
     names = ("modern-wire.py", "modern-client-components.py")
     return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
-            + [path for path in (ROOT / "mods/modern/src/test/client").rglob("*") if path.is_file()])
+            + [path for path in (ROOT / "mod-common/src/test/client").rglob("*") if path.is_file()])
 
 
 def attachment_runner_helpers():
@@ -38,8 +38,8 @@ def attachment_runner_helpers():
 
 
 def sources(mode):
-    folder = ROOT / ("mods/modern/src" if mode == "modern" else "plugin/src")
-    files = [p for p in folder.rglob("*") if p.is_file()]
+    folders = ("mod-common/src", "fabric/src", "forge/src", "neoforge/src") if mode == "modern" else ("bukkit/src",)
+    files = [path for folder in folders for path in (ROOT / folder).rglob("*") if path.is_file()]
     names = (["modern-build.py", "modern-native.py", "modern-client.py", "vanilla_protocol.py", "runtime_storage.py"]
              if mode == "modern" else ["plugin-build.py", "plugin-runtime.py", "vanilla_protocol.py", "runtime_storage.py"])
     files += [ROOT / "tools" / name for name in names]

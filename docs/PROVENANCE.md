@@ -577,7 +577,7 @@ client-side `Level`. It does not subclass the entity, replace its tick, use
 Unsafe, or load the plugin. AIR state ID 0 is removed on tick 1. The actual
 candidate state ID 14381 with no-gravity true survives 200 ticks at unchanged
 height and reports `INVISIBLE` render shape. The independent harness source is
-`plugin/src/test/client/OfficialClientSeatProbe.java`. This is executed vanilla
+`bukkit/src/test/client/OfficialClientSeatProbe.java`. This is executed vanilla
 entity-lifetime evidence, separate from human graphical review.
 
 The candidate runtime JAR SHA-256 is

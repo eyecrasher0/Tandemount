@@ -114,7 +114,7 @@ def main():
     if digest(sdk / metadata["name"]) != metadata["sha256"]:
         raise ValueError("Prepared Paper distribution differs from its recorded checksum")
     java = Path(java_for(25))
-    source = ROOT / "plugin/src/test/portal/PortalTransferFixture.java"
+    source = ROOT / "bukkit/src/test/portal/PortalTransferFixture.java"
     build = ROOT / ".agents/portal-test-build" / uuid.uuid4().hex
     classes = build / "classes"
     classes.mkdir(parents=True)

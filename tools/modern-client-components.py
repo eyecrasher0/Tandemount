@@ -75,7 +75,7 @@ def main():
     inputs = {"minecraft":version,"official_client_sha256":hashlib.sha256(artifacts["client"].read_bytes()).hexdigest(),
               "symbols_sha256":hashlib.sha256(symbol_file.read_bytes()).hexdigest(),
               "libraries_sha256":{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in libraries}}
-    source = ROOT / "mods/modern/src/test/client/InteractionPoseProbe.java"
+    source = ROOT / "mod-common/src/test/client/InteractionPoseProbe.java"
     inputs["source_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
     (folder/"inputs.json").write_text(json.dumps(inputs,indent=2)+"\n")
     classes_out = folder / "classes";classes_out.mkdir(exist_ok=True)

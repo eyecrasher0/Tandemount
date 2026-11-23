@@ -47,9 +47,9 @@ def main():
     if classes.exists():
         shutil.rmtree(classes)
     classes.mkdir()
-    sources = sorted((ROOT / 'plugin/src/main/java').rglob('*.java'))
+    sources = sorted((ROOT / 'bukkit/src/main/java').rglob('*.java'))
     if args.fixture:
-        sources += sorted((ROOT / 'plugin/src/test/java').rglob('*.java'))
+        sources += sorted((ROOT / 'bukkit/src/test/java').rglob('*.java'))
     javac = str(args.java_home / 'bin/javac') if args.java_home else shutil.which('javac')
     if not javac: parser.error('Provide --java-home or JAVA_HOME with JDK 9 or newer.')
     compile_classpath = [api] + args.classpath
@@ -80,7 +80,7 @@ def main():
                         "paperweight-mappings-namespace: mojang\n")
             if target: manifest += 'Tandemount-Minecraft-Target: ' + target + '\n'
             write(jar, 'META-INF/MANIFEST.MF', manifest + '\n')
-            for tree in [classes, ROOT / 'plugin/src/main/resources']:
+            for tree in [classes, ROOT / 'bukkit/src/main/resources']:
                 for file in sorted(tree.rglob('*')):
                     if file.is_file():
                         relative = file.relative_to(tree).as_posix()

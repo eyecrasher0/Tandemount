@@ -103,7 +103,7 @@ def probe(mc,java,sdk,cache,trace,seat_id,state_id,ticks=1200,graph=False,carrie
     symbols=mapping(mc,sdk);symbols.update(seat_id=str(seat_id),ticks=str(ticks))
     properties=folder/"symbols.properties";properties.write_text("\n".join(k+"="+v for k,v in symbols.items())+"\n")
     classes=folder/"classes";classes.mkdir(exist_ok=True)
-    source=ROOT/"mods/legacy/client-test/ClientChecks.java"
+    source=ROOT/"forge/legacy/client-test/ClientChecks.java"
     subprocess.run([str(java/"bin/javac"),"-source","8","-target","8","-Xlint:all","-d",str(classes),str(source)],check=True)
     mode="carriers" if carriers else "graph" if graph else "report"
     raw_report=folder/("native-client-"+mode+".json");log=folder/("native-client-"+mode+".log")

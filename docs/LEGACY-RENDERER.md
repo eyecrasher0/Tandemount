@@ -131,7 +131,7 @@ required overall `status`. The latter remains failed when server/client horse
 roots or the no-periodic-follower requirement fail. Named `final_checks` use
 `{name, passed}` and do not promote a separate follower to native attachment.
 The source binding concatenates, in order: `tools/legacy-native-test.py`,
-`mods/legacy/native-test/NativeChecks.java`, `tools/legacy-client-test.py`, and
-`mods/legacy/client-test/ClientChecks.java`. Operational logs and binaries remain
+`forge/legacy/native-test/NativeChecks.java`, `tools/legacy-client-test.py`, and
+`forge/legacy/client-test/ClientChecks.java`. Operational logs and binaries remain
 outside Git. Forge 1.7.10 has no cancellable `EntityMountEvent`; only that event
 capability is unavailable. All lifecycle checks remain required.

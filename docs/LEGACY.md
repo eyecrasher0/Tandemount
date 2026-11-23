@@ -38,7 +38,7 @@ python3 tools/legacy-native-test.py --java /path/to/jdk8 --cache /large/task/cac
 
 The runner binds to `127.0.0.1` (`--port`, default 25844), uses offline fixture identities, and limits each
 sequential native server to a 1 GiB Java heap. It does not connect to or modify
-an existing server. Native test sources are in `mods/legacy/native-test/` and
+an existing server. Native test sources are in `forge/legacy/native-test/` and
 are compiled into a separate local test mod. They are never in a distributable.
 It records artifact, launcher, test-mod, source, and log SHA256 digests, then
 restarts the native server to inspect the saved fixture world. A failed required

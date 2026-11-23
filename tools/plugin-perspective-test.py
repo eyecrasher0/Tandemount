@@ -63,7 +63,7 @@ def main():
     folder = ROOT / ".agents/perspective-probes" / uuid.uuid4().hex
     classes = folder / "classes"
     classes.mkdir(parents=True)
-    sources = [ROOT / "plugin/src/test/client" / (name + ".java") for name in
+    sources = [ROOT / "bukkit/src/test/client" / (name + ".java") for name in
         ("OfficialClientSeatProbe", "ClientSeatMotionProbe", "PoseAttachmentProbe", "ClientDriverLatencyReplay")]
     source_hashes = {str(p.relative_to(ROOT)): digest(p) for p in sources}
     with (folder / "compile.log").open("w") as log:

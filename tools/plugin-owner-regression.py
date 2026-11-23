@@ -76,7 +76,7 @@ def main():
     plugins=run/'plugins';plugins.mkdir()
     shutil.copy2(args.plugin,plugins/'Tandemount.jar');shutil.copy2(args.fixture,plugins/'TandemountNativeFixture.jar')
     config=plugins/'Tandemount';config.mkdir()
-    (config/'config.yml').write_text((ROOT/'plugin/src/main/resources/config.yml').read_text().replace('debug: false','debug: true'))
+    (config/'config.yml').write_text((ROOT/'bukkit/src/main/resources/config.yml').read_text().replace('debug: false','debug: true'))
     (run/'eula.txt').write_text('eula=true\n')
     (run/'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance=2\nsimulation-distance=2\nspawn-protection=0\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
     (run/'bukkit.yml').write_text('settings:\n  allow-end: false\n  connection-throttle: 0\nspawn-limits:\n  monsters: 0\n  animals: 0\n')

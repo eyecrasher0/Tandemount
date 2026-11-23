@@ -204,8 +204,8 @@ def load_matrix_record(directory, key, mode):
 
 
 def legacy_fixture_digest(root):
-    paths = ("tools/legacy-native-test.py", "mods/legacy/native-test/NativeChecks.java",
-             "tools/legacy-client-test.py", "mods/legacy/client-test/ClientChecks.java")
+    paths = ("tools/legacy-native-test.py", "forge/legacy/native-test/NativeChecks.java",
+             "tools/legacy-client-test.py", "forge/legacy/client-test/ClientChecks.java")
     return hashlib.sha256(b"".join((root / path).read_bytes() for path in paths)).hexdigest()
 
 
@@ -245,7 +245,7 @@ def main():
                     if raw.get("test_sources_sha256") != test_sha:
                         raise ValueError("Legacy fixture source changed since native execution")
                     build = json.loads(artifact.with_suffix(".json").read_text())
-                    java_sources = sorted((ROOT / "mods/legacy/src/main/java").rglob("*.java")) + sorted((ROOT / f"mods/legacy/forge-{mc}/src/main/java").rglob("*.java"))
+                    java_sources = sorted((ROOT / "forge/legacy/src/main/java").rglob("*.java")) + sorted((ROOT / f"forge/{mc}/src/main/java").rglob("*.java"))
                     current = hashlib.sha256((ROOT / "project.json").read_bytes()
                                              + b"".join(p.read_bytes() for p in java_sources)).hexdigest()
                     if current != build["source_sha256"] or digest(artifact) != build["sha256"]:

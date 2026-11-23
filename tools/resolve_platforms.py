@@ -211,7 +211,7 @@ def main():
               "sources": SOURCES, "targets": targets}
     output = ROOT / "platforms.json"
     output.write_text(json.dumps(matrix, indent=2) + "\n")
-    (ROOT / "docs/COMPATIBILITY.md").write_text(render(matrix))
+    (ROOT / "BACKPORTS.md").write_text(render(matrix))
     print(json.dumps({"versions": len(targets), "upstreams": {
         name: sum(t["platforms"][name]["available"] for t in targets) for name in PLATFORMS},
         "output": str(output)}))

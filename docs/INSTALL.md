@@ -1,8 +1,9 @@
 # Installation and commands
 
-Use the file for your **exact Minecraft release and server platform**. The
-[platform matrix](COMPATIBILITY.md) lists which upstream platforms exist; release
-verification is recorded separately. Development builds are still under test.
+Use the file for your **exact Minecraft release and server platform**.
+[GitHub Releases](https://github.com/eyecrasher0/Tandemount/releases) lists the
+downloads available now. The [platform matrix](../BACKPORTS.md) covers the
+full set of build targets.
 
 | Server | File pattern | Install directory |
 | --- | --- | --- |

@@ -398,7 +398,7 @@ def main():
     shutil.copy2(args.fixture, run / 'plugins/TandemountNativeFixture.jar')
     config = run / 'plugins/Tandemount'
     config.mkdir()
-    default_config = (ROOT / 'plugin/src/main/resources/config.yml').read_text()
+    default_config = (ROOT / 'bukkit/src/main/resources/config.yml').read_text()
     (config / 'config.yml').write_text(default_config.replace('debug: false', 'debug: true'))
     fixture_config = run / 'plugins/TandemountNativeFixture'
     (run / 'eula.txt').write_text('eula=true\n')

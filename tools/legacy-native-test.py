@@ -34,7 +34,7 @@ client_probe=importlib.util.module_from_spec(client_spec);client_spec.loader.exe
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def test_source_digest():
-    sources=[Path(__file__),b.ROOT/"mods/legacy/native-test/NativeChecks.java",Path(__file__).with_name("legacy-client-test.py"),b.ROOT/"mods/legacy/client-test/ClientChecks.java"]
+    sources=[Path(__file__),b.ROOT/"forge/legacy/native-test/NativeChecks.java",Path(__file__).with_name("legacy-client-test.py"),b.ROOT/"forge/legacy/client-test/ClientChecks.java"]
     return hashlib.sha256(b"".join(path.read_bytes() for path in sources)).hexdigest()
 
 def vanilla_login(mc,port):
@@ -429,7 +429,7 @@ public final class NativeTestMod {{
 '''
     with tempfile.TemporaryDirectory(prefix=f"native-tests-{mc}-",dir=args.cache) as temp:
         temp=Path(temp);source=temp/"NativeTestMod.java";source.write_text(shim);classes=temp/"classes";classes.mkdir()
-        subprocess.run([str(args.java/"bin/javac"),"-source","8","-target","8","-Xlint:-path","-encoding","UTF-8","-cp",os.pathsep.join(map(str,[api,artifact,args.cache/"asm-5.0.3.jar"])),"-d",str(classes),str(source),str(b.ROOT/"mods/legacy/native-test/NativeChecks.java")],check=True)
+        subprocess.run([str(args.java/"bin/javac"),"-source","8","-target","8","-Xlint:-path","-encoding","UTF-8","-cp",os.pathsep.join(map(str,[api,artifact,args.cache/"asm-5.0.3.jar"])),"-d",str(classes),str(source),str(b.ROOT/"forge/legacy/native-test/NativeChecks.java")],check=True)
         table={"minecraft":mc}
         with zipfile.ZipFile(args.cache/f"mcp-{mc}-names.zip") as z:
             for name in ["methods.csv","fields.csv"]:

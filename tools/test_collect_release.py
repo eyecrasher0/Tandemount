@@ -207,8 +207,8 @@ class NativeCollectionTest(unittest.TestCase):
 
 class LegacyFixtureBindingTest(unittest.TestCase):
     def test_each_native_and_original_client_input_invalidates_evidence(self):
-        paths = ("tools/legacy-native-test.py", "mods/legacy/native-test/NativeChecks.java",
-                 "tools/legacy-client-test.py", "mods/legacy/client-test/ClientChecks.java")
+        paths = ("tools/legacy-native-test.py", "forge/legacy/native-test/NativeChecks.java",
+                 "tools/legacy-client-test.py", "forge/legacy/client-test/ClientChecks.java")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for name in paths:

@@ -838,15 +838,15 @@ public abstract class ForgeConfigShutdown {
     mixin_config = {"required": True, "minVersion": "0.8", "package": "dev.eyecrasher.tandemount.modern.mixin", "compatibilityLevel": "JAVA_8", "plugin": "dev.eyecrasher.tandemount.modern.NativeHooks", "mixins": mixins, "injectors": {"defaultRequire": 1}}
     (classes / "tandemount.mixins.json").write_text(json.dumps(mixin_config, indent=2) + "\n")
     mod = {"schemaVersion": 1, "id": identity["id"], "version": identity["version"], "name": identity["name"], "description": "Independent server-side tandem horse riding.", "authors": [identity["author"]], "license": identity["license"], "environment": "server", "entrypoints": {"main": ["dev.eyecrasher.tandemount.modern.FabricEntrypoint"]}, "mixins": ["tandemount.mixins.json"], "depends": {"fabricloader": ">=" + target["platforms"]["fabric"]["loader"], "minecraft": "=" + version, "java": ">=" + str(target["java"])}}
+    adapter_platform = platform
     if platform == "fabric":
         (classes / "fabric.mod.json").write_text(json.dumps(mod, indent=2) + "\n")
     else:
         legacy_neo = platform == "neoforge" and version == "1.20.1"
-        annotation = "net.minecraftforge.fml.common.Mod" if platform == "forge" or legacy_neo else "net.neoforged.fml.common.Mod"
-        adapter = work / "generated" / "dev" / "eyecrasher" / "tandemount" / "modern" / "LoaderEntrypoint.java"
-        adapter.write_text('package dev.eyecrasher.tandemount.modern;\n@' + annotation + '("tandemount") public final class LoaderEntrypoint { public LoaderEntrypoint() { LoaderCompatibility.initialize(); TandemRuntime.initialize(); } }\n')
+        if legacy_neo:
+            adapter_platform = "forge"
+        annotation = "net.minecraftforge.fml.common.Mod" if adapter_platform == "forge" else "net.neoforged.fml.common.Mod"
         (classes / "META-INF").mkdir(exist_ok=True)
-        forge_id = "forge" if platform == "forge" or legacy_neo else "neoforge"
         metadata_name = "neoforge.mods.toml" if platform == "neoforge" and not legacy_neo and tuple(map(int, version.split("."))) >= (1,20,5) else "mods.toml"
         loader_range = "[1,)" # The SDK is pinned externally; the Minecraft dependency is exact.
         toml = f'''modLoader="javafml"
@@ -871,13 +871,15 @@ config="tandemount.mixins.json"
 '''
         (classes / "META-INF" / metadata_name).write_text(toml)
         (classes / "META-INF" / "MANIFEST.MF").write_text("Manifest-Version: 1.0\nMixinConfigs: tandemount.mixins.json\n\n")
-    sources = [p for p in (ROOT / "mods" / "modern" / "src" / "main" / "java").rglob("*.java") if platform == "fabric" or p.name != "FabricEntrypoint.java"] + list((work / "generated").rglob("*.java"))
+    source_roots = (ROOT / "mod-common/src/main/java",
+                    ROOT / adapter_platform / "src/main/java", work / "generated")
+    sources = [path for source_root in source_roots for path in sorted(source_root.rglob("*.java"))]
     compiler = Path(os.environ.get("TANDEMOUNT_JAVA") or java_for(max(21, target["java"]))).with_name("javac")
     subprocess.run([str(compiler), "-proc:none", "--release", "8", "-cp", os.pathsep.join(map(str, sdk)), "-d", str(classes), *map(str, sources)], check=True)
     fixture_classes = work / "fixture-classes"
     if fixture_classes.exists(): shutil.rmtree(fixture_classes)
     fixture_classes.mkdir()
-    fixture_sources = list((ROOT / "mods/modern/src/test/java").rglob("*.java"))
+    fixture_sources = list((ROOT / "mod-common/src/test/java").rglob("*.java"))
     if platform == "fabric":
         fixture_metadata = dict(mod, id="tandemount_fixture", name=identity["name"] + " disposable test fixture", entrypoints={}, mixins=[])
         fixture_metadata["depends"] = dict(mod["depends"], tandemount="=" + identity["version"])

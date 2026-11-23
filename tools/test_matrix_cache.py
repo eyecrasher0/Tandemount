@@ -76,7 +76,7 @@ class RunnerFingerprintTest(unittest.TestCase):
         self.write('platforms.json', '{}')
         self.write('project.json', '{"version":"1.0.0"}')
         self.write('LICENSE', 'license fixture')
-        self.write('plugin/src/test/client/ClientProbe.java', 'initial standalone client probe input')
+        self.write('bukkit/src/test/client/ClientProbe.java', 'initial standalone client probe input')
         self.patch = patch('matrix_verify.ROOT', self.root)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -97,7 +97,7 @@ class RunnerFingerprintTest(unittest.TestCase):
 
     def test_changed_standalone_client_probe_changes_plugin_runner_only(self):
         before = runner_sources('plugins'), sources('plugins'), runner_sources('modern'), sources('modern')
-        self.write('plugin/src/test/client/ClientProbe.java', 'different client lifecycle behavior')
+        self.write('bukkit/src/test/client/ClientProbe.java', 'different client lifecycle behavior')
         after = runner_sources('plugins'), sources('plugins'), runner_sources('modern'), sources('modern')
         self.assertNotEqual(before[0], after[0])
         self.assertNotEqual(before[1], after[1])
@@ -115,7 +115,7 @@ class RunnerFingerprintTest(unittest.TestCase):
 
     def test_added_or_changed_modern_wire_and_client_probes_invalidate_modern_proof(self):
         for name in ('tools/modern-wire.py', 'tools/modern-client-components.py',
-                     'mods/modern/src/test/client/InteractionPoseProbe.java'):
+                     'mod-common/src/test/client/InteractionPoseProbe.java'):
             with self.subTest(input=name):
                 before = runner_sources('modern'), sources('modern')
                 other_before = runner_sources('plugins'), sources('plugins')

@@ -22,6 +22,6 @@ Independent server-side horse sharing implementation, by EyeCrasher, GPL-3.0-onl
 - Use a separate feature branch. Commit only task changes. The owner explicitly
   authorized publishing this new project to GitHub, Modrinth, and CurseForge.
 - English public docs and messages. Russian owner updates. No community posts.
-- Owner explicitly deferred the icon: no generated icon or placeholder artwork.
+- Use the owner-supplied icon. Do not generate replacement or placeholder artwork.
 - Do not delete other projects or caches. Use the task-specific
   `TANDEMOUNT_CACHE` directory for large downloaded toolchains and game SDKs.

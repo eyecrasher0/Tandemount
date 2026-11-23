@@ -73,7 +73,7 @@ def build(mc, args):
     asm = fetch(cache, "asm-5.0.3.jar", MAVEN+"org/ow2/asm/asm-debug-all/5.0.3/asm-debug-all-5.0.3.jar")
     launch = fetch(cache, "launchwrapper-1.12.jar", "https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar")
     names = fetch(cache, f"mcp-{mc}-names.zip", MAVEN+f"de/oceanlabs/mcp/mcp_stable/{MAPPINGS[mc]}/mcp_stable-{MAPPINGS[mc]}.zip")
-    sources = sorted((ROOT/"mods/legacy/src/main/java").rglob("*.java")) + sorted((ROOT/f"mods/legacy/forge-{mc}/src/main/java").rglob("*.java"))
+    sources = sorted((ROOT/"forge/legacy/src/main/java").rglob("*.java")) + sorted((ROOT/f"forge/{mc}/src/main/java").rglob("*.java"))
     literals = set()
     for source in sources:
         for literal in re.findall(r'"([A-Za-z_][A-Za-z_0-9|]*)"', source.read_text()):
@@ -88,7 +88,7 @@ def build(mc, args):
         classes=Path(temporary)/"classes"; classes.mkdir()
         generated = []
         for source in sources:
-            target = Path(temporary)/"sources"/source.relative_to(ROOT/"mods/legacy")
+            target = Path(temporary)/"sources"/source.relative_to(ROOT/"forge")
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(source.read_text().replace("@VERSION@", version))
             generated.append(target)
