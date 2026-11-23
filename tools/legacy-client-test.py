@@ -36,7 +36,7 @@ ALIASES={
     "WorldType":"world/WorldType","Difficulty":"world/EnumDifficulty","Handler":"client/network/NetHandlerPlayClient",
     "WorldClient":"client/multiplayer/WorldClient","Profiler":"profiler/Profiler","Blocks":"init/Blocks",
     "FallingBlock":"entity/item/EntityFallingBlock","Entity":"entity/Entity","LivingBase":"entity/EntityLivingBase",
-    "Block":"block/Block","World":"world/World","Minecraft":"client/Minecraft","GameConfiguration":"client/main/GameConfiguration",
+    "Block":"block/Block","BlockState":"block/state/IBlockState","World":"world/World","Minecraft":"client/Minecraft","GameConfiguration":"client/main/GameConfiguration",
     "PacketBuffer":"network/PacketBuffer",
     "SpawnObject":"network/play/server/S0EPacketSpawnObject","EntityVelocity":"network/play/server/S12PacketEntityVelocity",
     "EntityTeleport":"network/play/server/S18PacketEntityTeleport","EntityMetadata":"network/play/server/S1CPacketEntityMetadata",

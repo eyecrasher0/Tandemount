@@ -1,6 +1,6 @@
 # Publication status
 
-GitHub hosts 19 Tandemount 1.0.0 JARs for the 22 exact Minecraft and platform
+GitHub hosts 33 Tandemount 1.0.0 JARs for the 45 exact Minecraft and platform
 pairs in the download table. Each published batch links to its corresponding
 source archive, verification report, and SHA-256 checksums.
 Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·

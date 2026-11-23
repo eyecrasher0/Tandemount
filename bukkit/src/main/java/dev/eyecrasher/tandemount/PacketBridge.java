@@ -2,7 +2,6 @@
 package dev.eyecrasher.tandemount;
 
 import org.bukkit.entity.Player;
-import java.io.ByteArrayOutputStream;
 import java.lang.reflect.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -12,29 +11,37 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class PacketBridge {
     private final TandemountPlugin plugin;
     private final DriverCarrierRotation driverCarrierRotation;
-    private final ConcurrentMap<Integer, Integer> edges = new ConcurrentHashMap<Integer, Integer>();
     private final ConcurrentMap<Integer, Integer> seatTypes = new ConcurrentHashMap<Integer, Integer>();
     private final ConcurrentMap<Integer, Object> dimensionRefresh = new ConcurrentHashMap<Integer, Object>();
-    private final ConcurrentMap<UUID, Object> pipelines = new ConcurrentHashMap<UUID, Object>();
-    private final ConcurrentMap<Class<?>, MountCodec> codecs = new ConcurrentHashMap<Class<?>, MountCodec>();
+    private final ConcurrentMap<UUID, Session> sessions = new ConcurrentHashMap<UUID, Session>();
     private static final String HANDLER = "tandemount_seat";
+
+    private static final class Session {
+        final Player player;
+        final Object pipeline, handler;
+        volatile boolean ready;
+        Session(Player player, Object pipeline, Object handler) {
+            this.player = player;
+            this.pipeline = pipeline;
+            this.handler = handler;
+        }
+    }
 
     PacketBridge(TandemountPlugin plugin) throws ReflectiveOperationException {
         this.plugin = plugin;
         driverCarrierRotation = "26.3".equals(plugin.nativeAccess.minecraft) && "Paper".equals(org.bukkit.Bukkit.getName())
                 ? new DriverCarrierRotation() : null;
     }
-    void add(int horse, int seat) { edges.put(horse, seat); }
-    void remove(final int horse, final int seat) {
-        final List<Object> active = new ArrayList<Object>(pipelines.values());
+    void removeSeat(final int seat) {
+        final List<Session> active = new ArrayList<Session>(sessions.values());
         final AtomicInteger pending = new AtomicInteger(active.size() + 1);
         final Runnable retired = new Runnable() { public void run() {
-            if (pending.decrementAndGet() == 0) { edges.remove(horse, seat); seatTypes.remove(seat); }
+            if (pending.decrementAndGet() == 0) seatTypes.remove(seat);
         }};
         // Native removal may have already queued mount packets on Netty. Keep
         // filtering until each channel has consumed its preceding writes.
-        for (Object pipeline : active) try {
-            Object loop = Reflect.call(Reflect.call(pipeline, "channel"), "eventLoop");
+        for (Session session : active) try {
+            Object loop = Reflect.call(Reflect.call(session.pipeline, "channel"), "eventLoop");
             Reflect.call(loop, "execute", retired);
         } catch (ReflectiveOperationException disconnected) { retired.run(); }
         retired.run();
@@ -52,7 +59,10 @@ final class PacketBridge {
         if (driverCarrierRotation != null) driverCarrierRotation.remove(entity);
     }
 
-    void install(final Player player) throws ReflectiveOperationException {
+    synchronized void install(final Player player) throws ReflectiveOperationException {
+        final UUID id = player.getUniqueId();
+        Session current = sessions.get(id);
+        if (current != null && current.player == player) return;
         Object nativePlayer = Reflect.handle(player);
         Object listener = null, connection = null, channel = null;
         for (Field f : Reflect.fields(nativePlayer.getClass())) {
@@ -77,7 +87,6 @@ final class PacketBridge {
         final ClassLoader loader = channel.getClass().getClassLoader();
         final String prefix = channel.getClass().getName().startsWith("net.minecraft.util.") ? "net.minecraft.util.io.netty" : "io.netty";
         final Class<?> outbound = Class.forName(prefix + ".channel.ChannelOutboundHandler", true, loader);
-        final UUID id = player.getUniqueId();
         final Object handler = Proxy.newProxyInstance(loader, new Class<?>[] {outbound}, new InvocationHandler() {
             public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                 String name = method.getName();
@@ -111,10 +120,13 @@ final class PacketBridge {
                 return null;
             }
         });
+        final Session session = new Session(player, pipeline, handler);
+        Session previous = sessions.put(id, session);
+        if (previous != null) uninstall(previous);
         Reflect.call(loop, "execute", new Runnable() {
             public void run() {
                 try {
-                    if (Reflect.call(pipeline, "get", HANDLER) != null) return;
+                    if (sessions.get(id) != session) return;
                     @SuppressWarnings("unchecked") List<String> names = (List<String>) Reflect.call(pipeline, "names");
                     // Outbound events flow from the pipeline tail toward its head.
                     // Install after the encoder so this handler receives packet
@@ -122,13 +134,16 @@ final class PacketBridge {
                     if (names.contains("encoder")) Reflect.call(pipeline, "addAfter", "encoder", HANDLER, handler);
                     else if (names.contains("packet_handler")) Reflect.call(pipeline, "addBefore", "packet_handler", HANDLER, handler);
                     else throw new IllegalStateException("No upstream packet encoder in " + names);
-                    pipelines.put(id, pipeline);
+                    session.ready = true;
                 } catch (Throwable e) { plugin.packetFailure(e); }
             }
         });
     }
 
-    boolean installed(Player player) { return pipelines.containsKey(player.getUniqueId()); }
+    boolean installed(Player player) {
+        Session session = sessions.get(player.getUniqueId());
+        return session != null && session.player == player && session.ready;
+    }
 
     private Object filter(UUID viewer, Object packet) throws ReflectiveOperationException {
         if (seatTypes.isEmpty()) return packet;
@@ -174,24 +189,7 @@ final class PacketBridge {
                 throw new NoSuchMethodException("Native bundle packet constructor");
             }
         }
-        if (!name.equals("PacketPlayOutMount") && !name.equals("ClientboundSetPassengersPacket"))
-            return driverCarrierRotation == null ? packet : driverCarrierRotation.shorten(viewer, packet);
-        MountCodec codec = codecs.get(packet.getClass());
-        if (codec == null) {
-            codec = new MountCodec(packet.getClass());
-            MountCodec previous = codecs.putIfAbsent(packet.getClass(), codec);
-            if (previous != null) codec = previous;
-        }
-        int vehicle = codec.vehicle.getInt(packet);
-        Integer removed = edges.get(vehicle);
-        if (removed == null) return packet;
-        int[] before = (int[])codec.passengers.get(packet);
-        int count = 0;
-        for (int passenger : before) if (passenger != removed.intValue()) count++;
-        if (count == before.length) return packet;
-        int[] after = new int[count]; int i = 0;
-        for (int passenger : before) if (passenger != removed.intValue()) after[i++] = passenger;
-        return codec.create(vehicle, after);
+        return driverCarrierRotation == null ? packet : driverCarrierRotation.shorten(viewer, packet);
     }
 
     private Object dimensionRefresh(Object packet) throws ReflectiveOperationException {
@@ -205,74 +203,31 @@ final class PacketBridge {
         throw new NoSuchFieldException("Native entity metadata identifier");
     }
 
-    void uninstall(Player player) { uninstall(player.getUniqueId()); }
-    private void uninstall(UUID id) {
-        final Object pipeline = pipelines.remove(id);
-        if (pipeline == null) return;
+    synchronized void uninstall(Player player) {
+        UUID id = player.getUniqueId();
+        Session session = sessions.get(id);
+        if (session != null && session.player == player && sessions.remove(id, session)) uninstall(session);
+    }
+    private void uninstall(Session session) {
+        final Object pipeline = session.pipeline;
         try {
             Object channel = Reflect.call(pipeline, "channel");
             Object loop = Reflect.call(channel, "eventLoop");
             Reflect.call(loop, "execute", new Runnable() {
                 public void run() {
-                    try { if (Reflect.call(pipeline, "get", HANDLER) != null) Reflect.call(pipeline, "remove", HANDLER); }
+                    try { if (Reflect.call(pipeline, "get", HANDLER) == session.handler) Reflect.call(pipeline, "remove", HANDLER); }
                     catch (ReflectiveOperationException e) { plugin.debug("Could not remove a disconnected network filter", e); }
                 }
             });
         } catch (ReflectiveOperationException e) { plugin.debug("Could not reach a disconnected network filter", e); }
     }
-    void close() {
-        for (UUID id : pipelines.keySet()) uninstall(id);
-        edges.clear();
+    synchronized void close() {
+        List<Session> retired = new ArrayList<Session>(sessions.values());
+        sessions.clear();
+        for (Session session : retired) uninstall(session);
         seatTypes.clear();
         dimensionRefresh.clear();
         if (driverCarrierRotation != null) driverCarrierRotation.clear();
     }
 
-    private static final class MountCodec {
-        final Field vehicle, passengers;
-        final Constructor<?> empty, reader, bufferConstructor;
-        final Method bufferFactory;
-        MountCodec(Class<?> type) throws ReflectiveOperationException {
-            Field v = null, p = null;
-            for (Field f : type.getDeclaredFields()) if (!Modifier.isStatic(f.getModifiers())) {
-                if (f.getType() == int.class) v = f;
-                if (f.getType() == int[].class) p = f;
-            }
-            if (v == null || p == null) throw new NoSuchFieldException("Upstream mount packet IDs");
-            v.setAccessible(true); p.setAccessible(true); vehicle = v; passengers = p;
-            Constructor<?> e = null, r = null, b = null;
-            Method factory = null;
-            try { e = type.getDeclaredConstructor(); e.setAccessible(true); }
-            catch (NoSuchMethodException modern) {
-                for (Constructor<?> c : type.getDeclaredConstructors()) if (c.getParameterTypes().length == 1) {
-                    Class<?> arg = c.getParameterTypes()[0];
-                    if (arg.getSimpleName().equals("FriendlyByteBuf") || arg.getSimpleName().equals("PacketDataSerializer")) {
-                        r = c; r.setAccessible(true);
-                        for (Constructor<?> bc : arg.getConstructors()) if (bc.getParameterTypes().length == 1
-                                && bc.getParameterTypes()[0].getName().endsWith(".buffer.ByteBuf")) { b = bc; break; }
-                        if (b != null) {
-                            String prefix = b.getParameterTypes()[0].getName().replace(".buffer.ByteBuf", "");
-                            factory = Class.forName(prefix + ".buffer.Unpooled").getMethod("wrappedBuffer", byte[].class);
-                        }
-                        break;
-                    }
-                }
-            }
-            if (e == null && (r == null || b == null || factory == null)) throw new NoSuchMethodException("Upstream mount packet reader");
-            empty = e; reader = r; bufferConstructor = b; bufferFactory = factory;
-        }
-        Object create(int id, int[] ids) throws ReflectiveOperationException {
-            if (empty != null) {
-                Object packet = empty.newInstance(); vehicle.setInt(packet, id); passengers.set(packet, ids); return packet;
-            }
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            varint(bytes, id); varint(bytes, ids.length); for (int value : ids) varint(bytes, value);
-            Object raw = Reflect.call(bufferFactory, (Object)null, (Object)bytes.toByteArray());
-            try { return reader.newInstance(bufferConstructor.newInstance(raw)); }
-            finally { Reflect.call(raw, "release"); }
-        }
-        private static void varint(ByteArrayOutputStream out, int value) {
-            do { int part = value & 127; value >>>= 7; out.write(value == 0 ? part : part | 128); } while (value != 0);
-        }
-    }
 }

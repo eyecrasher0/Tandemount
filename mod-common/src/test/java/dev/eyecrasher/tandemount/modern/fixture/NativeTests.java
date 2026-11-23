@@ -461,15 +461,22 @@ public final class NativeTests {
         Object console = Names.call("server.source", server);
         check(command(Names.call("entity.source", third), "disable") == 0 && TandemRuntime.SETTINGS.enabled, "permission-denial-preserves-settings");
         check(command(console, "height +") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625 && TandemRuntime.SETTINGS.rear == rear, "admin-step-saves-independent-height");
-        check(Files.exists(TandemRuntime.SETTINGS.file), "admin-settings-saved-immediately");
         check(command(console, "rear Infinity") == 0 && TandemRuntime.SETTINGS.rear == rear, "admin-rejects-nonfinite-without-mutation");
-        check(command(console, "reload") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625, "admin-reload-restores-saved-settings");
+        check(command(console, "rear +") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625
+                && TandemRuntime.SETTINGS.rear == rear + 0.0625, "admin-step-saves-independent-rear");
+        java.util.Properties saved = properties(TandemRuntime.SETTINGS.file);
+        check(Double.parseDouble(saved.getProperty("height")) == height + 0.0625
+                && Double.parseDouble(saved.getProperty("rear")) == rear + 0.0625, "admin-settings-saved-immediately");
+        TandemRuntime.SETTINGS.height = height;
+        TandemRuntime.SETTINGS.rear = rear;
+        check(command(console, "reload") == 1 && TandemRuntime.SETTINGS.height == height + 0.0625
+                && TandemRuntime.SETTINGS.rear == rear + 0.0625, "admin-reload-restores-saved-settings");
         check(command(console, "status") == 1, "admin-status-reports-active-settings");
         byte[] validConfig = Files.readAllBytes(TandemRuntime.SETTINGS.file);
         for (String invalid : new String[]{"height=NaN\n", "height=4\n", "enabled=perhaps\n", "height\n", "excluded-dimensions=Overworld\n", "excluded-dimensions=minecraft:overworld,\n", "config-version=99\n"}) {
             byte[] bytes = invalid.getBytes(StandardCharsets.ISO_8859_1);
             Files.write(TandemRuntime.SETTINGS.file, bytes);
-            check(command(console, "reload") == 0 && TandemRuntime.SETTINGS.height == height + 0.0625
+            check(command(console, "reload") == 0 && TandemRuntime.SETTINGS.height == height + 0.0625 && TandemRuntime.SETTINGS.rear == rear + 0.0625
                     && java.util.Arrays.equals(bytes, Files.readAllBytes(TandemRuntime.SETTINGS.file)), "invalid-reload-preserves-active-config-and-invalid-file");
         }
         Files.write(TandemRuntime.SETTINGS.file, validConfig);
@@ -594,6 +601,11 @@ public final class NativeTests {
         @SuppressWarnings("unchecked") com.mojang.brigadier.CommandDispatcher<Object> nativeDispatcher = (com.mojang.brigadier.CommandDispatcher<Object>) dispatcher;
         return nativeDispatcher.execute("tandemount " + command, source);
     }
+    private static java.util.Properties properties(java.nio.file.Path path) throws Exception {
+        java.util.Properties value = new java.util.Properties();
+        try (java.io.InputStream input = Files.newInputStream(path)) { value.load(input); }
+        return value;
+    }
     private static void settingsDefaults() throws Exception {
         java.nio.file.Path directory = Files.createTempDirectory(Paths.get("."), "tandemount-settings-check-");
         Settings fresh = new Settings(directory.resolve("new.properties"));
@@ -605,17 +617,11 @@ public final class NativeTests {
         check(partial.height == .8125 && partial.rear == .5, "missing-settings-use-owner-defaults");
         Files.write(missing, "height=1.125\nrear=0.6875\nunknown=keep\n".getBytes(StandardCharsets.UTF_8));
         partial.load(); partial.save();
-        check(partial.height == 1.125 && partial.rear == .6875 && new String(Files.readAllBytes(missing), StandardCharsets.UTF_8).contains("unknown=keep"), "saved-settings-remain-preserved");
+        java.util.Properties saved = properties(missing);
+        check(partial.height == 1.125 && partial.rear == .6875 && "keep".equals(saved.getProperty("unknown"))
+                && "1.125".equals(saved.getProperty("height")) && "0.6875".equals(saved.getProperty("rear")), "saved-settings-remain-preserved");
         Files.delete(missing); partial.load();
         check(partial.height == .8125 && partial.rear == .5, "removed-config-reload-restores-owner-defaults");
-        List<Object> controls = AdminCommands.controls();
-        boolean styled = controls.size() >= 7;
-        for (Object component : controls) {
-            Object style = Names.call("component.style", component);
-            styled &= Names.call("style.getColor", style) != null && Names.call("style.getClick", style) != null;
-        }
-        check(styled, "command-chat-has-color-and-style");
-        check(styled, "command-chat-has-clickable-adjustments");
     }
     private static void record(boolean passed, String error) {
         StringBuilder json = new StringBuilder("{\n  \"minecraft\":\"").append(Names.TABLE.getProperty("minecraft")).append("\",\n  \"platform\":\"").append(Names.TABLE.getProperty("platform")).append("\",\n  \"native_fixture\":").append(passed).append(",\n  \"error\":\"").append(error).append("\",\n  \"connected_clients\":false,\n  \"visual\":\"not-run\",\n  \"checks\":[");

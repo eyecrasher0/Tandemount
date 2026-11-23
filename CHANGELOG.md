@@ -8,6 +8,9 @@
   1.21.1, and 26.3, plus NeoForge builds for 1.20.6, 1.21.1, and 26.3.
 - Published verified Bukkit builds for Paper, Purpur, and Folia 1.19.4 and for
   Paper 26.3.
+- Added Fabric and Forge builds for 1.17.1 and 1.18.2, Paper and Purpur
+  for 1.18.2, Paper, Purpur, and Folia for 1.20.6, and all three mod
+  loaders and four server cores for 1.21.11 and 26.2.
   [Release assets and evidence](https://github.com/eyecrasher0/Tandemount/releases/tag/tandemount-1.0.0)
 
 - Independent server-side implementation by EyeCrasher under GPL-3.0-only.

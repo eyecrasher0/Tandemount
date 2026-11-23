@@ -9,7 +9,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from release_audit import ROOT, PLUGIN_PLATFORMS, artifact_targets, audit, child, digest
+from release_audit import DEFAULT_MANIFEST, ROOT, PLUGIN_PLATFORMS, artifact_targets, audit, child, digest
 from source_archive import export
 
 
@@ -41,8 +41,8 @@ def entries_for(manifest):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
-    parser.add_argument("--evidence", type=Path, default=ROOT / ".agents/native")
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--evidence", type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / ".agents/release/plan.json")
     parser.add_argument("--dist", type=Path, default=ROOT / "dist/1.0.0")
     parser.add_argument("--curseforge-mods", type=int)
@@ -50,8 +50,9 @@ def main():
     args = parser.parse_args()
     project = json.loads((ROOT / "release/project.json").read_text())
     matrix = json.loads((ROOT / "platforms.json").read_text())
-    manifest = json.loads(args.manifest.read_text())
-    result = audit(ROOT, matrix, manifest, args.evidence)
+    manifest_file = args.manifest.resolve()
+    manifest = json.loads(manifest_file.read_text())
+    result = audit(ROOT, matrix, manifest, args.evidence or manifest_file.parent / "native")
     if result["result"] != "pass":
         raise SystemExit(json.dumps(result, indent=2))
     status = subprocess.check_output(["git", "-C", str(ROOT), "status", "--porcelain"], text=True)
@@ -72,7 +73,7 @@ def main():
         entry["sha512"] = digest(destination, "sha512")
         entry["version_number"] = project["version"] + "+" + entry["family"] + "-mc" + entry["minecraft"][0]
     tag = "tandemount-" + project["version"]
-    verification_bytes = args.manifest.with_name("verification.json").read_bytes()
+    verification_bytes = manifest_file.with_name("verification.json").read_bytes()
     verification = json.loads(verification_bytes)
     verification_sha256 = hashlib.sha256(verification_bytes).hexdigest()
     archive = f"Tandemount-{project['version']}-source.zip"
@@ -87,7 +88,7 @@ def main():
     sums_path = args.dist / "SHA256SUMS"
     sums_path.write_text("\n".join(sums) + "\n")
     plan = {"schema": 1, "project": project, "source": source, "entries": entries,
-            "manifest_sha256": digest(args.manifest), "matrix_sha256": digest(ROOT / "platforms.json"),
+            "manifest_sha256": digest(manifest_file), "matrix_sha256": digest(ROOT / "platforms.json"),
             "audit": result, "tag": tag,
             "checksums": str(sums_path.resolve()), "checksums_sha256": digest(sums_path),
             "verification": str(published_verification.resolve()), "verification_sha256": verification_sha256,

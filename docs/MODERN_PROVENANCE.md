@@ -6,7 +6,7 @@ targets from Minecraft 1.16.5 onward where an exact upstream is available.
 This document records implementation inputs, not a compatibility assertion.
 
 The implementation agent read the new project's `AGENTS.md`, behavioral
-specification, `platforms.json`, and the new `mods/modern/` implementation and
+specification, `platforms.json`, and the `mod-common/` implementation and
 `tools/modern-*.py` tooling. It did not read predecessor horse-sharing mod
 sources, patches, tests, archives or binaries, retrieve predecessor project
 memory, or inspect the running KopajStvaraj server. Work was confined to the

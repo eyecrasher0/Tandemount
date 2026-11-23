@@ -6,10 +6,18 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import re
 import struct
 import time
 from vanilla_protocol import VanillaClient, load_ids, read_varint, varint, text
+from plugin_protocol import component, nodes
+
+
+CONTROLS = {
+    "Height [-]": "/tandemount height -",
+    "Height [+]": "/tandemount height +",
+    "Rear [-]": "/tandemount rear -",
+    "Rear [+]": "/tandemount rear +",
+}
 
 
 class Client(VanillaClient):
@@ -38,6 +46,10 @@ class Client(VanillaClient):
                 for child, parent in list(self.parents.items()):
                     if parent == entity:
                         del self.parents[child]
+        elif identifier == self.packet("game", "clientbound", "remove_entity", "ClientboundRemoveEntityPacket"):
+            entity, _ = read_varint(body)
+            self.known_entities.discard(entity)
+            self.parents = {child: parent for child, parent in self.parents.items() if child != entity and parent != entity}
         if identifier == self.packet("game", "clientbound", "set_passengers", "ClientboundSetPassengersPacket"):
             vehicle, offset = read_varint(body)
             count, offset = read_varint(body, offset)
@@ -74,6 +86,14 @@ class Client(VanillaClient):
     def click(self, entity):
         self.send(self.packet("game", "serverbound", "interact", "ServerboundInteractPacket"),
                   varint(entity) + varint(0) + varint(0) + b"\0")
+
+    def command_components(self, after):
+        chat_id = self.packet("game", "clientbound", "system_chat", "ClientboundSystemChatPacket")
+        if chat_id is None:
+            chat_id = self.packet("game", "clientbound", "chat", "ClientboundChatPacket")
+        for when, identifier, body in self.raw:
+            if identifier == chat_id and when >= after:
+                yield from nodes(component(body, read_varint))
 
     def command(self, value):
         version = tuple(map(int, self.version.split(".")))
@@ -113,6 +133,13 @@ def main():
     ids, clients, checks = load_ids(args.ids), [], []
     directory = args.ids.parent
     state_file = directory / "tandemount-wire-state.json"
+    readiness = directory / "tandemount-network-ready.json"
+    protocol = None
+    if readiness.is_file():
+        native = json.loads(readiness.read_text())
+        if native.get("ready") is not True or native.get("port") != args.port or type(native.get("protocol")) is not int:
+            raise ValueError("Native server readiness does not match the fixture connection")
+        protocol = native["protocol"]
     sequence = 0
 
     def state():
@@ -144,7 +171,7 @@ def main():
         return wait(lambda value: value.get("sequence") == sequence, action)
 
     def connect(name):
-        client = Client(args.port, args.minecraft, ids, name=name, timeout=45)
+        client = Client(args.port, args.minecraft, ids, name=name, timeout=45, protocol=protocol)
         clients.append(client)
         outcome = client.verify(timeout=20, remain=.2)
         if not outcome["joined_play"] or outcome["errors"]:
@@ -174,10 +201,15 @@ def main():
              and existing.parents.get(value["driver"]) == value["horse"], "existing observer native graph")
         checks.append("existing-observer-received-native-attachment-shares-horse-root" if mounted["nativeAttachment"] else "existing-observer-received-complete-early-follower-graph")
         mount_finished = time.monotonic_ns()
+        third_click_at = time.monotonic_ns()
         existing.click(initial["horse"])
-        time.sleep(.25)
-        if state()["observerVehicle"] != -1:
-            raise AssertionError("Third rider mounted")
+        existing.command("tandemount")
+        wait(lambda value: any(node.get("text") == "Tandemount — shared horse riding"
+                               for node in existing.command_components(third_click_at)), "server processed the third rider's click and following command")
+        after_click = state()
+        if (after_click["observerVehicle"] != -1 or after_click["driverVehicle"] != mounted["driverVehicle"]
+                or after_click["riderVehicle"] != mounted["riderVehicle"] or after_click["riderRoot"] != mounted["riderRoot"]):
+            raise AssertionError("Third rider click changed the ride")
         checks.append("real-client-third-rider-rejected")
         late = connect("TmWireLate")
         wait(lambda value: late.root(value["rider"]) == ride_root(value)
@@ -186,25 +218,22 @@ def main():
         request("admin")
         menu_started = time.monotonic_ns()
         existing.command("tandemount")
-        chat_id = existing.packet("game", "clientbound", "system_chat", "ClientboundSystemChatPacket")
-        if chat_id is None:
-            chat_id = existing.packet("game", "clientbound", "chat", "ClientboundChatPacket")
-        def command_chat():
-            return b"\n".join(body for when, identifier, body in existing.raw
-                              if identifier == chat_id and when >= menu_started)
-        pattern = rb"/tandemount (?:height|rear) [+-]"
-        expected_commands = {b"/tandemount " + axis + b" " + step
-                             for axis in (b"height", b"rear") for step in (b"+", b"-")}
-        wait(lambda value: expected_commands <= set(re.findall(pattern, command_chat())),
-             "all four clickable adjustment commands")
-        chat = command_chat()
-        if not any(color in chat for color in (b"#55FF55", b"#55ff55", b"green")):
-            raise AssertionError("Actual command chat has no control color")
+        def received_controls():
+            controls = {}
+            for node in existing.command_components(menu_started):
+                label = str(node.get("text", "")).strip()
+                if label not in CONTROLS or str(node.get("color", "")).lower() not in {"green", "#55ff55"}:
+                    continue
+                event = node.get("click_event", node.get("clickEvent", {}))
+                if event.get("action") == "run_command":
+                    controls[label] = event.get("command", event.get("value"))
+            return controls
+        wait(lambda value: received_controls() == CONTROLS, "all four styled run-command controls")
         checks.append("command-chat-has-color-and-style")
         checks.append("command-chat-has-clickable-adjustments")
-        chosen = next(command for command in re.findall(pattern, chat) if command.endswith(b"height +"))
+        chosen = received_controls()["Height [+]"]
         default_attachment_end_ns = time.monotonic_ns()
-        existing.command(chosen.decode())
+        existing.command(chosen)
         wait(lambda value: value.get("height") == .875 and value.get("rear") == .5, "actual clicked adjustment command")
         checks.append("command-click-adjustment-applies")
         existing.command("tandemount reset")
@@ -222,7 +251,7 @@ def main():
         driver.steer(False)
         driven = wait(lambda value: abs(value["horsePosition"][2] - start[2]) > .5
                       and value["riderRoot"] == ride_root(value) and value["driverVehicle"] == value["horse"], "native first-driver vehicle movement")
-        checks.append("real-client-first-driver-controls-native-horse")
+        checks.append("server-accepts-driver-vehicle-movement-during-shared-ride")
         time.sleep(1)
         motion_end = time.monotonic_ns()
         helpers = {helper["id"] for helper in state()["helpers"]}

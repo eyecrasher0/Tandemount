@@ -13,6 +13,7 @@ import urllib.request
 import zipfile
 
 from cache_servers import ROOT, UA, checksum, java_for
+from runtime_storage import sdk_hashes, server_identity
 
 
 def get_bytes(url):
@@ -43,7 +44,11 @@ def install(cache, platform, target):
     record_path = directory / "distribution.json"
     if record_path.is_file():
         record = json.loads(record_path.read_text())
-        if record.get("sdk") == sdk and record.get("installation") == "pass":
+        try:
+            server_identity(target, platform, record, directory)
+        except (KeyError, OSError, ValueError):
+            pass
+        else:
             return {"minecraft": version, "platform": platform, "result": "cached"}
     installer = directory / (artifact + "-" + sdk + "-installer.jar")
     if not installer.is_file():
@@ -67,15 +72,15 @@ def install(cache, platform, target):
         result = subprocess.run(command, cwd=directory, stdout=output, stderr=subprocess.STDOUT, timeout=900)
     if result.returncode:
         raise RuntimeError(f"{platform}/{version} installation failed; see {log}")
-    args_files = list((directory / "libraries" / group / artifact).glob("*/unix_args.txt"))
-    launch_jars = [p for p in directory.glob("*.jar") if p != installer and not p.name.startswith("minecraft_server")]
+    args_files = list((directory / "libraries" / group / artifact / sdk).glob("unix_args.txt"))
+    launch_jars = sorted(p for p in directory.glob(f"{artifact}-{sdk}*.jar") if p != installer)
     if not args_files and not launch_jars:
         raise RuntimeError(f"No usable server launcher installed by {platform}/{version}")
     record = {"platform": platform, "minecraft": version, "sdk": sdk, "installer_url": url,
               "installer_sha256": checksum(installer), "installer_sha1": expected, "java": target["java"],
               "installation": "pass", "installer_java": installer_java,
               "args_files": [str(p.relative_to(directory)) for p in args_files],
-              "launcher_jars": [p.name for p in launch_jars]}
+              "launcher_jars": [p.name for p in launch_jars], "launch_files": sdk_hashes(directory)}
     record_path.write_text(json.dumps(record, indent=2) + "\n")
     return {"minecraft": version, "platform": platform, "result": "installed", "directory": str(directory)}
 

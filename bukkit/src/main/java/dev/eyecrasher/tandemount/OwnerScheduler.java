@@ -18,12 +18,13 @@ final class OwnerScheduler {
         catch (ClassNotFoundException absent) { found = false; }
         folia = found;
     }
-    void next(Entity owner, final Runnable task) {
+    void next(Entity owner, final Runnable task, Runnable retired) {
         if (!folia) { Bukkit.getScheduler().runTaskLater(plugin, task, 1L); return; }
         try {
             Object scheduler = Reflect.call(owner, "getScheduler");
             Consumer<Object> callback = new Consumer<Object>() { public void accept(Object ignored) { task.run(); } };
-            Reflect.call(scheduler, "runDelayed", plugin, callback, null, 1L);
+            if (Reflect.call(scheduler, "runDelayed", plugin, callback, retired, 1L) == null && retired != null)
+                retired.run();
         } catch (ReflectiveOperationException e) { throw new IllegalStateException("Folia entity scheduler unavailable", e); }
     }
     boolean owns(Entity entity) {

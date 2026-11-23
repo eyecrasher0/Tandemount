@@ -15,6 +15,8 @@ import urllib.parse
 import urllib.request
 import uuid
 
+from release_audit import DEFAULT_MANIFEST
+
 ROOT = Path(__file__).resolve().parents[1]
 V2 = "https://api.modrinth.com/v2"
 V3 = "https://api.modrinth.com/v3"
@@ -374,7 +376,7 @@ def hash_matches(version, entry):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, default=ROOT / ".agents/release/plan.json")
-    parser.add_argument("--manifest", type=Path, default=ROOT / "build/release/artifacts.json")
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--state", type=Path, default=ROOT / ".agents/release/modrinth-state.json")
     parser.add_argument("--apply", action="store_true", help="Create the unlisted project and upload all audited files")
     args = parser.parse_args()

@@ -12,6 +12,7 @@ import sys
 import urllib.request
 
 from cache_servers import ROOT, UA, checksum, fetch_json, java_for
+from runtime_storage import sdk_hashes, server_identity
 
 
 def main():
@@ -49,7 +50,11 @@ def main():
         server = directory / "server.jar"
         if server.is_file() and record_path.is_file():
             record = json.loads(record_path.read_text())
-            if record.get("minecraft") == version and record.get("loader") == loader and record.get("installation") == "pass":
+            try:
+                server_identity(target, "fabric", record, directory)
+            except (KeyError, OSError, ValueError):
+                pass
+            else:
                 return {"minecraft": version, "result": "cached", "directory": str(directory)}
         command = [java_for(17), "-Xmx512M", "-jar", str(installer), "server", "-mcversion", version,
                    "-loader", loader, "-dir", str(directory), "-downloadMinecraft"]
@@ -64,7 +69,7 @@ def main():
         record = {"minecraft": version, "platform": "fabric", "loader": loader,
                   "installer": selected["version"], "installer_sha256": checksum(installer),
                   "vanilla_sha1": expected_server, "vanilla_sha256": checksum(server),
-                  "installation": "pass", "java": target["java"]}
+                  "installation": "pass", "java": target["java"], "launch_files": sdk_hashes(directory)}
         record_path.write_text(json.dumps(record, indent=2) + "\n")
         return {"minecraft": version, "result": "installed", "directory": str(directory)}
 

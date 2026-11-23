@@ -7,6 +7,7 @@ from human visual checks. This never reads or modifies any existing server world
 """
 import argparse
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -21,7 +22,7 @@ import uuid
 import zlib
 
 from vanilla_protocol import accept_teleport
-from runtime_storage import RuntimeWorkspace
+from runtime_storage import RuntimeWorkspace, server_identity
 from plugin_protocol import wire_properties, menu_checks, send_native
 from project_metadata import artifact_name
 
@@ -249,19 +250,25 @@ def packet_checks(clients, graph, minecraft):
         checks.append({'assertion': name, 'status': 'passed' if passed else 'failed', 'detail': detail})
     oldest = minecraft == '1.7.10'
     for client in clients:
-        spawned, mounts, poses, types, helper_positions = set(), [], [], [], []
+        spawned, mounts, poses, types, helper_positions = set(), {}, [], [], []
         helpers = [graph['helper_' + str(i)] for i in range(graph.get('helper_count', 0))]
         spawn_ids = {client.identifier('game', 'clientbound', 'minecraft:add_entity', 'PacketPlayOutSpawnEntity', 'ClientboundAddEntityPacket'),
                      client.identifier('game', 'clientbound', 'minecraft:add_mob', 'PacketPlayOutSpawnEntityLiving', 'ClientboundAddMobPacket')}
-        if oldest:
-            spawn_ids.add(client.identifier('game', 'clientbound', 'PacketPlayOutNamedEntitySpawn'))
+        spawn_ids.add(client.identifier('game', 'clientbound', 'minecraft:add_player', 'PacketPlayOutNamedEntitySpawn', 'ClientboundAddPlayerPacket'))
         mount_id = client.identifier('game', 'clientbound', 'minecraft:set_passengers', 'PacketPlayOutMount', 'ClientboundSetPassengersPacket')
         attach_id = client.identifier('game', 'clientbound', 'PacketPlayOutAttachEntity')
+        removal_id = client.identifier('game', 'clientbound', 'minecraft:remove_entities',
+                                       'minecraft:remove_entity', 'PacketPlayOutEntityDestroy',
+                                       'ClientboundRemoveEntitiesPacket', 'ClientboundRemoveEntityPacket')
         position_ids = {client.identifier('game', 'clientbound', 'minecraft:entity_position_sync', 'ClientboundEntityPositionSyncPacket'),
                         client.identifier('game', 'clientbound', 'minecraft:teleport_entity', 'PacketPlayOutEntityTeleport', 'ClientboundTeleportEntityPacket')}
         relative_position_ids = {client.identifier('game', 'clientbound', 'minecraft:move_entity_pos', 'PacketPlayOutRelEntityMove', 'ClientboundMoveEntityPacket$Pos'),
                                  client.identifier('game', 'clientbound', 'minecraft:move_entity_pos_rot', 'PacketPlayOutRelEntityMoveLook', 'ClientboundMoveEntityPacket$PosRot')}
-        for stage, packet_id, raw in client.packets:
+        def unmount(entity):
+            for vehicle, passengers in mounts.items():
+                mounts[vehicle] = [passenger for passenger in passengers if passenger != entity]
+
+        for stage, packet_id, raw in list(client.packets):
             if stage != 'game': continue
             body = bytes.fromhex(raw)
             try:
@@ -278,11 +285,31 @@ def packet_checks(clients, graph, minecraft):
                     passengers = []
                     for _ in range(length):
                         passenger, offset = read_vi(body, offset); passengers.append(passenger)
-                    mounts.append((vehicle, passengers))
+                    if vehicle in spawned:
+                        for passenger in passengers:
+                            if passenger in spawned:
+                                unmount(passenger)
+                        mounts[vehicle] = [passenger for passenger in passengers if passenger in spawned]
                 if oldest and packet_id == attach_id and len(body) >= 9 and body[8] == 0:
                     passenger, vehicle = struct.unpack_from('>ii', body)
-                    if passenger in spawned and vehicle in spawned:
-                        mounts.append((vehicle, [passenger]))
+                    if passenger in spawned and (vehicle in spawned or vehicle == -1):
+                        unmount(passenger)
+                        if vehicle != -1:
+                            mounts[vehicle] = [passenger]
+                if packet_id == removal_id:
+                    if oldest:
+                        removed = struct.unpack_from('>' + 'i' * body[0], body, 1)
+                    else:
+                        value, offset = read_vi(body)
+                        removed = [value] if minecraft == '1.17' else []
+                        if minecraft != '1.17':
+                            for _ in range(value):
+                                entity, offset = read_vi(body, offset)
+                                removed.append(entity)
+                    for entity in removed:
+                        spawned.discard(entity)
+                        mounts.pop(entity, None)
+                        unmount(entity)
                 if packet_id in position_ids:
                     if oldest:
                         entity, offset = struct.unpack_from('>i', body)[0], 4
@@ -301,24 +328,69 @@ def packet_checks(clients, graph, minecraft):
         prefix = client.name.lower() + '-'
         check(prefix + 'native-vanilla-seat-spawn-received', graph['seat'] in spawned and bool(types) and all(v > 0 for v in types), 'Actual clientbound protocol frames; native IDs and vanilla spawn packet')
         display = graph.get('seat_block_display') == 1
-        seat_kind = 'block-display' if display else 'falling-block'
-        check(prefix + 'client-seat-uses-nonliving-' + seat_kind,
-              graph.get('seat_block_display' if display else 'seat_falling_block') == 1 and graph.get('seat_nonliving') == 1
-              and graph['seat'] in spawned, 'Native fixture confirms the exact nonliving vanilla seat type; loopback client received the same seat entity ID')
-        check(prefix + 'passenger-seat-edge-received', any(v == graph['seat'] and p == [graph['rider']] for v, p in mounts), 'Actual clientbound mount graph')
+        seat_kind = 'block-display' if display else 'slime' if oldest else 'armor-stand'
+        expected_type = 55 if oldest else 78 if minecraft == '1.12.2' else None
+        type_matches = not display or graph.get('seat_nonliving') == 1
+        if expected_type is not None:
+            type_matches = bool(types) and types[-1] == expected_type
+        check(prefix + 'client-seat-uses-vanilla-' + seat_kind,
+              graph.get('seat_' + seat_kind.replace('-', '_')) == 1 and graph['seat'] in spawned
+              and type_matches,
+              'Native fixture seat and received vanilla spawn share the observed entity ID and type')
+        check(prefix + 'passenger-seat-edge-received', mounts.get(graph['seat']) == [graph['rider']], 'Final received clientbound mount graph')
         if display:
             chain = [(graph['horse'], [graph['driver'], helpers[0]])]
             chain.extend((parent, [child]) for parent,child in zip(helpers, helpers[1:]))
-            check(prefix + 'received-native-attachment-shares-horse-root', all(any(v == parent and p == children for v,p in mounts) for parent,children in chain)
+            check(prefix + 'received-native-attachment-shares-horse-root', all(mounts.get(parent) == children for parent,children in chain)
                   and all(entity in spawned for entity in helpers), 'Actual received bounded native passenger graph shares the horse root with its ordinary driver first')
             check(prefix + 'attachment-has-no-periodic-position-follow-packets', not helper_positions,
                   {'absolute_seat_packets': len(poses), 'absolute_helper_packets': len(helper_positions),
                    'scope': 'All native attached helpers; no independent absolute or relative position broadcasts'})
         else:
-            check(prefix + 'horse-has-only-driver-on-client', any(v == graph['horse'] and p == [graph['driver']] for v, p in mounts)
-                  and not any(v == graph['horse'] and graph['seat'] in p for v, p in mounts), 'Actual clientbound graph preserves native horse control and separate seat position')
+            check(prefix + 'horse-has-only-driver-on-client', mounts.get(graph['horse']) == [graph['driver']],
+                  'Final received clientbound graph preserves the driver and separate seat')
             check(prefix + 'seat-position-updates-received', len(poses) >= 3, 'Native absolute position updates observed in socket frames; no human visual claim')
     return checks
+
+
+def legacy_client_lifetime(minecraft, artifact, folder, clients, graph, java, settled_at, settled_end):
+    build = importlib.import_module('legacy-build')
+    probe = importlib.import_module('legacy-client-test')
+    sdk = CACHE / 'legacy'
+    jdk = build.java8_home(Path(java).resolve().parent.parent)
+    seat = graph['seat']
+    oldest = minecraft == '1.7.10'
+    frame = 'EntityVelocity' if oldest else 'EntityTeleport'
+    result = {'status': 'passed', 'minecraft': minecraft, 'artifact_sha256': hashlib.sha256(artifact.read_bytes()).hexdigest(),
+              'probes': {}, 'human_visual': False}
+    for role, client in zip(('existing', 'late'), clients):
+        specs = {
+            'SpawnMob': ('PacketPlayOutSpawnEntityLiving',),
+            'SpawnObject': ('PacketPlayOutSpawnEntity',),
+            'EntityVelocity': ('PacketPlayOutEntityVelocity',),
+            'EntityTeleport': ('PacketPlayOutEntityTeleport',),
+            'EntityMetadata': ('PacketPlayOutEntityMetadata',),
+            'EntityHeadLook': ('PacketPlayOutEntityHeadRotation',),
+        }
+        names = {client.identifier('game', 'clientbound', *aliases): kind for kind, aliases in specs.items()}
+        rows = []
+        for (stage, identifier, raw), when in zip(client.packets, client.packet_times):
+            kind = names.get(identifier)
+            if stage != 'game' or kind is None or when > settled_end:
+                continue
+            body = bytes.fromhex(raw)
+            entity = struct.unpack_from('>i', body)[0] if oldest and not kind.startswith('Spawn') else read_vi(body)[0]
+            if entity != seat:
+                continue
+            if kind.startswith('Spawn') or kind == 'EntityMetadata' or when >= settled_at:
+                rows.append(kind + '\t' + raw)
+                if kind == frame:
+                    rows.append('tick')
+        trace = folder / (role + '-legacy-client.tsv')
+        trace.write_text('\n'.join(rows) + '\n')
+        result['probes'][role] = probe.probe(minecraft, jdk, sdk, sdk / 'official-client', trace, seat,
+                                            55 if oldest else 78, 40, work=folder / (role + '-legacy-client'))
+    return result
 
 
 def saved_world_checks(run, fixture_config):
@@ -359,8 +431,8 @@ def active_save_checks(fixture_config):
              'detail': {'native_probe_records': matching, 'scope': 'Live mounted seat refuses the native serialization entry point; final world save is checked after shutdown.'}}]
 
 
-def ping(port):
-    with socket.create_connection(('127.0.0.1', port), 5) as sock:
+def ping(port, timeout=5):
+    with socket.create_connection(('127.0.0.1', port), timeout) as sock:
         data = vi(0) + vi(0) + string('localhost') + struct.pack('>H', port) + vi(1)
         sock.sendall(vi(len(data)) + data + b'\x01\x00')
         packet_id, body = recv_frame(sock)
@@ -388,11 +460,14 @@ def main():
         if not args.plugin.is_file():
             parser.error('Build the exact plugin first or supply its path with --plugin: ' + str(args.plugin))
     metadata = json.loads((CACHE / 'servers' / args.platform / args.minecraft / 'distribution.json').read_text())
+    target = next(target for target in json.loads((ROOT / 'platforms.json').read_text())['targets']
+                  if target['minecraft'] == args.minecraft)
     sdk = Path(metadata['file']).parent
     workspace = RuntimeWorkspace(CACHE / 'plugin-runs' / args.platform / args.minecraft,
                                  args.platform + '-' + args.minecraft + '-' + time.strftime('%Y%m%d-%H%M%S') + '-' + uuid.uuid4().hex[:6],
                                  sdk, extra_names=('cache',))
     run = workspace.directory
+    identity = server_identity(target, args.platform, metadata, run)
     (run / 'plugins').mkdir()
     shutil.copy2(args.plugin, run / 'plugins/Tandemount.jar')
     shutil.copy2(args.fixture, run / 'plugins/TandemountNativeFixture.jar')
@@ -408,7 +483,7 @@ def main():
     (run / 'server.properties').write_text(f'server-ip=127.0.0.1\nserver-port={args.port}\nonline-mode=false\nwhite-list=false\nenforce-whitelist=false\nnetwork-compression-threshold=-1\nlevel-type=FLAT\ngenerate-structures=false\nview-distance={view_distance}\nsimulation-distance=2\nspawn-protection=0\nmax-players=8\nenforce-secure-profile=false\nspawn-animals=false\nspawn-monsters=false\nallow-nether=true\nlevel-seed=1\n')
     (run / 'bukkit.yml').write_text('settings:\n  allow-end: false\n  connection-throttle: 0\n  shutdown-message: Tandemount disposable test complete\nspawn-limits:\n  monsters: 0\n  animals: 0\n  water-animals: 0\n  ambient: 0\n')
     java = java_for(int(metadata['java']), args.java_home)
-    command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', str(run / Path(metadata['file']).name), 'nogui']
+    command = [str(java), '-Xms256M', '-Xmx1G', '-XX:ActiveProcessorCount=2', '-DPaper.IgnoreJavaVersion=true', '-jar', identity['launcher'], 'nogui']
     log = (run / 'server.log').open('w')
     server = subprocess.Popen(command, cwd=run, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     lines = queue.Queue()
@@ -419,9 +494,9 @@ def main():
     reader.start()
     clients = []
     result = {'schema': 1, 'platform': args.platform, 'minecraft': args.minecraft,
-              'server': metadata, 'artifact': str(args.plugin),
-              'artifact_sha256': hashlib.sha256(args.plugin.read_bytes()).hexdigest(),
-              'fixture': str(args.fixture), 'fixture_sha256': hashlib.sha256(args.fixture.read_bytes()).hexdigest(),
+              'server': identity, 'artifact': str(args.plugin),
+              'artifact_sha256': hashlib.sha256((run / 'plugins/Tandemount.jar').read_bytes()).hexdigest(),
+              'fixture': str(args.fixture), 'fixture_sha256': hashlib.sha256((run / 'plugins/TandemountNativeFixture.jar').read_bytes()).hexdigest(),
               'kind': 'native-runtime', 'visual_verification': 'not-performed',
               'run': str(run), 'command': command, 'status': 'failed', 'assertions': []}
     deadline = time.monotonic() + args.timeout
@@ -456,7 +531,10 @@ def main():
                     raise RuntimeError('Fixture preparation failed: ' + str(phase()))
                 time.sleep(0.1)
             ids = properties(fixture_config / 'protocol.properties')
-            protocol = ping(args.port)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Native test budget expired before the protocol status query')
+            protocol = ping(args.port, min(30, remaining))
             result['protocol'] = protocol
             for name in ('TmDriver', 'TmRider', 'TmThird'):
                 client = Client(name, args.port, protocol, ids, args.minecraft)
@@ -469,7 +547,18 @@ def main():
             time.sleep(1)
             command_line('tmfixture wire-start')
             late = None
+            legacy_observation = None
+            legacy_capture = args.minecraft in {'1.7.10', '1.12.2'}
             handled = set()
+
+            def drive_horse(value):
+                horse_id, x, y, z, yaw, pitch = map(float, value.split(','))
+                for step in range(30):
+                    clients[0].steer(int(horse_id))
+                    clients[0].move_vehicle(x, y, z + (step + 1) * 0.04, yaw, pitch)
+                    time.sleep(0.05)
+                clients[0].steer(int(horse_id), False)
+
             while time.monotonic() < deadline:
                 current = phase()
                 if current.get('phase') == 'failed':
@@ -486,27 +575,33 @@ def main():
                 if current.get('phase') == 'wire-menu' and 'wire-menu' not in handled:
                     handled.add('wire-menu')
                     result.setdefault('client_attachment_windows', {})['initial_end_ns'] = time.monotonic_ns()
-                    send_native(clients[2], wire, 0); time.sleep(.5)
-                    result['menu_assertions'] = menu_checks(clients[2], read_vi)
-                    if not all(row['status'] == 'passed' for row in result['menu_assertions']):
-                        raise RuntimeError('Received clickable command menu failed validation')
+                    send_native(clients[2], wire, 0)
+                    menu_deadline = min(deadline, time.monotonic() + 10)
+                    while True:
+                        result['menu_assertions'] = menu_checks(clients[2], read_vi)
+                        if all(row['status'] == 'passed' for row in result['menu_assertions']):
+                            break
+                        if time.monotonic() >= menu_deadline:
+                            raise RuntimeError('Received clickable command menu failed validation')
+                        time.sleep(.05)
                     send_native(clients[2], wire, 1); time.sleep(.3)
                     send_native(clients[2], wire, 'interact'); time.sleep(.1)
                     for _ in range(3): send_native(clients[1], wire, 'interact'); time.sleep(.1)
                     command_line('tmfixture wire-menu-finish')
                 if current.get('phase') == 'drive' and late is None:
-                    horse_id, x, y, z, yaw, pitch = map(float, current['value'].split(','))
-                    for step in range(30):
-                        clients[0].steer(int(horse_id))
-                        clients[0].move_vehicle(x, y, z + (step + 1) * 0.04, yaw, pitch)
-                        time.sleep(0.05)
-                    clients[0].steer(int(horse_id), False)
+                    if not legacy_capture:
+                        drive_horse(current['value'])
                     late = Client('TmLate', args.port, protocol, ids, args.minecraft)
                     clients.append(late)
                     if not late.joined.wait(15):
                         raise RuntimeError('Late observer did not join: ' + repr(late.errors))
                     time.sleep(3)
                     graph = properties(fixture_config / 'initial-graph.properties')
+                    if legacy_capture:
+                        settled_at = time.monotonic_ns()
+                        time.sleep(5)
+                        legacy_observation = ([clients[2], late], graph, settled_at, time.monotonic_ns())
+                        drive_horse(current['value'])
                     result['packet_assertions'] = packet_checks([clients[2], late], graph, args.minecraft)
                     result.setdefault('client_attachment_windows', {})['late_end_ns'] = time.monotonic_ns()
                     command_line('tmfixture late')
@@ -545,7 +640,8 @@ def main():
                 raise TimeoutError('Fixture did not complete')
             if result['status'] == 'passed' and not args.no_restart:
                 for client in clients: client.close()
-                command_line('stop'); server.wait(40)
+                command_line('stop')
+                server.wait(args.timeout)
                 reader.join(timeout=2)
                 result['save_assertions'] = saved_world_checks(run, fixture_config)
                 if not all(a['status'] == 'passed' for a in result['save_assertions']):
@@ -580,7 +676,7 @@ def main():
     finally:
         for client in clients:
             client.close()
-            (run / (client.name + '-packets.json')).write_text(json.dumps({'packets': client.packets,
+            (run / (client.name + '-packets.json')).write_text(json.dumps({'minecraft': args.minecraft, 'packets': client.packets,
                 'received_monotonic_ns': client.packet_times, 'sent_packets': client.sent_packets,
                 'errors': client.errors}, indent=2))
         if server.poll() is None:
@@ -597,16 +693,25 @@ def main():
         result['server_log'] = str(run / 'server.log')
         if (fixture_config / 'assertions.jsonl').exists():
             result['assertions'] = [json.loads(line) for line in (fixture_config / 'assertions.jsonl').read_text().splitlines()]
-        if result.get('status') == 'passed' and not args.bootstrap_only and tuple(map(int, args.minecraft.split('.'))) >= (1, 19, 4):
+        if result.get('status') == 'passed' and not args.bootstrap_only:
             from attachment_evidence import verify
             windows = result.get('client_attachment_windows', {})
-            proof = verify(args.minecraft, args.plugin, run, fixture_config / 'protocol.properties', {
-                'existing': {'capture': fixture_config / 'initial-attachment.json',
-                             'trace': run / 'TmThird-packets.json', 'end_ns': windows.get('initial_end_ns')},
-                'late': {'capture': fixture_config / 'late-attachment.json',
-                         'trace': run / 'TmLate-packets.json', 'end_ns': windows.get('late_end_ns')},
-            }) if all(windows.get(key) is not None for key in ('initial_end_ns', 'late_end_ns')) else {
-                'status': 'failed', 'error': 'Native observation cutoff times were not recorded'}
+            tested_artifact = run / 'plugins/Tandemount.jar'
+            if legacy_observation:
+                observers, graph, settled_at, settled_end = legacy_observation
+                try:
+                    proof = legacy_client_lifetime(args.minecraft, tested_artifact, run, observers, graph, java,
+                                                   settled_at, settled_end)
+                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                    proof = {'status': 'failed', 'error': str(error)}
+            else:
+                proof = verify(args.minecraft, tested_artifact, run, fixture_config / 'protocol.properties', {
+                    'existing': {'capture': fixture_config / 'initial-attachment.json',
+                                 'trace': run / 'TmThird-packets.json', 'end_ns': windows.get('initial_end_ns')},
+                    'late': {'capture': fixture_config / 'late-attachment.json',
+                             'trace': run / 'TmLate-packets.json', 'end_ns': windows.get('late_end_ns')},
+                }) if all(windows.get(key) is not None for key in ('initial_end_ns', 'late_end_ns')) else {
+                    'status': 'failed', 'error': 'Native observation cutoff times were not recorded'}
             result['official_client_attachment'] = proof
             result.setdefault('packet_assertions', []).append({
                 'assertion': 'vanilla-client-seat-survives-native-ticks',

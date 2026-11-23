@@ -1,9 +1,10 @@
 # Release evidence
 
 `project.json` defines the project identity. `tools/collect_release.py` produces
-the ignored `build/release/artifacts.json` from current compiled artifacts and
-native matrix records. Its absence means there is no complete release candidate
-yet. Collection refuses changed source, changed raw reports, mismatched artifact
+the release manifest from current compiled artifacts and native matrix records.
+After a complete audit, `build/release/latest-artifacts.json` points to the
+manifest alongside its reports under `build/release/candidates/`.
+Collection refuses changed source, changed raw reports, mismatched artifact
 hashes, and missing named behavioral checks; it does not convert an overall
 fixture result into blanket compatibility.
 
@@ -24,8 +25,7 @@ publication plan:
 
 ```sh
 python3 tools/collect_release.py
-python3 tools/release_audit.py --manifest build/release/artifacts.json \
-  --evidence .agents/native --output .agents/release/audit.json
+python3 tools/release_audit.py --output .agents/release/audit.json
 ```
 
 The audit verifies the artifact and metadata contracts, evidence hashes and
@@ -46,7 +46,7 @@ test player data, worlds, and downloaded game binaries. The publication plan
 stages this report with the source archive and checksums so the large local SDK
 cache can be removed after uploads have been verified.
 
-The five published 1.0.0 batches have corresponding source and verification
+The seven published 1.0.0 batches have corresponding source and verification
 assets. The publishers match those batches by JAR hash and platform. For an
 audited release plan, the publishers check the staged archive and report and
 verify the report covers every artifact's exact native targets.

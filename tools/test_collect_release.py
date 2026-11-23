@@ -8,9 +8,24 @@ from collect_release import MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, l
 
 
 class NativeCollectionTest(unittest.TestCase):
+    def server(self, minecraft, platform, **build):
+        return {"minecraft": minecraft, "platform": platform, "launcher": "server.jar",
+                "launch_files": {"server.jar": "e" * 64}, **build}
+
+    def legacy_probe(self, minecraft, carrier):
+        return {"minecraft": minecraft, "status": "passed", "probe_exit_code": 0, "ticks": 1200,
+                "removed": False, "unobstructed_picking": True, "carrier": carrier,
+                "official_client_sha256": "e" * 64, "packet_sequence_sha256": "f" * 64,
+                "probe_report_sha256": "a" * 64}
+
     def proof(self, minecraft, artifact):
+        if minecraft in ("1.7.10", "1.12.2"):
+            carrier = {"1.7.10": "signed-size-slime", "1.12.2": "marker-armor-stand"}[minecraft]
+            return {"status": "passed", "minecraft": minecraft, "artifact_sha256": artifact,
+                    "probes": {role: self.legacy_probe(minecraft, carrier) for role in ("existing", "late")}}
         probe = {"kind": "original-client-native-graph-ticks", "receivedNativeState": True,
                  "originalPacketCodecsConsumed": 50, "probe_exit_code": 0,
+                 "attachmentMode": "native-horse-root" if tuple(map(int, minecraft.split("."))) >= (1, 19, 4) else "early-follower",
                  "inputs": {"native_artifact_sha256": artifact},
                  "receivedStateTicks": {"ticks": 1200, "rootErrors": 0, "removedObservations": 0,
                                         "maximumRelativeDrift": 0},
@@ -21,7 +36,7 @@ class NativeCollectionTest(unittest.TestCase):
 
     def modern(self):
         return {"minecraft": "1.21.1", "platform": "forge", "sha256": "a" * 64,
-                "server": {"sdk": "1.21.1-52.1.14"}, "native_fixture": True,
+                "server": self.server("1.21.1", "forge", sdk="1.21.1-52.1.14"), "native_fixture": True,
                 "bootstrap": "passed", "connected_clients": True, "restart_passed": True,
                 "exit_code": 0, "error": "", "checks": sorted({n for v in [*MODERN.values(), *MOD_ATTACHMENT.values()] for n in v}),
                 "restart_fixture": {"native_fixture": True},
@@ -110,7 +125,7 @@ class NativeCollectionTest(unittest.TestCase):
                  "native_packets_consumed": 300, "official_client_sha256": "d" * 64,
                  "packet_sequence_sha256": "e" * 64, "probe_report_sha256": "f" * 64}
         return {"minecraft": minecraft, "platform": "forge", "artifact_sha256": "c" * 64,
-                "server": {"minecraft": minecraft, "platform": "forge", "sdk": sdk},
+                "server": self.server(minecraft, "forge", sdk=sdk),
                 "status": "passed", "exit_code": 0, "restart": {"status": "passed"},
                 "vanilla_socket_login": {"status": "passed", "ordered_play_login": True},
                 "network_policy": {"status": "not-applicable" if minecraft == "1.12.2" else "passed"},
@@ -195,7 +210,7 @@ class NativeCollectionTest(unittest.TestCase):
     def test_fabric_absent_event_is_never_fabricated_as_pass(self):
         raw = self.modern()
         raw["platform"] = "fabric"
-        raw["server"] = {"loader": "0.20.1"}
+        raw["server"] = self.server(raw["minecraft"], "fabric", loader="0.20.1")
         raw["checks"] = [n for n in raw["checks"] if not n.startswith("loader-")]
         self.assertEqual(normalize(raw, "modern")["result"], "fail")
         raw["loader_cancellation"] = {"status": "not-applicable", "reason": "Loader-only SDK has no event bus"}
@@ -204,24 +219,24 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertEqual(report["checks"]["cancelled-dismount"], "not-applicable")
 
     def test_duplicate_pass_does_not_hide_native_failure(self):
-        raw = {"minecraft": "1.12.2", "platform": "paper", "server": {"build": "1620"},
-               "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
-               "restart": "passed", "exit_code": 0,
-               "official_client_attachment": self.proof("1.12.2", "b" * 64),
-               "assertions": [{"assertion": n, "status": "passed"} for n in sorted({n for v in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for n in v})]}
+        raw = self.plugin()
         self.assertEqual(normalize(raw, "plugin")["result"], "pass")
         raw["assertions"].insert(0, {"assertion": "ordinary-non-op-passenger-mounted", "status": "failed"})
         report = normalize(raw, "plugin")
         self.assertEqual(report["result"], "fail")
         self.assertIs(report["checks"]["mount"], False)
 
-    def plugin(self):
-        return {"minecraft": "26.3", "platform": "paper", "server": {"build": "249"},
+    def plugin(self, minecraft="26.3"):
+        attached = tuple(map(int, minecraft.split("."))) >= (1, 19, 4)
+        required = [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] if attached else [
+            *PLUGIN.values(), ("tmthird-horse-has-only-driver-on-client", "tmthird-seat-position-updates-received")]
+        return {"minecraft": minecraft, "platform": "paper",
+                "server": self.server(minecraft, "paper", build="fixture-build"),
                 "artifact_sha256": "b" * 64, "kind": "native-runtime", "status": "passed",
                 "restart": "passed", "exit_code": 0,
-                "official_client_attachment": self.proof("26.3", "b" * 64),
+                "official_client_attachment": self.proof(minecraft, "b" * 64),
                 "assertions": [{"assertion": name, "status": "passed"}
-                               for name in sorted({name for required in [*PLUGIN.values(), *PLUGIN_ATTACHMENT.values()] for name in required})]}
+                               for name in sorted({name for group in required for name in group})]}
 
     def test_server_event_alone_cannot_prove_real_client_mounting(self):
         raw = self.plugin()
@@ -252,11 +267,9 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertIn("mount", report["incomplete_checks"])
 
     def test_independent_follower_cannot_pass_any_native_attachment_contract(self):
-        for version in ("1.7.10", "1.8.9", "1.12.2", "1.16.5", "1.19.4", "1.20.4", "1.20.5", "26.3"):
+        for version in ("1.19.4", "1.20.4", "1.20.5", "26.3"):
             with self.subTest(minecraft=version):
-                raw = self.plugin()
-                raw["minecraft"] = version
-                raw["official_client_attachment"]["minecraft"] = version
+                raw = self.plugin(version)
                 missing = {name for required in PLUGIN_ATTACHMENT.values() for name in required}
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in missing]
                 report = normalize(raw, "plugin")
@@ -270,8 +283,7 @@ class NativeCollectionTest(unittest.TestCase):
                      "tmthird-attachment-has-no-periodic-position-follow-packets",
                      "tmlate-attachment-has-no-periodic-position-follow-packets"):
             with self.subTest(assertion=name):
-                raw = self.plugin()
-                raw["minecraft"] = "1.20.4"
+                raw = self.plugin("1.20.4")
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] != name]
                 self.assertIn("late-observer", normalize(raw, "plugin")["incomplete_checks"])
 
@@ -285,14 +297,19 @@ class NativeCollectionTest(unittest.TestCase):
         self.assertIn("settings", report["incomplete_checks"])
 
     def test_attached_graph_does_not_require_world_follower_packets_or_driver_only_graph(self):
-        for version in ("1.7.10", "1.12.2", "1.19.4", "1.20.4", "1.20.5", "26.3"):
+        for version in ("1.19.4", "1.20.4", "1.20.5", "26.3"):
             with self.subTest(minecraft=version):
-                raw = self.plugin()
-                raw["minecraft"] = version
-                raw["official_client_attachment"]["minecraft"] = version
+                raw = self.plugin(version)
                 old_follower_checks = {"tmlate-horse-has-only-driver-on-client", "tmlate-seat-position-updates-received"}
                 raw["assertions"] = [item for item in raw["assertions"] if item["assertion"] not in old_follower_checks]
                 self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+
+    def test_early_plugin_needs_its_observed_follower_and_position_updates(self):
+        raw = self.plugin("1.12.2")
+        self.assertEqual(normalize(raw, "plugin")["result"], "pass")
+        raw["assertions"] = [item for item in raw["assertions"]
+                             if item["assertion"] != "tmthird-seat-position-updates-received"]
+        self.assertIn("late-observer", normalize(raw, "plugin")["incomplete_checks"])
 
 
 class LegacyFixtureBindingTest(unittest.TestCase):

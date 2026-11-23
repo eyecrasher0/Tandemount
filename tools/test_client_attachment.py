@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from client_attachment import normalize_capture, received_state, stationary_capture_ns
+from client_attachment import captured_packets, normalize_capture, received_state, stationary_capture_ns, write_received_state
 from vanilla_protocol import varint
 
 
@@ -71,6 +71,22 @@ class CaptureInputTest(unittest.TestCase):
             self.assertEqual(received_state(trace,protocol,output),1)
             self.assertEqual(output.read_text(),"ClientboundSetPassengersPacket\t0102\n")
 
+    def test_detached_follower_replay_includes_received_teleport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            protocol = root / "protocol.properties"
+            protocol.write_text("play.clientbound.PacketPlayOutMount=75\n"
+                                "play.clientbound.PacketPlayOutEntityTeleport=86\n")
+            trace = root / "packets.json"
+            teleport = ("15" + "4020000000000000" + "40504a6666666666" + "401e000000000000"
+                        + "000001")
+            trace.write_text(json.dumps({"packets": [["game", 75, "150104"], ["game", 86, teleport]],
+                                         "received_monotonic_ns": [1, 2], "errors": []}))
+            output = root / "state.tsv"
+            self.assertEqual(write_received_state(captured_packets(trace, protocol, 2), output,
+                                                  include_teleports=True), 2)
+            self.assertEqual(output.read_text().splitlines()[1], "ClientboundTeleportEntityPacket\t" + teleport)
+
     def test_protocol_errors_and_empty_state_are_not_accepted(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);protocol=root/"protocol.properties";trace=root/"trace.json"
@@ -90,10 +106,10 @@ class CaptureInputTest(unittest.TestCase):
                     (30, "ClientboundMoveEntityPacket$PosRot", varint(10)),
                     (40, "ClientboundSetEntityDataPacket", varint(90))]
         self.assertEqual(stationary_capture_ns(packets,state,50),20)
-        self.assertIsNone(stationary_capture_ns(
-            packets+[(45,"ClientboundSetPassengersPacket",bytes((90,1,2)))],state,50))
-        self.assertIsNone(stationary_capture_ns(
-            packets+[(45,"ClientboundRemoveEntitiesPacket",bytes((1,25)))],state,50))
+        for packet in [(45,"ClientboundSetPassengersPacket",bytes((90,1,2))),
+                       (45,"ClientboundRemoveEntitiesPacket",bytes((1,25)))]:
+            with self.subTest(packet=packet), self.assertRaisesRegex(ValueError, "ride is incomplete"):
+                stationary_capture_ns(packets + [packet], state, 50)
 
 
 if __name__=="__main__":

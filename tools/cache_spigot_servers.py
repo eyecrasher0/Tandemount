@@ -12,6 +12,7 @@ import sys
 import urllib.request
 
 from cache_servers import ROOT, UA, checksum, java_for
+from runtime_storage import sdk_hashes
 
 BUILDTOOLS_URL = "https://hub.spigotmc.org/jenkins/job/BuildTools/201/artifact/target/BuildTools.jar"
 
@@ -25,7 +26,9 @@ def build(cache, tools, target):
     server = directory / "spigot.jar"
     if record_path.is_file() and server.is_file():
         record = json.loads(record_path.read_text())
-        if record.get("refs") == selected["refs"] and checksum(server) == record.get("sha256"):
+        if (record.get("minecraft") == version and record.get("revision") == selected["revision"]
+                and record.get("refs") == selected["refs"] and checksum(server) == record.get("sha256")
+                and record.get("launch_files") == sdk_hashes(directory)):
             return {"platform": "spigot", "minecraft": version, "result": "cached", "file": str(server)}
     builder = directory / "builder"
     builder.mkdir(exist_ok=True)
@@ -60,7 +63,7 @@ def build(cache, tools, target):
     record = {"platform": "spigot", "minecraft": version, "revision": selected["revision"],
               "refs": actual_refs, "sha256": checksum(server), "java": target["java"],
               "buildtools_url": BUILDTOOLS_URL, "buildtools_sha256": checksum(tools),
-              "file": str(server), "build": "pass"}
+              "file": str(server), "build": "pass", "launch_files": sdk_hashes(directory)}
     record_path.write_text(json.dumps(record, indent=2) + "\n")
     return {"platform": "spigot", "minecraft": version, "result": "built", "file": str(server), "sha256": record["sha256"]}
 

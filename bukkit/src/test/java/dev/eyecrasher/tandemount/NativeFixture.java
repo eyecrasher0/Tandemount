@@ -133,15 +133,15 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     }
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!command.getName().equals("tmfixture")) return false;
-        if (args.length == 0) return true;
+        if (!(sender instanceof ConsoleCommandSender) || args.length == 0) return true;
         try {
             if (args[0].startsWith("owner-")) { NativeFixtureOwner.command(this, args[0]); return true; }
             if (args[0].equals("prepare")) prepare();
             if (args[0].equals("start")) start();
             if (args[0].equals("wire-start")) { wireMode = true; start(); }
-            if (args[0].equals("wire-cancelled")) wireCancelled();
+            if (args[0].equals("wire-cancelled")) wireCancelled(20);
             if (args[0].equals("wire-mounted")) wireMounted();
-            if (args[0].equals("wire-menu-finish")) wireMenuFinish();
+            if (args[0].equals("wire-menu-finish")) wireMenuFinish(100);
             if (args[0].equals("late")) late();
             if (args[0].equals("saveprobe")) saveprobe();
             if (args[0].equals("finish")) finish();
@@ -303,15 +303,6 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 initialHomeRetained = false;
                 try { Probe.call(initialHomeWorld, "removePluginChunkTicket", 0, 0, NativeFixture.this); }
                 catch (NoSuchMethodException oldApi) { /* Legacy listener has just stopped retaining this home. */ }
-                Field bounds = (Field)field(field(tandem, "nativeAccess"), "bounds");
-                require("native-seat-shape-uses-mutable-instance-aabb",
-                        !Modifier.isStatic(bounds.getModifiers())
-                                && (!Modifier.isFinal(bounds.getModifiers())
-                                    || ((Boolean)field(field(tandem, "nativeAccess"), "oldest")
-                                        && bounds.getName().equals("boundingBox")
-                                        && field(field(tandem, "nativeAccess"), "boxMutator") != null))
-                                && (bounds.getType().getSimpleName().equals("AABB")
-                                        || bounds.getType().getSimpleName().equals("AxisAlignedBB")));
                 driver.setOp(false); rider.setOp(false); third.setOp(false);
                 horse = (Horse)driver.getWorld().spawnEntity(new Location(driver.getWorld(), 8, 64, 8), org.bukkit.entity.EntityType.HORSE);
                 ordinaryHorse(horse); horse.setAdult(); horse.setTamed(true); horse.setOwner(driver);
@@ -338,8 +329,12 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             } catch (Throwable failure) { failed("native-start", failure); }
         }});
     }
-    private void wireCancelled() {
+    private void wireCancelled(final int remainingChecks) {
         later(3,new Runnable(){public void run(){
+            if (wireCancelledInteractions == 0 && remainingChecks > 0) {
+                wireCancelled(remainingChecks - 1);
+                return;
+            }
             boolean preciseCancelled = !wirePreciseOnly || (wireInteractions == 1 && wireCancelledInteractions == 1
                     && "PlayerInteractAtEntityEvent".equals(wireCancelledEvent));
             record("cancelled-final-interaction-does-not-mount",
@@ -366,8 +361,12 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             }});
         }});
     }
-    private void wireMenuFinish() {
+    private void wireMenuFinish(final int remainingTicks) {
         next(third,new Runnable(){public void run(){
+            if (wireThirdInteractions == 0 && remainingTicks > 0) {
+                wireMenuFinish(remainingTicks - 1);
+                return;
+            }
             require("command-click-adjustment-applies",Math.abs(settings().vertical-wireSettings.vertical-1.0/16)<1.0e-9 && settings().rearward==wireSettings.rearward);
             require("real-client-third-rider-rejected", wireThirdInteractions > 0 && !third.isInsideVehicle() && rider.isInsideVehicle() && driver.getVehicle()==horse && countSeats()==1);
             third.removeAttachment(wireAdmin);wireAdmin=null;
@@ -447,9 +446,20 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             Object nativeSeat = Probe.handle(rider.getVehicle());
             require("seat-not-custom-registry-type", ((Class<?>)field(field(tandem, "nativeAccess"), "seatBase")).isInstance(nativeSeat));
             boolean display = (Boolean)field(field(tandem, "nativeAccess"), "interpolatedSeat");
-            require(display ? "seat-is-nonliving-vanilla-block-display" : "seat-is-nonliving-vanilla-falling-block",
-                    rider.getVehicle().getType().name().equals(display ? "BLOCK_DISPLAY" : "FALLING_BLOCK")
+            boolean oldest = (Boolean)field(field(tandem, "nativeAccess"), "oldest");
+            boolean marker = (Boolean)field(field(tandem, "nativeAccess"), "markerSeat");
+            if (oldest) require("seat-is-invisible-size-minus-one-vanilla-slime",
+                    rider.getVehicle() instanceof Slime && ((Slime)rider.getVehicle()).getSize() == -1
+                    && (Boolean)Probe.call(nativeSeat, "isInvisible"));
+            else if (marker) require("seat-is-invisible-vanilla-marker-armor-stand",
+                    rider.getVehicle().getType().name().equals("ARMOR_STAND")
+                    && !((Boolean)Probe.call(rider.getVehicle(), "isVisible")) && (Boolean)Probe.call(rider.getVehicle(), "isMarker"));
+            else require("seat-is-nonliving-vanilla-block-display",
+                    rider.getVehicle().getType().name().equals("BLOCK_DISPLAY")
                     && !(rider.getVehicle() instanceof LivingEntity));
+            require("positioned-seat-bounds-empty-with-ordinary-horse-bounds-intact",
+                    Arrays.equals(dimensions(rider.getVehicle()), new double[3])
+                    && Arrays.stream(dimensions(horse)).allMatch(size -> size > 0.5));
             if (display) {
                 require("seat-gravity-remains-disabled", !((Boolean)Probe.call(rider.getVehicle(), "hasGravity")));
                 require("seat-block-remains-native-invisible", Probe.call(Probe.call(rider.getVehicle(), "getBlock"), "getMaterial").toString().equals("BARRIER"));
@@ -459,11 +469,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                 Object attachment = field(field(tandem, "nativeAccess"), "attachment");
                 boolean protectedHelpers = helpers.length == ((Number)field(attachment, "helperCount")).intValue();
                 for (Entity helper : helpers) {
-                    Object box = Probe.call(helper, "getBoundingBox");
                     protectedHelpers &= !((Boolean)Probe.call(helper, "hasGravity"))
-                            && ((Number)Probe.call(box, "getWidthX")).doubleValue() == 0
-                            && ((Number)Probe.call(box, "getHeight")).doubleValue() == 0
-                            && ((Number)Probe.call(box, "getWidthZ")).doubleValue() == 0;
+                            && Arrays.equals(dimensions(helper), new double[3]);
                     if (helper.getType().name().equals("LLAMA"))
                         protectedHelpers &= (Boolean)Probe.call(helper, "isInvisible") && !((Boolean)Probe.call(helper, "hasAI"))
                                 && helper.getLocation().getY() < horse.getLocation().getY() - 40;
@@ -510,7 +517,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private void late() {
         later(8, new Runnable() { public void run() {
             try {
-                require("driver-input-moves-horse", driveStart != null && horse.getLocation().distanceSquared(driveStart) > 0.05);
+                require("server-accepts-driver-vehicle-movement-during-shared-ride",
+                        driveStart != null && horse.getLocation().distanceSquared(driveStart) > 0.05
+                        && driver.getVehicle() == horse && rider.isInsideVehicle());
                 require("late-observer-real-player", Bukkit.getPlayerExact("TmLate") != null);
                 require("late-observer-requires-no-remount", rider.isInsideVehicle() && driver.getVehicle() == horse && countSeats() == 1);
                 trackSeat("late-attachment.json");
@@ -545,6 +554,20 @@ public final class NativeFixture extends JavaPlugin implements Listener {
         }});
     }
     private void trackSeat() { trackSeat("initial-attachment.json"); }
+    private double[] dimensions(Entity entity) throws ReflectiveOperationException {
+        try {
+            Object box = Probe.call(entity, "getBoundingBox");
+            return new double[]{((Number)Probe.call(box, "getWidthX")).doubleValue(),
+                    ((Number)Probe.call(box, "getHeight")).doubleValue(), ((Number)Probe.call(box, "getWidthZ")).doubleValue()};
+        } catch (NoSuchMethodException oldApi) {
+            Object handle = Probe.handle(entity), box;
+            try { box = Probe.call(handle, "getBoundingBox"); }
+            catch (NoSuchMethodException preSetter) { box = field(handle, "boundingBox"); }
+            return new double[]{((Number)field(box, "d")).doubleValue() - ((Number)field(box, "a")).doubleValue(),
+                    ((Number)field(box, "e")).doubleValue() - ((Number)field(box, "b")).doubleValue(),
+                    ((Number)field(box, "f")).doubleValue() - ((Number)field(box, "c")).doubleValue()};
+        }
+    }
     private void trackSeat(String captureName) {
         if (rider.getVehicle() == null) return;
         for (Entity playerSeat : new Entity[] {rider.getVehicle(), Bukkit.getPlayerExact("TmLate") == null ? null : Bukkit.getPlayerExact("TmLate").getVehicle()})
@@ -558,20 +581,26 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             graph.setProperty("driver", Integer.toString(driver.getEntityId()));
             graph.setProperty("rider", Integer.toString(rider.getEntityId()));
             graph.setProperty("seat", Integer.toString(rider.getVehicle().getEntityId()));
-            graph.setProperty("seat_falling_block", rider.getVehicle().getType() == EntityType.FALLING_BLOCK ? "1" : "0");
             graph.setProperty("seat_block_display", rider.getVehicle().getType().name().equals("BLOCK_DISPLAY") ? "1" : "0");
+            graph.setProperty("seat_slime", rider.getVehicle() instanceof Slime ? "1" : "0");
+            graph.setProperty("seat_armor_stand", rider.getVehicle().getType().name().equals("ARMOR_STAND") ? "1" : "0");
             graph.setProperty("seat_interaction", rider.getVehicle().getType().name().equals("INTERACTION") ? "1" : "0");
-            if ((Boolean)field(field(tandem, "nativeAccess"), "interpolatedSeat")) {
-                Object ride = ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId());
-                Entity[] helpers = (Entity[])field(ride, "helpers");
+            Object access = field(tandem, "nativeAccess");
+            String minecraft = (String)field(access, "minecraft");
+            boolean attached = (Boolean)field(access, "interpolatedSeat");
+            Object ride = ((Map<?, ?>)field(tandem, "horses")).get(horse.getUniqueId());
+            Entity[] helpers = (Entity[])field(ride, "helpers");
+            if (attached) {
                 graph.setProperty("helper_count", Integer.toString(helpers.length));
                 for (int i = 0; i < helpers.length; i++) graph.setProperty("helper_" + i, Integer.toString(helpers[i].getEntityId()));
+            }
+            if (!minecraft.equals("1.7.10") && !minecraft.equals("1.12.2")) {
                 File capture = new File(getDataFolder(), captureName);
                 if (!capture.exists()) {
-                    Object attachment = field(field(tandem, "nativeAccess"), "attachment");
-                    Object scale = field(attachment, "scale");
-                    StringBuilder json = new StringBuilder("{\"minecraft\":\"").append(field(field(tandem,"nativeAccess"),"minecraft"))
+                    Object scale = attached ? field(field(access, "attachment"), "scale") : null;
+                    StringBuilder json = new StringBuilder("{\"minecraft\":\"").append(minecraft)
                             .append("\",\"snapshot_monotonic_ns\":").append(System.nanoTime())
+                            .append(",\"nativeAttachment\":").append(attached)
                             .append(",\"horse\":").append(horse.getEntityId()).append(",\"driver\":").append(driver.getEntityId())
                             .append(",\"horsePosition\":[").append(horse.getLocation().getX()).append(',').append(horse.getLocation().getY()).append(',').append(horse.getLocation().getZ()).append(']')
                             .append(",\"riderVehicle\":").append(rider.getVehicle().getEntityId())
@@ -582,7 +611,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                         if (json.charAt(json.length()-1) != '[') json.append(',');
                         Location location = helper.getLocation();
                         json.append("{\"id\":").append(helper.getEntityId()).append(",\"type\":\"").append(helper.getType().name())
-                                .append("\",\"parent\":").append(helper.getVehicle().getEntityId())
+                                .append("\",\"parent\":").append(attached ? helper.getVehicle().getEntityId() : -1)
                                 .append(",\"x\":").append(location.getX()).append(",\"y\":").append(location.getY()).append(",\"z\":").append(location.getZ())
                                 .append(",\"pose\":\"").append(invoke(helper,"getPose")).append('"')
                                 .append(",\"yaw\":").append(location.getYaw()).append(",\"noGravity\":").append(!((Boolean)invoke(helper,"hasGravity")));

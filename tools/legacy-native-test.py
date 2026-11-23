@@ -536,7 +536,7 @@ def run(mc,args):
     folder=workspace.directory
     launch=folder/launcher.name
     vanilla_jar=folder/f"minecraft_server.{mc}.jar"
-    server_identity={"minecraft":mc,"platform":"forge","sdk":b.SDK[mc],
+    server_identity={"minecraft":mc,"platform":"forge","sdk":b.SDK[mc],"launcher":launch.name,
                      "launch_files":{p.name:sha(p) for p in (launch,vanilla_jar)}}
     artifact=args.artifacts/b.artifact_name("forge",mc)
     if not artifact.exists():raise SystemExit(f"Build the exact artifact first: {artifact}")

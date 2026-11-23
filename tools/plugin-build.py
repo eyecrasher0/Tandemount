@@ -77,7 +77,7 @@ def main():
         with zipfile.ZipFile(artifact, 'w', zipfile.ZIP_DEFLATED) as jar:
             manifest = (f"Manifest-Version: 1.0\nImplementation-Title: {project['name']}\n"
                         f"Implementation-Version: {project['version']}\nImplementation-Vendor: {project['author']}\n"
-                        "paperweight-mappings-namespace: mojang\n")
+                        "paperweight-mappings-namespace: mojang\nTandemount-Loader: bukkit\n")
             if target: manifest += 'Tandemount-Minecraft-Target: ' + target + '\n'
             write(jar, 'META-INF/MANIFEST.MF', manifest + '\n')
             for tree in [classes, ROOT / 'bukkit/src/main/resources']:

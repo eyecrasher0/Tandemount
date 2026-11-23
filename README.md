@@ -28,19 +28,33 @@ client.
 | --- | --- | --- | --- |
 | 1.7.10 | Forge | [`tandemount-forge-1.0.0+1.7.10.jar`][forge-1.7.10] | `mods/` |
 | 1.8.9 | Forge | [`tandemount-forge-1.0.0+1.8.9.jar`][forge-1.8.9] | `mods/` |
-| 1.12.2 | Forge | [`tandemount-forge-1.0.0+1.12.2.jar`][forge-1.12.2] | `mods/` |
 | 1.12.2 | Paper, Spigot | [`tandemount-bukkit-1.0.0+1.12.2.jar`][bukkit-1.12.2] | `plugins/` |
+| 1.12.2 | Forge | [`tandemount-forge-1.0.0+1.12.2.jar`][forge-1.12.2] | `mods/` |
 | 1.16.5 | Fabric | [`tandemount-fabric-1.0.0+1.16.5.jar`][fabric-1.16.5] | `mods/` |
 | 1.16.5 | Forge | [`tandemount-forge-1.0.0+1.16.5.jar`][forge-1.16.5] | `mods/` |
+| 1.17.1 | Fabric | [`tandemount-fabric-1.0.0+1.17.1.jar`][fabric-1.17.1] | `mods/` |
+| 1.17.1 | Forge | [`tandemount-forge-1.0.0+1.17.1.jar`][forge-1.17.1] | `mods/` |
+| 1.18.2 | Paper, Purpur | [`tandemount-bukkit-1.0.0+1.18.2.jar`][bukkit-1.18.2] | `plugins/` |
+| 1.18.2 | Fabric | [`tandemount-fabric-1.0.0+1.18.2.jar`][fabric-1.18.2] | `mods/` |
+| 1.18.2 | Forge | [`tandemount-forge-1.0.0+1.18.2.jar`][forge-1.18.2] | `mods/` |
+| 1.19.4 | Paper, Purpur, Folia | [`tandemount-bukkit-1.0.0+1.19.4.jar`][bukkit-1.19.4] | `plugins/` |
 | 1.19.4 | Fabric | [`tandemount-fabric-1.0.0+1.19.4.jar`][fabric-1.19.4] | `mods/` |
 | 1.19.4 | Forge | [`tandemount-forge-1.0.0+1.19.4.jar`][forge-1.19.4] | `mods/` |
-| 1.19.4 | Paper, Purpur, Folia | [`tandemount-bukkit-1.0.0+1.19.4.jar`][bukkit-1.19.4] | `plugins/` |
+| 1.20.6 | Paper, Purpur, Folia | [`tandemount-bukkit-1.0.0+1.20.6.jar`][bukkit-1.20.6] | `plugins/` |
 | 1.20.6 | Fabric | [`tandemount-fabric-1.0.0+1.20.6.jar`][fabric-1.20.6] | `mods/` |
 | 1.20.6 | Forge | [`tandemount-forge-1.0.0+1.20.6.jar`][forge-1.20.6] | `mods/` |
 | 1.20.6 | NeoForge | [`tandemount-neoforge-1.0.0+1.20.6.jar`][neoforge-1.20.6] | `mods/` |
 | 1.21.1 | Fabric | [`tandemount-fabric-1.0.0+1.21.1.jar`][fabric-1.21.1] | `mods/` |
 | 1.21.1 | Forge | [`tandemount-forge-1.0.0+1.21.1.jar`][forge-1.21.1] | `mods/` |
 | 1.21.1 | NeoForge | [`tandemount-neoforge-1.0.0+1.21.1.jar`][neoforge-1.21.1] | `mods/` |
+| 1.21.11 | Paper, Spigot, Purpur, Folia | [`tandemount-bukkit-1.0.0+1.21.11.jar`][bukkit-1.21.11] | `plugins/` |
+| 1.21.11 | Fabric | [`tandemount-fabric-1.0.0+1.21.11.jar`][fabric-1.21.11] | `mods/` |
+| 1.21.11 | Forge | [`tandemount-forge-1.0.0+1.21.11.jar`][forge-1.21.11] | `mods/` |
+| 1.21.11 | NeoForge | [`tandemount-neoforge-1.0.0+1.21.11.jar`][neoforge-1.21.11] | `mods/` |
+| 26.2 | Paper, Spigot, Purpur, Folia | [`tandemount-bukkit-1.0.0+26.2.jar`][bukkit-26.2] | `plugins/` |
+| 26.2 | Fabric | [`tandemount-fabric-1.0.0+26.2.jar`][fabric-26.2] | `mods/` |
+| 26.2 | Forge | [`tandemount-forge-1.0.0+26.2.jar`][forge-26.2] | `mods/` |
+| 26.2 | NeoForge | [`tandemount-neoforge-1.0.0+26.2.jar`][neoforge-26.2] | `mods/` |
 | 26.3 | Fabric | [`tandemount-fabric-1.0.0+26.3.jar`][fabric-26.3] | `mods/` |
 | 26.3 | Forge | [`tandemount-forge-1.0.0+26.3.jar`][forge-26.3] | `mods/` |
 | 26.3 | NeoForge | [`tandemount-neoforge-1.0.0+26.3.jar`][neoforge-26.3] | `mods/` |
@@ -52,7 +66,9 @@ batch. [GitHub release](https://github.com/eyecrasher0/Tandemount/releases/tag/t
 [Legacy Forge verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json) ·
 [Fabric and Forge backport verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-modern-backports.json) ·
 [Bukkit 1.12.2 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-backports.json) ·
-[Bukkit 1.19.4 and mod 1.21.1 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-1.19.4-1.21.1.json)
+[Bukkit 1.19.4 and mod 1.21.1 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-1.19.4-1.21.1.json) ·
+[Additional build verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-key-boundaries.json) ·
+[Bukkit 1.18.2 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-1.18.2.json)
 
 The build target matrix covers 38 exact Minecraft releases from 1.7.10 through
 26.3 and records upstream platforms and Java requirements for each version.
@@ -60,19 +76,33 @@ The build target matrix covers 38 exact Minecraft releases from 1.7.10 through
 
 [forge-1.7.10]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.7.10.jar
 [forge-1.8.9]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.8.9.jar
-[forge-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.12.2.jar
 [bukkit-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.12.2.jar
+[forge-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.12.2.jar
 [fabric-1.16.5]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.16.5.jar
 [forge-1.16.5]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.16.5.jar
+[fabric-1.17.1]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.17.1.jar
+[forge-1.17.1]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.17.1.jar
+[bukkit-1.18.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.18.2.jar
+[fabric-1.18.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.18.2.jar
+[forge-1.18.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.18.2.jar
+[bukkit-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.19.4.jar
 [fabric-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.19.4.jar
 [forge-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.19.4.jar
-[bukkit-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.19.4.jar
+[bukkit-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.20.6.jar
 [fabric-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.20.6.jar
 [forge-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.20.6.jar
 [neoforge-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B1.20.6.jar
 [fabric-1.21.1]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.21.1.jar
 [forge-1.21.1]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.21.1.jar
 [neoforge-1.21.1]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B1.21.1.jar
+[bukkit-1.21.11]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.21.11.jar
+[fabric-1.21.11]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.21.11.jar
+[forge-1.21.11]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.21.11.jar
+[neoforge-1.21.11]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B1.21.11.jar
+[bukkit-26.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B26.2.jar
+[fabric-26.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B26.2.jar
+[forge-26.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B26.2.jar
+[neoforge-26.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B26.2.jar
 [fabric-26.3]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B26.3.jar
 [forge-26.3]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B26.3.jar
 [neoforge-26.3]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B26.3.jar

@@ -90,8 +90,8 @@ def frame(identifier, payload=b"", threshold=None):
     return varint(len(data)) + data
 
 
-def ping(port):
-    with socket.create_connection(("127.0.0.1", port), timeout=10) as sock:
+def ping(port, timeout=10):
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
         sock.sendall(frame(0, varint(0) + text("localhost") + struct.pack(">H", port) + varint(1)))
         sock.sendall(frame(0))
         identifier, body = receive(sock)
@@ -139,7 +139,9 @@ def accept_teleport(version, body, previous=(0.0, 0.0, 0.0, 0.0, 0.0)):
 
 
 class VanillaClient:
-    def __init__(self, port, version, ids, name="TmVanillaTest", timeout=30):
+    def __init__(self, port, version, ids, name="TmVanillaTest", timeout=30, protocol=None):
+        if protocol is None:
+            protocol = ping(port, timeout=timeout)["version"]["protocol"]
         self.port, self.version, self.ids, self.name = port, version, ids, name
         self.sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
         self.sock.settimeout(timeout)
@@ -153,7 +155,6 @@ class VanillaClient:
         self.custom_queries_declined = 0
         self.position = (0.0, 0.0, 0.0, 0.0, 0.0)
         self.lock = threading.Lock()
-        protocol = ping(port)["version"]["protocol"]
         self.send(0, varint(protocol) + text("localhost") + struct.pack(">H", port) + varint(2))
         parts = tuple(map(int, version.split(".")))
         tail = b""
