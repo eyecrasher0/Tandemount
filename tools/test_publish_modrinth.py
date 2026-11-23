@@ -232,6 +232,16 @@ class ModrinthPublishTests(unittest.TestCase):
                 self.assertEqual(payload['source_url'], self.project['source_url'])
                 self.assertTrue({'is_draft', 'icon', 'icon_url'}.isdisjoint(payload))
 
+    def test_version_upload_preserves_the_existing_project_description(self):
+        remote = {"id": "Project1", "source_url": self.project["source_url"],
+                  "license": {"id": self.project["license"]},
+                  "body": "Choose your server build in the Versions tab."}
+        with patch('publish_modrinth.request', side_effect=[None, remote]) as send:
+            updated = publish_modrinth.prepare_existing_project('token', remote, self.project, 'Release README')
+        payload = json.loads(send.call_args_list[0].kwargs["body"])
+        self.assertNotIn("body", payload)
+        self.assertEqual(updated["body"], remote["body"])
+
     def test_unconfigured_existing_project_with_files_is_not_overwritten(self):
         remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft",
                   "source_url": None, "license": {"id": "LicenseRef-Unknown"}}

@@ -269,7 +269,7 @@ def load_project(token, slug, expected_username):
 
 
 def prepare_existing_project(token, remote, project, body):
-    """Initialize the owner's empty draft, or refresh this matching project."""
+    """Initialize the owner's empty draft or refresh matching project metadata."""
     license_value = remote.get("license")
     license_id = license_value.get("id") if isinstance(license_value, dict) else license_value
     matches = remote.get("source_url") == project["source_url"] and license_id == project["license"]
@@ -285,6 +285,8 @@ def prepare_existing_project(token, remote, project, body):
     payload = project_payload(project, body)
     for field in ("project_type", "slug", "is_draft"):
         payload.pop(field)
+    if matches and (remote.get("body") or "").strip():
+        payload.pop("body")
     url = V2 + "/project/" + urllib.parse.quote(remote["id"], safe="")
     request("PATCH", url, token=token, body=json.dumps(payload).encode("utf-8"))
     updated = request("GET", url, token=token)
