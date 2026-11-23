@@ -13,6 +13,7 @@ import threading
 
 from cache_servers import ROOT
 from project_metadata import artifact_name
+from runtime_storage import installed_identity
 
 
 def sha(path):
@@ -20,13 +21,14 @@ def sha(path):
 
 
 def plugin_runner_helpers():
-    names = ("plugin-owner-regression.py", "plugin_protocol.py", "client_lifetime.py")
+    names = ("plugin-owner-regression.py", "plugin_protocol.py", "legacy-build.py", "legacy-client-test.py")
     return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
+            + [ROOT / "mods/legacy/client-test/ClientChecks.java"]
             + [path for path in (ROOT / "plugin/src/test/client").rglob("*") if path.is_file()])
 
 
 def modern_runner_helpers():
-    names = ("modern-wire.py", "modern-client-components.py")
+    names = ("modern-wire.py", "modern-client-components.py", "plugin_protocol.py")
     return ([ROOT / "tools" / name for name in names if (ROOT / "tools" / name).is_file()]
             + [path for path in (ROOT / "mods/modern/src/test/client").rglob("*") if path.is_file()])
 
@@ -74,37 +76,38 @@ def runner_sources(mode):
     return hasher.hexdigest()
 
 
-def matching_native(previous, artifact, native_path, fixture=None):
+def matching_native(previous, artifact, native_path, fixture=None, server=None):
     if (previous.get("result") != "pass" or not artifact.is_file() or not native_path.is_file()
             or previous.get("artifact_sha256") != sha(artifact)
             or previous.get("native_report_sha256") != sha(native_path)):
         return False
     native = json.loads(native_path.read_text())
-    if native.get("artifact_sha256", native.get("sha256")) != previous["artifact_sha256"]:
+    if (native.get("artifact_sha256", native.get("sha256")) != previous["artifact_sha256"]
+            or not server or previous.get("server") != server or native.get("server") != server):
         return False
     if fixture is not None and (not fixture.is_file() or native.get("fixture_sha256") != sha(fixture)):
         return False
     return True
 
 
-def rebuilt_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None):
+def rebuilt_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None, server=None):
     """Reuse execution only after a rebuild produced the same exact bytes.
 
     A build-only compatibility fix for another target can change source inputs
     while leaving this target's JAR unchanged. The real native report, runner
     inputs, and any separate fixture must all still match independently.
     """
-    if previous.get("runner_fingerprint") != runner_fingerprint or not matching_native(previous, artifact, native_path, fixture):
+    if previous.get("runner_fingerprint") != runner_fingerprint or not matching_native(previous, artifact, native_path, fixture, server):
         return None
     return {**previous, "source_fingerprint": fingerprint,
             "previous_source_fingerprint": previous["source_fingerprint"],
             "cached": True, "native_reused_after_identical_rebuild": True}
 
 
-def same_source_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None):
+def same_source_cache(previous, artifact, native_path, fingerprint, runner_fingerprint, fixture=None, server=None):
     if (previous.get("source_fingerprint") == fingerprint
             and previous.get("runner_fingerprint") == runner_fingerprint
-            and matching_native(previous, artifact, native_path, fixture)):
+            and matching_native(previous, artifact, native_path, fixture, server)):
         return {**previous, "cached": True}
     return None
 
@@ -146,6 +149,8 @@ def main():
     if args.cache:
         env["TANDEMOUNT_CACHE"] = str(args.cache.resolve())
     matrix = json.loads((ROOT / "platforms.json").read_text())
+    by_version = {target["minecraft"]: target for target in matrix["targets"]}
+    cache = Path(env.get("TANDEMOUNT_CACHE", ROOT / ".agents/cache"))
     platforms = ["fabric", "forge", "neoforge"] if args.mode == "modern" else ["paper", "spigot", "purpur", "folia"]
     if args.platforms:
         if set(args.platforms) - set(platforms):
@@ -171,6 +176,10 @@ def main():
         version, platform = item
         key = platform + "-" + version
         record_path = output / (key + ".json")
+        try:
+            server = installed_identity(cache, by_version[version], platform)
+        except (KeyError, OSError, ValueError):
+            server = None
         if args.mode == "modern":
             artifact = ROOT / "mods/modern/build" / artifact_name(platform, version)
             native_path = ROOT / ".agents/modern-native" / (key + ".json")
@@ -184,7 +193,7 @@ def main():
         previous = None
         if args.resume and record_path.is_file() and artifact.is_file() and fixture is not None:
             previous = json.loads(record_path.read_text())
-            cached = same_source_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
+            cached = same_source_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture, server)
             if cached is not None:
                 record_path.write_text(json.dumps(cached, indent=2) + "\n")
                 return cached
@@ -200,7 +209,7 @@ def main():
                 return result
             fixture = ROOT / json.loads(build_record.read_text())["fixture"]
         if previous and sources(args.mode) == target_fingerprint:
-            cached = rebuilt_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture)
+            cached = rebuilt_cache(previous, artifact, native_path, target_fingerprint, runner_fingerprint, fixture, server)
             if cached is not None:
                 record_path.write_text(json.dumps(cached, indent=2) + "\n")
                 return cached
@@ -218,13 +227,14 @@ def main():
             result["native_report"] = str(native_path.relative_to(ROOT))
             result["native_report_sha256"] = sha(native_path)
             reported_hash = native.get("artifact_sha256", native.get("sha256"))
+            result["server"] = native.get("server")
             result["artifact_hash_matches"] = reported_hash == result["artifact_sha256"]
             if args.mode == "modern":
                 passed = (native.get("native_fixture") is True and native.get("connected_clients") is True
                           and native.get("restart_passed") is True and native.get("bootstrap") == "passed")
             else:
                 passed = native.get("status") == "passed" and bool(native.get("assertions"))
-            result["result"] = "pass" if passed and code == 0 and result["artifact_hash_matches"] else "fail"
+            result["result"] = "pass" if passed and code == 0 and result["artifact_hash_matches"] and server is not None and result["server"] == server else "fail"
         if sources(args.mode) != target_fingerprint:
             result["result"] = "stale"
             result["error"] = "Implementation or runner source changed after the matrix started"

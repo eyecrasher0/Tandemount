@@ -13,6 +13,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from runtime_storage import sdk_hashes
 
 ROOT = Path(__file__).resolve().parents[1]
 UA = "Tandemount/1.0 (https://github.com/eyecrasher0/Tandemount)"
@@ -108,6 +109,8 @@ def obtain(cache, platform, target, bootstrap):
     item = json.loads(record.read_text()) if record.is_file() else distribution(platform, version)
     server = directory / item["name"]
     item["sha256"] = download(item, server)
+    if "launch_files" in item and item["launch_files"] != sdk_hashes(directory):
+        raise ValueError("Cached Bukkit SDK files differ from their bootstrap record")
     item["file"] = str(server)
     item["java"] = target["java"]
     if bootstrap:
@@ -121,6 +124,7 @@ def obtain(cache, platform, target, bootstrap):
             record.write_text(json.dumps(item, indent=2) + "\n")
             raise RuntimeError(f"Bootstrap failed: {platform}/{version}; see {log}")
         item["bootstrap"] = "pass"
+    item["launch_files"] = sdk_hashes(directory)
     record.write_text(json.dumps(item, indent=2) + "\n")
     return {"platform": platform, "minecraft": version, "sha256": item["sha256"],
             "file": str(server), "bootstrap": item.get("bootstrap", "not-run")}

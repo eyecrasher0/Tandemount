@@ -39,7 +39,16 @@ public final class NativeHooks implements IMixinConfigPlugin, Opcodes {
                 if (found != null) break;
             }
             if (found == null) throw new IllegalStateException("Tandemount exact upstream hook is absent: " + key + " " + Names.TABLE.getProperty("minecraft"));
-            patch(found, key.substring(2));
+            String kind = key.substring(2);
+            patch(found, kind);
+            if (kind.equals("earlyTransfer")) {
+                Type destination = Type.getArgumentTypes(found.desc)[0];
+                String forgeTransfer = Type.getMethodDescriptor(Type.getReturnType(found.desc), destination,
+                        Type.getObjectType("net/minecraftforge/common/util/ITeleporter"));
+                for (MethodNode method : node.methods)
+                    if (method.desc.equals(forgeTransfer) && (method.name.equals(found.name) || method.name.equals("changeDimension")))
+                        patch(method, kind);
+            }
         }
     }
     private static MethodInsnNode call(String method, String descriptor) {
@@ -50,14 +59,24 @@ public final class NativeHooks implements IMixinConfigPlugin, Opcodes {
             InsnList guard = new InsnList();
             LabelNode ordinary = new LabelNode();
             guard.add(new VarInsnNode(ALOAD, 0));
-            guard.add(new VarInsnNode(ALOAD, 1));
-            guard.add(call(kind.equals("helperTransfer") ? "helperTransfer" : "earlyTransfer", "(Ljava/lang/Object;Ljava/lang/Object;)Z"));
+            if (kind.equals("helperTransfer")) {
+                guard.add(new VarInsnNode(ALOAD, 1));
+                guard.add(call("helperTransfer", "(Ljava/lang/Object;Ljava/lang/Object;)Z"));
+            } else guard.add(call("earlyTransfer", "(Ljava/lang/Object;)Z"));
             guard.add(new JumpInsnNode(IFEQ, ordinary));
             guard.add(new InsnNode(ACONST_NULL));
             guard.add(new InsnNode(ARETURN));
             guard.add(ordinary);
             guard.add(new FrameNode(F_SAME, 0, null, 0, null));
             method.instructions.insert(guard);
+            if (kind.equals("earlyTransfer")) for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (instruction.getOpcode() != ARETURN) continue;
+                InsnList completed = new InsnList();
+                completed.add(new InsnNode(DUP));
+                completed.add(new VarInsnNode(ALOAD, 0));
+                completed.add(call("afterEarlyTransfer", "(Ljava/lang/Object;Ljava/lang/Object;)V"));
+                method.instructions.insertBefore(instruction, completed);
+            }
         } else if (kind.equals("helperInteract")) {
             InsnList guard = new InsnList();
             LabelNode ordinary = new LabelNode();

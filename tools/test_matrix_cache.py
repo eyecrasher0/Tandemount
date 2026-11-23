@@ -18,13 +18,17 @@ class MatrixCacheTest(unittest.TestCase):
         self.artifact.write_bytes(b'Exact built artifact')
         self.fixture = self.root / 'fixture.jar'
         self.fixture.write_bytes(b'Exact executable native fixture')
+        self.server = {'minecraft': '26.3', 'platform': 'paper', 'build': '249',
+                       'launch_files': {'paper.jar': 'a' * 64}}
         self.native = self.root / 'native.json'
-        self.native.write_text(json.dumps({'artifact_sha256': sha(self.artifact), 'fixture_sha256': sha(self.fixture)}))
+        self.native.write_text(json.dumps({'artifact_sha256': sha(self.artifact), 'fixture_sha256': sha(self.fixture),
+                                           'server': self.server}))
         self.record = {'result': 'pass', 'source_fingerprint': 'old-source', 'runner_fingerprint': 'same-runner',
-                       'artifact_sha256': sha(self.artifact), 'native_report_sha256': sha(self.native)}
+                       'artifact_sha256': sha(self.artifact), 'native_report_sha256': sha(self.native),
+                       'server': self.server}
 
     def reuse(self):
-        return rebuilt_cache(self.record, self.artifact, self.native, 'new-source', 'same-runner', self.fixture)
+        return rebuilt_cache(self.record, self.artifact, self.native, 'new-source', 'same-runner', self.fixture, self.server)
 
     def test_identical_artifact_runner_fixture_and_report_retain_real_execution(self):
         cached = self.reuse()
@@ -44,6 +48,10 @@ class MatrixCacheTest(unittest.TestCase):
         self.native.write_text('{}')
         self.assertIsNone(self.reuse())
 
+    def test_changed_upstream_server_requires_new_native_run(self):
+        self.server = {**self.server, 'build': '250', 'launch_files': {'paper.jar': 'b' * 64}}
+        self.assertIsNone(self.reuse())
+
     def test_changed_runner_requires_new_native_run(self):
         self.record['runner_fingerprint'] = 'previous-runner'
         self.assertIsNone(self.reuse())
@@ -60,7 +68,7 @@ class MatrixCacheTest(unittest.TestCase):
             with self.subTest(runner=runner):
                 self.record['runner_fingerprint'] = runner
                 self.assertIsNone(same_source_cache(self.record, self.artifact, self.native,
-                                                    'old-source', 'same-runner', self.fixture))
+                                                    'old-source', 'same-runner', self.fixture, self.server))
 
 
 class RunnerFingerprintTest(unittest.TestCase):
@@ -77,6 +85,7 @@ class RunnerFingerprintTest(unittest.TestCase):
         self.write('project.json', '{"version":"1.0.0"}')
         self.write('LICENSE', 'license fixture')
         self.write('plugin/src/test/client/ClientProbe.java', 'initial standalone client probe input')
+        self.write('mods/legacy/client-test/ClientChecks.java', 'initial legacy vanilla client probe input')
         self.patch = patch('matrix_verify.ROOT', self.root)
         self.patch.start()
         self.addCleanup(self.patch.stop)
@@ -104,7 +113,7 @@ class RunnerFingerprintTest(unittest.TestCase):
         self.assertEqual(before[2:], after[2:])
 
     def test_added_or_changed_plugin_helpers_invalidate_plugin_proof(self):
-        for name in ('plugin-owner-regression.py', 'plugin_protocol.py', 'client_lifetime.py'):
+        for name in ('plugin-owner-regression.py', 'legacy-build.py', 'legacy-client-test.py'):
             with self.subTest(name=name):
                 before = runner_sources('plugins'), sources('plugins')
                 self.write('tools/' + name, 'first executable helper input')
@@ -127,7 +136,7 @@ class RunnerFingerprintTest(unittest.TestCase):
                 self.assertEqual(other_before, (runner_sources('plugins'), sources('plugins')))
 
     def test_shared_official_client_runner_changes_invalidate_both_families(self):
-        for name in ('tools/client_attachment.py', 'tools/attachment_evidence.py',
+        for name in ('tools/client_attachment.py', 'tools/attachment_evidence.py', 'tools/plugin_protocol.py',
                      'tests/client/AttachmentClientProbe.java'):
             with self.subTest(input=name):
                 before = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))

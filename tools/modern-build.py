@@ -704,6 +704,7 @@ def mapped_table(target, platform):
             member = methods.get((CLASSES["Entity"], "changeDimension", params))
             if member:
                 table["h.earlyTransfer"] = mapped_member(member)
+                table["m.entity.earlyTransfer"] = table["h.earlyTransfer"]
                 break
         if "h.earlyTransfer" not in table: raise ValueError("Exact native transfer guard unavailable: " + version)
     table["h.pairing"] = table["m.tracker.pairing"]
@@ -870,7 +871,12 @@ side="SERVER"
 config="tandemount.mixins.json"
 '''
         (classes / "META-INF" / metadata_name).write_text(toml)
-        (classes / "META-INF" / "MANIFEST.MF").write_text("Manifest-Version: 1.0\nMixinConfigs: tandemount.mixins.json\n\n")
+    (classes / "META-INF").mkdir(exist_ok=True)
+    manifest = (f"Manifest-Version: 1.0\nImplementation-Version: {identity['version']}\n"
+                f"Tandemount-Minecraft: {version}\nTandemount-Loader: {platform}\n")
+    if platform != "fabric":
+        manifest += "MixinConfigs: tandemount.mixins.json\n"
+    (classes / "META-INF" / "MANIFEST.MF").write_text(manifest + "\n")
     sources = [p for p in (ROOT / "mods" / "modern" / "src" / "main" / "java").rglob("*.java") if platform == "fabric" or p.name != "FabricEntrypoint.java"] + list((work / "generated").rglob("*.java"))
     compiler = Path(os.environ.get("TANDEMOUNT_JAVA") or java_for(max(21, target["java"]))).with_name("javac")
     subprocess.run([str(compiler), "-proc:none", "--release", "8", "-cp", os.pathsep.join(map(str, sdk)), "-d", str(classes), *map(str, sources)], check=True)

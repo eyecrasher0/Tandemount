@@ -16,7 +16,7 @@ import subprocess
 import time
 import uuid
 from cache_servers import java_for
-from runtime_storage import RuntimeWorkspace
+from runtime_storage import RuntimeWorkspace, server_identity
 from project_metadata import metadata as project_metadata, artifact_name
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,14 +36,15 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
     fixture = ROOT / build_record['fixture']
     if hashlib.sha256(fixture.read_bytes()).hexdigest() != build_record['fixture_sha256']:
         raise ValueError("The exact disposable fixture hash changed")
-    artifact_hash = hashlib.sha256(artifact.read_bytes()).hexdigest()
     # Every run gets its own directory; an earlier world is never silently reused.
     workspace = RuntimeWorkspace(CACHE / os.environ.get("TANDEMOUNT_NATIVE_NAMESPACE", "native"), platform + "-" + version + "-"
                                  + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6], distribution)
     run_dir = workspace.directory
+    identity = server_identity(target, platform, metadata, run_dir)
     (run_dir / "mods").mkdir()
     shutil.copy2(artifact, run_dir / "mods" / artifact.name)
     shutil.copy2(fixture, run_dir / "mods" / fixture.name)
+    artifact_hash = hashlib.sha256((run_dir / "mods" / artifact.name).read_bytes()).hexdigest()
     (run_dir / "eula.txt").write_text("eula=true\n")
     port = int(os.environ.get("TANDEMOUNT_TEST_PORT", "0"))
     if network_test and port == 0:
@@ -51,15 +52,7 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
             available.bind(("127.0.0.1", 0))
             port = available.getsockname()[1]
     (run_dir / "server.properties").write_text("\n".join(("online-mode=false", "white-list=false", "enforce-whitelist=false", "server-ip=127.0.0.1", "server-port=" + str(port), "enable-query=false", "enable-rcon=false", "view-distance=2", "simulation-distance=2", "max-players=8", "spawn-protection=0", "structures={}", "generate-structures=false", "level-type=flat", "level-seed=0", 'generator-settings={"biome":"minecraft:plains","structures":{},"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}]}', "level-name=disposable-fixture", "allow-flight=true", "sync-chunk-writes=false", "pause-when-empty-seconds=-1", "")))
-    launcher = ["-jar", "fabric-server-launch.jar"]
-    if platform != "fabric":
-        args_files = metadata.get("args_files", [])
-        if args_files:
-            launcher = ["@" + args_files[0]]
-        else:
-            jars = metadata.get("launcher_jars", [])
-            if not jars: raise ValueError("No official FML launcher found")
-            launcher = ["-jar", jars[0]]
+    launcher = ["@" + identity["launcher"]] if metadata.get("args_files") else ["-jar", identity["launcher"]]
     command = [os.environ.get("TANDEMOUNT_JAVA") or java_for(target["java"]), "-Xms256M", "-Xmx1G", "-XX:ActiveProcessorCount=2", "-Dtandemount.selftest=true"]
     if network_test:
         command += ["-Dtandemount.networktest=true", "-Dtandemount.test.port=" + str(port)]
@@ -97,9 +90,12 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
             code = "timeout"
     fixture = run_dir / "tandemount-native-result.json"
     result = {"minecraft": version, "platform": platform, "artifact": str(artifact.relative_to(ROOT)), "sha256": artifact_hash, "run_directory": str(run_dir), "java": target["java"], "seconds": round(time.monotonic()-started, 2), "exit_code": code, "bootstrap": "unverified", "native_fixture": False, "connected_clients": False, "visual": "not-run",
-              "server": metadata, "fixture_sha256": build_record['fixture_sha256'], "distribution_sha256": hashlib.sha256((distribution / "distribution.json").read_bytes()).hexdigest()}
+              "server": identity, "fixture_sha256": build_record['fixture_sha256']}
     if fixture.exists():
-        result.update(json.loads(fixture.read_text()))
+        findings = json.loads(fixture.read_text())
+        if (findings.get("minecraft"), findings.get("platform")) != (version, platform):
+            raise ValueError("Native fixture executed against a different target")
+        result.update(findings)
         result["bootstrap"] = "passed"
     else:
         text = (run_dir / "console.log").read_text(errors="replace")
@@ -120,8 +116,7 @@ def run(version, platform, accept_eula=False, timeout=240, network_test=False, r
         restart_fixture = run_dir / "tandemount-restart-result.json"
         result["restart_fixture"] = json.loads(restart_fixture.read_text()) if restart_fixture.exists() else {"native_fixture": False, "error": "Restart fixture result was not produced"}
         result["restart_passed"] = result["restart_fixture"].get("native_fixture", False) and result["restart_exit_code"] == 0
-    if (network_test and result.get("native_fixture") and result.get("connected_clients") and code == 0
-            and tuple(map(int, version.split("."))) >= (1, 19, 4)):
+    if network_test and result.get("native_fixture") and result.get("connected_clients") and code == 0:
         from attachment_evidence import verify
         # This probe uses the recorded original geometry before the fixture
         # sends any tuning commands. A server-side reset can be visible before

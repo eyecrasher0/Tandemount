@@ -90,10 +90,10 @@ class CaptureInputTest(unittest.TestCase):
                     (30, "ClientboundMoveEntityPacket$PosRot", varint(10)),
                     (40, "ClientboundSetEntityDataPacket", varint(90))]
         self.assertEqual(stationary_capture_ns(packets,state,50),20)
-        self.assertIsNone(stationary_capture_ns(
-            packets+[(45,"ClientboundSetPassengersPacket",bytes((90,1,2)))],state,50))
-        self.assertIsNone(stationary_capture_ns(
-            packets+[(45,"ClientboundRemoveEntitiesPacket",bytes((1,25)))],state,50))
+        for packet in [(45,"ClientboundSetPassengersPacket",bytes((90,1,2))),
+                       (45,"ClientboundRemoveEntitiesPacket",bytes((1,25)))]:
+            with self.subTest(packet=packet), self.assertRaisesRegex(ValueError, "ride is incomplete"):
+                stationary_capture_ns(packets + [packet], state, 50)
 
 
 if __name__=="__main__":

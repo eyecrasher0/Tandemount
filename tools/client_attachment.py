@@ -289,14 +289,20 @@ PACKET_CLASSES={
     "set_entity_data":"ClientboundSetEntityDataPacket", "update_attributes":"ClientboundUpdateAttributesPacket",
     "set_passengers":"ClientboundSetPassengersPacket", "rotate_head":"ClientboundRotateHeadPacket",
     "move_entity_rot":"ClientboundMoveEntityPacket$Rot",
+    "remove_entities":"ClientboundRemoveEntitiesPacket", "remove_entity":"ClientboundRemoveEntityPacket",
 }
 PLUGIN_PACKET_CLASSES={
     "PacketPlayOutSpawnEntity":"ClientboundAddEntityPacket",
+    "PacketPlayOutSpawnEntityLiving":"ClientboundAddMobPacket",
     "PacketPlayOutNamedEntitySpawn":"ClientboundAddPlayerPacket",
     "PacketPlayOutEntityMetadata":"ClientboundSetEntityDataPacket",
     "PacketPlayOutUpdateAttributes":"ClientboundUpdateAttributesPacket",
     "PacketPlayOutMount":"ClientboundSetPassengersPacket",
     "PacketPlayOutEntityHeadRotation":"ClientboundRotateHeadPacket",
+    "PacketPlayOutEntityDestroy":"ClientboundRemoveEntitiesPacket",
+    "PacketPlayOutRelEntityMove":"ClientboundMoveEntityPacket$Pos",
+    "PacketPlayOutRelEntityMoveLook":"ClientboundMoveEntityPacket$PosRot",
+    "PacketPlayOutEntityTeleport":"ClientboundTeleportEntityPacket",
 }
 SPAWN_PACKETS={"ClientboundAddEntityPacket", "ClientboundAddMobPacket", "ClientboundAddPlayerPacket"}
 MOTION_PACKETS={
@@ -304,11 +310,13 @@ MOTION_PACKETS={
     "move_entity_pos_rot":"ClientboundMoveEntityPacket$PosRot",
     "teleport_entity":"ClientboundTeleportEntityPacket",
     "entity_position_sync":"ClientboundEntityPositionSyncPacket",
-    "remove_entities":"ClientboundRemoveEntitiesPacket",
 }
 
 
 def captured_packets(trace, protocol, end_ns):
+    raw=json.loads(trace.read_text())
+    if raw.get("errors"):
+        raise ValueError("Captured observer has protocol errors")
     ids={}
     packet_classes={**PACKET_CLASSES, **MOTION_PACKETS}
     for key,identifier in load_ids(protocol).items():
@@ -320,12 +328,12 @@ def captured_packets(trace, protocol, end_ns):
         elif name in packet_classes.values():
             ids[identifier]=name
         elif name in PLUGIN_PACKET_CLASSES:
-            ids[identifier]=PLUGIN_PACKET_CLASSES[name]
-    raw=json.loads(trace.read_text())
-    if raw.get("errors"):
-        raise ValueError("Captured observer has protocol errors")
+            ids[identifier]=("ClientboundRemoveEntityPacket" if name == "PacketPlayOutEntityDestroy"
+                             and raw.get("minecraft") == "1.17" else PLUGIN_PACKET_CLASSES[name])
     for index,packet in enumerate(raw["packets"]):
         if isinstance(packet,dict):
+            if packet.get("state", "game") not in {"game", "play"}:
+                continue
             when,identifier=packet["at_ns"],packet["id"]
             payload=base64.b64decode(packet["base64"],validate=True)
         else:
@@ -354,11 +362,9 @@ def received_state(trace, protocol, output, end_ns=None):
 
 def stationary_capture_ns(packets, state, end_ns):
     """Measure the quiet interval of the captured ride in this observer's graph."""
-    if end_ns is None or not state.get("nativeAttachment", True):
-        return None
     expected = {state["driver"]: state["horse"], state["rider"]: state["riderVehicle"]}
-    expected.update((helper["id"],helper["vehicle"]) for helper in state["helpers"])
-    wanted = set(expected) | {state["horse"]}
+    expected.update((helper["id"],helper["vehicle"]) for helper in state["helpers"] if helper["vehicle"] >= 0)
+    wanted = {*expected, state["horse"], *(helper["id"] for helper in state["helpers"])}
     present, parents = set(), {}
     last = None
     for when, kind, payload in packets:
@@ -377,11 +383,12 @@ def stationary_capture_ns(packets, state, end_ns):
                 if child in wanted and child in present:
                     parents[child] = entity
                     last = when
-        elif kind == "ClientboundRemoveEntitiesPacket":
-            removed = set()
-            for _ in range(entity):
-                child, offset = read_varint(payload,offset)
-                removed.add(child)
+        elif kind in {"ClientboundRemoveEntitiesPacket", "ClientboundRemoveEntityPacket"}:
+            removed = {entity} if kind == "ClientboundRemoveEntityPacket" else set()
+            if not removed:
+                for _ in range(entity):
+                    child, offset = read_varint(payload,offset)
+                    removed.add(child)
             if removed & wanted:
                 last = when
             present.difference_update(removed)
@@ -391,8 +398,8 @@ def stationary_capture_ns(packets, state, end_ns):
         if entity in wanted:
             last = when
     if last is None or not wanted <= present or parents != expected:
-        return None
-    return end_ns - last
+        raise ValueError("Captured observer ride is incomplete at the selected cutoff")
+    return None if end_ns is None else end_ns - last
 
 
 def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifact=None):
@@ -431,8 +438,8 @@ def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifa
             raise ValueError("An observer trace requires its exact native protocol export")
         normalized=folder/"received-state.tsv"
         packets=list(captured_packets(trace,protocol,end_ns))
-        inputs["captured_state_packets"]=write_received_state(packets,normalized)
         quiet_ns=stationary_capture_ns(packets,state,end_ns)
+        inputs["captured_state_packets"]=write_received_state(packets,normalized)
         inputs.update(observer_trace_sha256=digest(trace),protocol_export_sha256=digest(protocol),
                       normalized_state_sha256=digest(normalized),end_ns=end_ns,stationary_capture_ns=quiet_ns)
         command.extend([str(normalized),str(quiet_ns if quiet_ns is not None else -1)])

@@ -85,6 +85,19 @@ public final class AttachmentClientProbe {
     }else call(ENTITY,"recreateFromPacket",PACKETS+"ClientboundAddEntityPacket",e,p);
    }
    entities.put(id,e);Field entries=world.getClass().getDeclaredField("entities");entries.setAccessible(true);((Map)entries.get(world)).put(id,e);
+  }else if(kind.equals("ClientboundRemoveEntitiesPacket")||kind.equals("ClientboundRemoveEntityPacket")){
+   Object encodedIds=kind.equals("ClientboundRemoveEntityPacket")
+       ?List.of(packetId(p,owner)):any(owner,p,"getEntityIds","entityIds");
+   Iterable<?> ids=encodedIds instanceof int[]
+       ?Arrays.stream((int[])encodedIds).boxed().collect(Collectors.toList())
+       :(Iterable<?>)encodedIds;
+   Field entries=world.getClass().getDeclaredField("entities");entries.setAccessible(true);
+   for(Object id:ids){
+    Object e=entities.remove(id);
+    if(e==null)continue;
+    call(ENTITY,"ejectPassengers","",e);call(ENTITY,"stopRiding","",e);
+    ((Map)entries.get(world)).remove(id);
+   }
   }else if(kind.equals("ClientboundSetEntityDataPacket")){
    int id=packetId(p,owner);Object e=entities.get(id);if(e!=null&&!players.contains(id))call("net.minecraft.network.syncher.SynchedEntityData","assignValues","java.util.List",call(ENTITY,"getEntityData","",e),any(owner,p,"packedItems","getUnpackedData"));
   }else if(kind.equals("ClientboundUpdateAttributesPacket")){
@@ -332,6 +345,13 @@ public final class AttachmentClientProbe {
    for(String line:Files.readAllLines(Path.of(args[3]))){if(line.isBlank())continue;String[] parts=line.split("\t");received(parts[0],decode(parts[0],parts[1],registry),world,entities,wanted,Set.of(driverId,riderId));receivedPackets++;}
    for(int id:wanted)if(!entities.containsKey(id))throw new AssertionError("Captured native state omitted entity "+id);
    horse=entities.get(horseId);driver=entities.get(driverId);rider=entities.get(riderId);
+   if(!nativeGraph&&state.getAsJsonArray("helpers").get(0).getAsJsonObject().get("type").getAsString().equals("falling_block")){
+    Object barrier=call("net.minecraft.world.level.block.Block","defaultBlockState","",field("net.minecraft.world.level.block.Blocks","BARRIER",null));
+    Object carrier=entities.get(last);
+    if(!C("net.minecraft.world.entity.item.FallingBlockEntity").isInstance(carrier)
+       ||call("net.minecraft.world.entity.item.FallingBlockEntity","getBlockState","",carrier)!=barrier)
+     throw new AssertionError("Observed follower did not retain the vanilla invisible barrier");
+   }
    for(var entry:entities.entrySet())for(Object child:(List<?>)call(ENTITY,"getPassengers","",entry.getValue()))children.computeIfAbsent(entry.getKey(),k->new ArrayList<>()).add(((Number)call(ENTITY,"getId","",child)).intValue());
    // Motion below is a controlled native tick component, starting with the
    // helper geometry actually decoded from received packet bytes.
@@ -385,7 +405,7 @@ public final class AttachmentClientProbe {
   }
   Map<String,Object> result=new LinkedHashMap<>();result.put("kind","original-client-native-graph-ticks");result.put("minecraft",S.getProperty("minecraft"));result.put("receivedNativeState",receivedState);result.put("receivedStateTicks",receivedTickResult);result.put("originalPacketCodecsConsumed",receivedPackets);result.put("ticks",tick);result.put("helperCount",state.getAsJsonArray("helpers").size());result.put("removedObservations",removed);result.put("rootErrors",rootErrors);result.put("maximumRelativeMotionError",errorMax);result.put("initialArmorStandLocalPosition",expected);result.put("samples",samples);result.put("environment","Normal Level subclass supplies controlled empty world, registry, scoreboard and chunks; all entity constructors and tick/rideTick/positionRider methods are original signed client classes");result.put("limitations","Driver/rider geometry subjects are original ArmorStands; this does not execute RemotePlayer/LocalPlayer or render graphics. Root motion and helper yaw are controlled component inputs, not a timed movement packet replay. Player offset and real controls require separate exact SDK/native server evidence.");
   result.put("interactionRays",rays(world,horse,driver,rider,entities));
-  result.put("attachmentMode",nativeGraph?"native-horse-root":"early-marker-cloud-follower");
+  result.put("attachmentMode",nativeGraph?"native-horse-root":"early-follower");
   result.put("configuredPlayerFeet",initialGeometry);
   if(removed!=0||rootErrors!=0||errorMax>1./16)throw new AssertionError("Native client graph lifetime/position failed: "+new Gson().toJson(result));
   if(args.length>2)Files.writeString(Path.of(args[2]),new GsonBuilder().setPrettyPrinting().create().toJson(result)+"\n");System.out.println("NATIVE_GRAPH_RESULT "+new Gson().toJson(result));

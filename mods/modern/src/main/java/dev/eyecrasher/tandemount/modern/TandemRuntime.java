@@ -231,13 +231,15 @@ public final class TandemRuntime {
             for (Object helper : ride.attachment.helpers) if (helper == entity) { remove(ride); return true; }
         return true; // A managed helper must never become an ordinary clone.
     }
-    public static boolean earlyTransfer(Object entity, Object destination) {
-        Ride ride = RIDES.get(entity);
-        if (ride != null) remove(ride);
+    public static boolean earlyTransfer(Object entity) {
         if (!isSeat(entity)) return false;
         for (Ride candidate : new ArrayList<Ride>(RIDES.values()))
             for (Object helper : candidate.attachment.helpers) if (helper == entity) { remove(candidate); return true; }
         return true;
+    }
+    public static void afterEarlyTransfer(Object result, Object entity) {
+        Ride ride = RIDES.get(entity);
+        if (result != null && ride != null) remove(ride);
     }
     private static void remove(Ride ride) {
         RIDES.remove(ride.horse);
