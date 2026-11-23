@@ -26,6 +26,7 @@ client.
 
 | Minecraft | Server | Download | Install in |
 | --- | --- | --- | --- |
+| 1.7.10 | Paper | [`tandemount-bukkit-1.0.0+1.7.10.jar`][bukkit-1.7.10] | `plugins/` |
 | 1.7.10 | Forge | [`tandemount-forge-1.0.0+1.7.10.jar`][forge-1.7.10] | `mods/` |
 | 1.8.9 | Forge | [`tandemount-forge-1.0.0+1.8.9.jar`][forge-1.8.9] | `mods/` |
 | 1.12.2 | Paper, Spigot | [`tandemount-bukkit-1.0.0+1.12.2.jar`][bukkit-1.12.2] | `plugins/` |
@@ -68,12 +69,14 @@ batch. [GitHub release](https://github.com/eyecrasher0/Tandemount/releases/tag/t
 [Bukkit 1.12.2 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-backports.json) ·
 [Bukkit 1.19.4 and mod 1.21.1 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-1.19.4-1.21.1.json) ·
 [Additional build verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-key-boundaries.json) ·
-[Bukkit 1.18.2 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-1.18.2.json)
+[Bukkit 1.18.2 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-1.18.2.json) ·
+[Paper 1.7.10 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-1.7.10.json)
 
 The build target matrix covers 38 exact Minecraft releases from 1.7.10 through
 26.3 and records upstream platforms and Java requirements for each version.
 [Build target matrix](BACKPORTS.md)
 
+[bukkit-1.7.10]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.7.10.jar
 [forge-1.7.10]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.7.10.jar
 [forge-1.8.9]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.8.9.jar
 [bukkit-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.12.2.jar

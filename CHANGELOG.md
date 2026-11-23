@@ -2,6 +2,8 @@
 
 ## 1.0.0
 
+- Added a Paper 1.7.10 build with stable idle horses and restored passenger
+  collision after dismount.
 - Published verified builds for Forge 1.7.10, 1.8.9, and 1.12.2, and a shared
   Bukkit JAR for Paper and Spigot 1.12.2.
 - Published verified Fabric and Forge builds for 1.16.5, 1.19.4, 1.20.6,

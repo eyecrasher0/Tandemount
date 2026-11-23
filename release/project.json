@@ -276,6 +276,18 @@
             ]
           }
         }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-1.7.10-source.zip",
+        "verification": "verification-bukkit-1.7.10.json",
+        "artifacts": {
+          "5e4ae305954bcb81bdebd8abe69e97cc1f696865a22b66a3643b6eb9e950a345": {
+            "minecraft": "1.7.10",
+            "platforms": [
+              "paper"
+            ]
+          }
+        }
       }
     ]
   }

@@ -1,12 +1,14 @@
 # Publication status
 
-GitHub hosts 33 Tandemount 1.0.0 JARs for the 45 exact Minecraft and platform
+GitHub hosts 34 Tandemount 1.0.0 JARs for the 46 exact Minecraft and platform
 pairs in the download table. Each published batch links to its corresponding
 source archive, verification report, and SHA-256 checksums.
 Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·
 [Build targets](../BACKPORTS.md)
 
 The Modrinth project remains a draft. CurseForge listing visibility depends on moderation.
+The Paper 1.7.10 download is on GitHub and in the Modrinth draft. CurseForge
+rejected the Minecraft 1.7.10 and 1.7 tags for the Bukkit Plugins project.
 The repository and storefronts use the owner's supplied artwork.
 [Project icon](../branding/icon.png)
 
