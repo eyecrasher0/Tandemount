@@ -16,5 +16,48 @@
   "modrinth_disclosure_note": "AI tools generated most of the implementation code and English project text. EyeCrasher defined the requirements and reviewed the project.",
   "modrinth_slug": "tandemount",
   "modrinth_categories": ["game-mechanics", "transportation"],
-  "release_status": "published-subset"
+  "release_status": "published-subset",
+  "published_batches": {
+    "tandemount-1.0.0": [
+      {
+        "source": "Tandemount-1.0.0-source.zip",
+        "verification": "verification.json",
+        "artifacts": {
+          "df67f2d7181b45c2cc67417b1406220df2aec3b030ce3686d5be27f4f4fd3329": {"minecraft": "1.20.6", "platforms": ["neoforge"]},
+          "7e45ac78270f956e12f50b0c54ded8c37b852fba1f29dffc8174330bd5509f7f": {"minecraft": "26.3", "platforms": ["fabric"]},
+          "6185d9c41ecb91b85701f1d59a6b8f795f865ff5c1cb2753171b702324e4f897": {"minecraft": "26.3", "platforms": ["forge"]},
+          "4c3cacd289e85d5e6f55f90a2d55328180c7b56cc7e25e72efc0f72b2344dcc7": {"minecraft": "26.3", "platforms": ["neoforge"]},
+          "01d27648fb0bdba6377e213c029ddcdb02dadc5008756bb3e2f52f866fe3fc04": {"minecraft": "26.3", "platforms": ["paper"]}
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-legacy-forge-source.zip",
+        "verification": "verification-legacy-forge.json",
+        "artifacts": {
+          "cebfda7e2f61c4dc175b2927dd6c4e748a04d99bc1b8f371be8bbf92f892c444": {"minecraft": "1.7.10", "platforms": ["forge"]},
+          "8d7a8ce46b8095e72094095a2f52ac199c1cad45aa3339b6c75c9e8bd8b3e14f": {"minecraft": "1.8.9", "platforms": ["forge"]},
+          "a1bfc20c1da6faaea25cb6df19067d0c4169ad2645d2e685304887992162d253": {"minecraft": "1.12.2", "platforms": ["forge"]}
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-modern-backports-source.zip",
+        "verification": "verification-modern-backports.json",
+        "artifacts": {
+          "378c1d916710d465761e429f4327702827ca0b277896266859a518e9a903dd65": {"minecraft": "1.16.5", "platforms": ["fabric"]},
+          "3e2532c7a9ad9052b0f46b87dcb36a9a31106c00c05cb1327102c7bc67ba4d6e": {"minecraft": "1.16.5", "platforms": ["forge"]},
+          "8be4866f187881aa45370e797de1ca60ede462805f8f60c1da497c453337138e": {"minecraft": "1.19.4", "platforms": ["fabric"]},
+          "4c3b0004b97483fd302f66264467fc283abaaf5ae63ef4c1684d9e92a21c7528": {"minecraft": "1.19.4", "platforms": ["forge"]},
+          "7167c381ee3d38a5cdc95592f109aba4b5860e13a5fdd5bbd55298f62a47752f": {"minecraft": "1.20.6", "platforms": ["fabric"]},
+          "80bd9ae6c6b140d8397c6340d0278e06670a5fb08421c186c489c815c17e21cc": {"minecraft": "1.20.6", "platforms": ["forge"]}
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-backports-source.zip",
+        "verification": "verification-bukkit-backports.json",
+        "artifacts": {
+          "42803114852a875e4a7079988b00226b6b06463510f7da2d65fcb5208efa35e6": {"minecraft": "1.12.2", "platforms": ["paper", "spigot"]}
+        }
+      }
+    ]
+  }
 }

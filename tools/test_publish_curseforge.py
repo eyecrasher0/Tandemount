@@ -3,18 +3,22 @@
 import unittest
 from unittest.mock import patch
 import io
+import json
 import urllib.error
 
 import publish_curseforge
 
 
 class CurseForgePublishTests(unittest.TestCase):
+    plan = {"tag": "tandemount-1.0.0", "source": {"file": "dist/candidate-source.zip"},
+            "verification": "dist/candidate-verification.json"}
+
     def test_mod_upload_tags_exact_game_version_and_loader(self):
         entry = {"id": "forge-1.21.11", "family": "forge", "minecraft": ["1.21.11"],
                  "platforms": ["forge"], "sha256": "a" * 64}
         metadata = publish_curseforge.metadata_for(
             entry, {"version": "1.0.0", "source_url": "https://example.test/source"},
-            {"1.21.11", "Forge", "Server"},
+            {"1.21.11", "Forge", "Server"}, self.plan,
         )
         self.assertEqual(metadata["gameVersionNames"], ["1.21.11", "Forge", "Server"])
         self.assertIn("Forge", metadata["displayName"])
@@ -25,20 +29,21 @@ class CurseForgePublishTests(unittest.TestCase):
                  "platforms": ["folia", "paper", "purpur", "spigot"], "sha256": "b" * 64}
         metadata = publish_curseforge.metadata_for(
             entry, {"version": "1.0.0", "source_url": "https://example.test/source"},
-            {"1.21.11"},
+            {"1.21.11"}, self.plan,
         )
         self.assertEqual(metadata["gameVersionNames"], ["1.21.11"])
         self.assertIn("Folia, Paper, Purpur, Spigot", metadata["displayName"])
 
-    def test_legacy_forge_upload_uses_separate_release_evidence(self):
+    def test_backport_upload_uses_matching_release_evidence(self):
+        project = json.loads((publish_curseforge.ROOT / "release/project.json").read_text())
         metadata = publish_curseforge.metadata_for(
-            {"family": "forge", "minecraft": ["1.8.9"], "platforms": ["forge"]},
-            {"version": "1.0.0", "source_url": "https://github.com/eyecrasher0/Tandemount"},
-            {"1.8.9", "Forge", "Server"},
+            {"family": "fabric", "minecraft": ["1.16.5"], "platforms": ["fabric"],
+             "sha256": "378c1d916710d465761e429f4327702827ca0b277896266859a518e9a903dd65"},
+            project, {"1.16.5", "Fabric", "Server"}, self.plan,
         )
         release = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
-        self.assertIn(f"[Complete GPL source]({release}/Tandemount-1.0.0-legacy-forge-source.zip)", metadata["changelog"])
-        self.assertIn(f"[Verification report]({release}/verification-legacy-forge.json)", metadata["changelog"])
+        self.assertIn(f"[Complete GPL source]({release}/Tandemount-1.0.0-modern-backports-source.zip)", metadata["changelog"])
+        self.assertIn(f"[Verification report]({release}/verification-modern-backports.json)", metadata["changelog"])
 
     def test_game_version_and_loader_names_are_verified_from_official_records(self):
         plan = {"entries": [

@@ -1,13 +1,13 @@
 # Publication status
 
-GitHub hosts Tandemount 1.0.0 for the eight exact Minecraft and platform pairs
-in the download table. The modern/Bukkit and legacy Forge batches have separate
-corresponding source archives, verification reports, and SHA-256 checksums.
+GitHub hosts 15 Tandemount 1.0.0 JARs for the 16 exact Minecraft and platform
+pairs in the download table. The original, legacy Forge, Fabric and Forge
+backport, and Bukkit backport batches each have corresponding source archives,
+verification reports, and SHA-256 checksums.
 Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·
 [Build targets](../BACKPORTS.md)
 
-The Modrinth description and eight versions are saved as drafts. CurseForge
-has received the release files and listing visibility depends on moderation.
+The Modrinth project remains a draft. CurseForge listing visibility depends on moderation.
 The repository and storefronts use the owner's supplied artwork.
 [Project icon](../branding/icon.png)
 
@@ -81,5 +81,7 @@ with an unset source and license can receive the audited release metadata;
 a conflicting source, another license, or existing files block that initialization.
 The publisher keeps the installed icon and verifies the resulting source URL
 and license after a refresh. Project description links point to `main`.
-Version changelogs link to the corresponding source and verification assets in
-the tagged release.
+Both publishers link to the source archive and verification report for the
+JAR's SHA-256 and exact platforms. New artifacts use the checked archive and
+report named by the publication plan. Upload those assets under the plan's tag
+before publishing the storefront versions.

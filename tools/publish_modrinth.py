@@ -96,7 +96,7 @@ def expected_targets(matrix):
             if state["available"]}
 
 
-def validate_plan(plan, matrix, manifest_path):
+def validate_plan(plan, matrix, manifest_path, project):
     if plan.get("schema") != 1 or plan.get("audit", {}).get("result") != "pass":
         raise ValueError("A passing publication plan is required")
     if plan.get("manifest_sha256") != digest(manifest_path, "sha256"):
@@ -109,6 +109,23 @@ def validate_plan(plan, matrix, manifest_path):
         raise ValueError("Publication plan does not name the current source commit")
     if subprocess.check_output(["git", "-C", str(ROOT), "status", "--porcelain"], text=True).strip():
         raise ValueError("Commit all source changes before publishing")
+    if plan["tag"] != "tandemount-" + project["version"]:
+        raise ValueError("Publication plan tag does not match the project version")
+    archive = Path(plan["source"]["file"])
+    verification_path = Path(plan["verification"])
+    if any(archive.name == batch["source"] or verification_path.name == batch["verification"]
+           for batch in project.get("published_batches", {}).get(plan["tag"], ())):
+        raise ValueError("A new batch needs distinct source and verification asset names")
+    if digest(archive, "sha256") != plan["source"]["sha256"]:
+        raise ValueError("Staged source archive SHA-256 mismatch")
+    verification_bytes = verification_path.read_bytes()
+    if hashlib.sha256(verification_bytes).hexdigest() != plan["verification_sha256"]:
+        raise ValueError("Staged verification report SHA-256 mismatch")
+    verification = json.loads(verification_bytes)
+    if verification.get("result") != "pass" or verification.get("source_commit") != source_commit:
+        raise ValueError("Verification report must pass for the planned source commit")
+    verified = {(report["minecraft"], report["platform"]): report["artifact_sha256"]
+                for report in verification["native_reports"] if report["result"] == "pass"}
 
     expected = expected_targets(matrix)
     declared = set()
@@ -117,14 +134,16 @@ def validate_plan(plan, matrix, manifest_path):
         family = entry["family"]
         mc_versions = entry["minecraft"]
         platforms = entry["platforms"]
-        if len(mc_versions) != 1:
-            raise ValueError("Every Modrinth version must name one exact Minecraft release")
+        if len(mc_versions) != 1 or not platforms:
+            raise ValueError("Every version must name one exact Minecraft release and its server platforms")
         if family == "plugin":
             pairs = {(mc_versions[0], platform) for platform in platforms}
         else:
             if len(platforms) != 1 or platforms[0] != family:
                 raise ValueError("Mod artifact loader metadata is ambiguous")
             pairs = {(mc_versions[0], family)}
+        if any(verified.get(pair) != entry["sha256"] for pair in pairs):
+            raise ValueError("Verification report does not cover the staged artifact for " + entry["id"])
         if declared & pairs:
             raise ValueError("Publication plan contains duplicate exact targets")
         declared.update(pairs)
@@ -162,22 +181,26 @@ def project_payload(project, body):
     }
 
 
-def release_changelog(project, entry):
+def release_changelog(project, entry, plan):
     repository = project["source_url"].rstrip("/")
     version = project["version"]
-    tag = urllib.parse.quote("tandemount-" + version, safe="")
-    legacy = (version == "1.0.0" and entry["family"] == "forge"
-              and entry["minecraft"][0] in {"1.7.10", "1.8.9", "1.12.2"})
-    suffix = "-legacy-forge" if legacy else ""
-    archive = urllib.parse.quote(f"Tandemount-{version}{suffix}-source.zip", safe="")
+    archive = Path(plan["source"]["file"]).name
+    verification = Path(plan["verification"]).name
+    for batch in project.get("published_batches", {}).get(plan["tag"], ()):
+        target = batch["artifacts"].get(entry["sha256"])
+        if (target and target["minecraft"] == entry["minecraft"][0]
+                and set(entry["platforms"]) <= set(target["platforms"])):
+            archive, verification = batch["source"], batch["verification"]
+            break
+    tag = urllib.parse.quote(plan["tag"], safe="")
     assets = f"{repository}/releases/download/{tag}"
     return (f"Tandemount {version} release.\n\n"
-            f"[Complete GPL source]({assets}/{archive}) · "
+            f"[Complete GPL source]({assets}/{urllib.parse.quote(archive, safe='')}) · "
             f"[Build and installation]({repository}/blob/{tag}/docs/INSTALL.md) · "
-            f"[Verification report]({assets}/verification{suffix}.json)")
+            f"[Verification report]({assets}/{urllib.parse.quote(verification, safe='')})")
 
 
-def version_payload(project_id, entry, project):
+def version_payload(project_id, entry, project, plan):
     if entry["family"] == "plugin":
         loaders = entry["platforms"]
     else:
@@ -186,7 +209,7 @@ def version_payload(project_id, entry, project):
     return {
         "name": f"{project['name']} {project['version']} — {', '.join(loaders)} — Minecraft {mc}",
         "version_number": entry["version_number"],
-        "changelog": release_changelog(project, entry),
+        "changelog": release_changelog(project, entry, plan),
         "dependencies": [],
         "game_versions": [mc],
         "version_type": "release",
@@ -206,15 +229,15 @@ def project_body(project):
 
     def source_link(link, image):
         url = urllib.parse.urlsplit(link)
-        if url.scheme or link.startswith(("#", "/")):
+        if url.scheme or link.startswith("#"):
             return link
         view = "raw" if image else "blob"
         if not image and (ROOT / urllib.parse.unquote(url.path)).is_dir():
             view = "tree"
         return f"{repository}/{view}/main/{link.removeprefix('./')}"
 
-    readme = re.sub(r"(!?\[[^\]]+\]\()([^)\s]+)(\))",
-                    lambda match: match[1] + source_link(match[2], match[1].startswith("!")) + match[3],
+    readme = re.sub(r"((?<!!)\[[^\]]+\]\()([^)\s]+)(\))",
+                    lambda match: match[1] + source_link(match[2], False) + match[3],
                     readme)
     readme = re.sub(r"""(<img\b[^>]*?\ssrc=["'])([^"']+)(["'])""",
                     lambda match: match[1] + source_link(match[2], True) + match[3], readme)
@@ -331,8 +354,8 @@ def list_versions(token, project_id):
     return result
 
 
-def upload_version(token, project_id, entry, project):
-    payload = version_payload(project_id, entry, project)
+def upload_version(token, project_id, entry, project, plan):
+    payload = version_payload(project_id, entry, project, plan)
     body, content_type = multipart(
         [("data", json.dumps(payload, separators=(",", ":")), "application/json")],
         [("artifact", entry["file"], "application/java-archive")],
@@ -356,7 +379,7 @@ def main():
         plan = json.loads(args.plan.read_text(encoding="utf-8"))
         matrix = json.loads((ROOT / "platforms.json").read_text(encoding="utf-8"))
         project = json.loads((ROOT / "release/project.json").read_text(encoding="utf-8"))
-        targets = validate_plan(plan, matrix, args.manifest)
+        targets = validate_plan(plan, matrix, args.manifest, project)
         summary = {"mode": "apply" if args.apply else "dry-run", "entries": len(plan["entries"]), "targets": targets,
                    "project_slug": project.get("modrinth_slug", project["id"]),
                    "requested_visibility": "unlisted"}
@@ -394,7 +417,7 @@ def main():
                     raise ValueError("Remote Modrinth version exists with a conflicting file: " + entry["version_number"])
                 skipped.append({"version_number": entry["version_number"], "version_id": matches[0]["id"], "sha512": entry["sha512"]})
                 continue
-            version = upload_version(token, project_id, entry, project)
+            version = upload_version(token, project_id, entry, project, plan)
             if not hash_matches(version, entry):
                 raise ValueError("Modrinth returned a different file hash for " + entry["version_number"])
             uploaded.append({"version_number": entry["version_number"], "version_id": version["id"], "sha512": entry["sha512"]})

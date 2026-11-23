@@ -42,9 +42,18 @@ public final class SeatConfigChecks {
         for (String value : new String[]{"overworld", "minecraft:overworld", "1.5", "1,,2", "1,", ",1", "1,1", "2147483648", "+1", "01", "null"}) rejected(path, "excluded-dimensions=" + value + "\n");
         rejected(path, "debug=true\ndebug=false\n");rejected(path, "types=donkey\n");rejected(path, "enabled=true\nverticl=1\n");
         rejected(path, "vertical-origin=unknown\nvertical=0.8125\n");rejected(path, "debug=\\uXXXX\n");
-        rejected(path, "vertical-origin=unknown\n");rejected(path, "excluded-dimensions\n");
+        rejected(path, "vertical-origin=unknown\n");rejected(path, "enabled\n");
+        rejected(path, "debug=true\n\\u0064ebug=false\n");
         Files.write(path, "excluded-dimensions=\n".getBytes(StandardCharsets.ISO_8859_1));
         check(SeatConfig.load(path).excludedDimensions.isEmpty(), "Explicit empty exclusions are valid");
+        Files.write(path, "excluded-dimensions\n".getBytes(StandardCharsets.ISO_8859_1));
+        check(SeatConfig.load(path).excludedDimensions.isEmpty(), "A bare Properties key has an empty value");
+        Files.write(path, ("  excluded\\u002ddimensions -1,\\\n    \\u0031\n  vertical: 0.0625\n")
+                .getBytes(StandardCharsets.ISO_8859_1));
+        SeatConfig existing = SeatConfig.load(path);
+        check(existing.excludedDimensions.equals(new TreeSet<Integer>(Arrays.asList(-1, 1)))
+                && !existing.horseFeet && existing.vertical == 0.0625,
+                "Existing escaped and continued Properties settings retain their values and units");
         System.out.println("[TandemountConfig] passed=" + checks);
     }
 }

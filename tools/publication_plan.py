@@ -71,23 +71,27 @@ def main():
         entry["sha1"] = digest(destination, "sha1")
         entry["sha512"] = digest(destination, "sha512")
         entry["version_number"] = project["version"] + "+" + entry["family"] + "-mc" + entry["minecraft"][0]
-    source = export(ROOT, "HEAD", args.dist / ("Tandemount-" + project["version"] + "-source.zip"), project["version"])
-    verification_path = args.manifest.with_name("verification.json")
-    verification = json.loads(verification_path.read_text())
+    tag = "tandemount-" + project["version"]
+    verification_bytes = args.manifest.with_name("verification.json").read_bytes()
+    verification = json.loads(verification_bytes)
+    verification_sha256 = hashlib.sha256(verification_bytes).hexdigest()
+    suffix = "-" + verification_sha256[:12] if tag in project.get("published_batches", {}) else ""
+    archive = f"Tandemount-{project['version']}{suffix}-source.zip"
+    source = export(ROOT, "HEAD", args.dist.resolve() / archive, project["version"])
     if verification.get("result") != "pass" or verification.get("source_commit") != source["source_commit"]:
         raise ValueError("Portable verification evidence must pass for the exact source commit")
-    published_verification = args.dist / "verification.json"
-    shutil.copy2(verification_path, published_verification)
+    published_verification = args.dist / f"verification{suffix}.json"
+    published_verification.write_bytes(verification_bytes)
     sums = [f"{entry['sha256']}  binaries/{Path(entry['file']).name}" for entry in entries]
     sums.append(source["sha256"] + "  " + Path(source["file"]).name)
-    sums.append(digest(published_verification) + "  verification.json")
-    sums_path = args.dist / "SHA256SUMS"
+    sums.append(verification_sha256 + "  " + published_verification.name)
+    sums_path = args.dist / f"SHA256SUMS{suffix}"
     sums_path.write_text("\n".join(sums) + "\n")
     plan = {"schema": 1, "project": project, "source": source, "entries": entries,
             "manifest_sha256": digest(args.manifest), "matrix_sha256": digest(ROOT / "platforms.json"),
-            "audit": result, "tag": "tandemount-" + project["version"],
+            "audit": result, "tag": tag,
             "checksums": str(sums_path.resolve()), "checksums_sha256": digest(sums_path),
-            "verification": str(published_verification.resolve()), "verification_sha256": digest(published_verification),
+            "verification": str(published_verification.resolve()), "verification_sha256": verification_sha256,
             "curseforge": {"mods": args.curseforge_mods, "plugins": args.curseforge_plugins}}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")

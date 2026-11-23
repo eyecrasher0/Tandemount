@@ -90,8 +90,9 @@ Additional upstream use for the client-lifetime repair and capability audit:
   the wire fixture sends ordinary client settings after JoinGame and waits for
   the first native server position before beginning periodic movement frames.
 
-The native report's source digest includes both test runners and both Java
-fixtures, in the documented order. Original-client probes additionally record
+The native report's source digest binds both test runners, both Java fixtures,
+the build, metadata, runtime storage and evidence helpers, and `project.json`.
+Original-client probes additionally record
 client class, metadata, libraries, packet sequence and probe-source digests.
 A native test, received packet, original client method execution and human
 visual review remain distinct evidence. The legacy follower report records its

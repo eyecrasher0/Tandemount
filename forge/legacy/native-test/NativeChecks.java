@@ -162,6 +162,7 @@ public final class NativeChecks {
         System.out.println("[TandemountObserver] {\"phase\":\""+phase+"\",\"joined\":"+joined+",\"horse\":"+call(observerHorse,"getEntityId")
                 +",\"driver\":"+call(observerDriver,"getEntityId")+",\"rider\":"+call(observerRider,"getEntityId")+",\"seat\":"+(joined?call(seat,"getEntityId"):-1)
                 +",\"horse_position\":["+number(observerHorse,"posX")+","+number(observerHorse,"posY")+","+number(observerHorse,"posZ")+"]"
+                +",\"horse_yaw\":"+number(observerHorse,"rotationYaw")
                 +",\"rider_feet\":["+number(observerRider,"posX")+","+feet(observerRider)+","+number(observerRider,"posZ")+"]"
                 +",\"seat_root\":"+(joined?call(root(seat),"getEntityId"):-1)
                 +",\"driver_root\":"+call(root(observerDriver),"getEntityId")

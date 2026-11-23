@@ -29,6 +29,13 @@ client.
 | 1.7.10 | Forge | [`tandemount-forge-1.0.0+1.7.10.jar`][forge-1.7.10] | `mods/` |
 | 1.8.9 | Forge | [`tandemount-forge-1.0.0+1.8.9.jar`][forge-1.8.9] | `mods/` |
 | 1.12.2 | Forge | [`tandemount-forge-1.0.0+1.12.2.jar`][forge-1.12.2] | `mods/` |
+| 1.12.2 | Paper, Spigot | [`tandemount-bukkit-1.0.0+1.12.2.jar`][bukkit-1.12.2] | `plugins/` |
+| 1.16.5 | Fabric | [`tandemount-fabric-1.0.0+1.16.5.jar`][fabric-1.16.5] | `mods/` |
+| 1.16.5 | Forge | [`tandemount-forge-1.0.0+1.16.5.jar`][forge-1.16.5] | `mods/` |
+| 1.19.4 | Fabric | [`tandemount-fabric-1.0.0+1.19.4.jar`][fabric-1.19.4] | `mods/` |
+| 1.19.4 | Forge | [`tandemount-forge-1.0.0+1.19.4.jar`][forge-1.19.4] | `mods/` |
+| 1.20.6 | Fabric | [`tandemount-fabric-1.0.0+1.20.6.jar`][fabric-1.20.6] | `mods/` |
+| 1.20.6 | Forge | [`tandemount-forge-1.0.0+1.20.6.jar`][forge-1.20.6] | `mods/` |
 | 1.20.6 | NeoForge | [`tandemount-neoforge-1.0.0+1.20.6.jar`][neoforge-1.20.6] | `mods/` |
 | 26.3 | Fabric | [`tandemount-fabric-1.0.0+26.3.jar`][fabric-26.3] | `mods/` |
 | 26.3 | Forge | [`tandemount-forge-1.0.0+26.3.jar`][forge-26.3] | `mods/` |
@@ -37,8 +44,10 @@ client.
 
 The release includes corresponding sources and SHA-256 checksums for each
 batch. [GitHub release](https://github.com/eyecrasher0/Tandemount/releases/tag/tandemount-1.0.0) ·
-[Modern mod and Paper verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification.json) ·
-[Legacy Forge verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json)
+[Original verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification.json) ·
+[Legacy Forge verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json) ·
+[Fabric and Forge backport verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-modern-backports.json) ·
+[Bukkit backport verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-bukkit-backports.json)
 
 The build target matrix covers 38 exact Minecraft releases from 1.7.10 through
 26.3 and records upstream platforms and Java requirements for each version.
@@ -47,6 +56,13 @@ The build target matrix covers 38 exact Minecraft releases from 1.7.10 through
 [forge-1.7.10]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.7.10.jar
 [forge-1.8.9]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.8.9.jar
 [forge-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.12.2.jar
+[bukkit-1.12.2]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-bukkit-1.0.0%2B1.12.2.jar
+[fabric-1.16.5]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.16.5.jar
+[forge-1.16.5]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.16.5.jar
+[fabric-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.19.4.jar
+[forge-1.19.4]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.19.4.jar
+[fabric-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B1.20.6.jar
+[forge-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B1.20.6.jar
 [neoforge-1.20.6]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-neoforge-1.0.0%2B1.20.6.jar
 [fabric-26.3]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-fabric-1.0.0%2B26.3.jar
 [forge-26.3]: https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/tandemount-forge-1.0.0%2B26.3.jar

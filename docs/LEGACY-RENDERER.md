@@ -129,10 +129,14 @@ python3 tools/legacy-client-test.py --minecraft 1.7.10 --graph --java /path/to/j
 Schema 2 native reports use `status` for the early-follower checks and record
 the actual horse-root relationship in `protocol_observers.native_attachment`.
 Existing and late observer packets drive separate original-client lifetime and
-picking probes. Named `final_checks` use `{name, passed}`. The full-matrix
-release collector has its own attachment qualification.
-The source binding concatenates, in order: `tools/legacy-native-test.py`,
-`forge/legacy/native-test/NativeChecks.java`, `tools/legacy-client-test.py`, and
-`forge/legacy/client-test/ClientChecks.java`. Operational logs and binaries remain
-outside Git. Forge 1.7.10 has no cancellable `EntityMountEvent`; only that event
-capability is unavailable. All lifecycle checks remain required.
+picking probes. Initial, moved, and adjusted snapshots also check the native
+passenger's feet against the current horse location and yaw. The release
+collector checks the same snapshots and both original-client probes.
+
+The runner and collector hash the same executable inputs, using each relative
+path and its contents separated by NUL bytes. The inputs include both Python
+test runners and their Java fixtures, `tools/legacy-build.py`,
+`tools/project_metadata.py`, `tools/runtime_storage.py`,
+`tools/legacy_evidence.py`, and `project.json`. Operational logs and binaries
+remain outside Git. Forge 1.7.10 has no cancellable `EntityMountEvent`.
+All lifecycle checks remain required.

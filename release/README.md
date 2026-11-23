@@ -18,7 +18,9 @@ objects. This describes only the available pairs and avoids implying that a
 particular platform existed on every Minecraft release. A rectangular mod
 artifact may instead use `minecraft` and `platforms` lists.
 
-Run the gate before creating a publication plan:
+The collector reads `.agents/legacy-native-results.json` by default, the same
+path written by the legacy Forge runner. Run the gate before creating a
+publication plan:
 
 ```sh
 python3 tools/collect_release.py
@@ -44,6 +46,12 @@ test player data, worlds, and downloaded game binaries. The publication plan
 stages this report with the source archive and checksums so the large local SDK
 cache can be removed after uploads have been verified.
 
+The four published 1.0.0 batches have separate source and verification assets.
+For a later batch under that tag, the publication plan uses filenames derived
+from the report digest. The publishers check the staged files and each
+artifact's exact native report before using the plan's asset names.
+[Verified download table](../README.md#choose-your-server-build)
+
 Plugin mount evidence must include a real vanilla-client right-click packet,
 sustained mounting after repeated interactions, and mounted movement. Calling a
 Bukkit interaction event directly does not cover the network handler's choice
@@ -56,6 +64,11 @@ entity's tick method using the received spawn state. Server-side survival and
 an invisible renderer alone cannot prove client survival: vanilla removes an
 AIR falling block before its client/server side check. The client-lifetime
 probe remains distinct from human review of rendered appearance.
+
+Forge 1.7.10, 1.8.9, and 1.12.2 use the approved early follower. Their report
+checks the native passenger position relative to the moving horse, both
+observers' mount relationships, and original-client lifetime and picking for
+each observer.
 
 The Paper 26.3 attachment revision requires both server and received-client
 horse-root relationships, first-rider control, a late observer's complete

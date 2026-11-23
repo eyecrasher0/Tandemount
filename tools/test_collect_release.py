@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from collect_release import LEGACY, MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, legacy_fixture_digest, normalize
+from collect_release import MODERN, MOD_ATTACHMENT, PLUGIN, PLUGIN_ATTACHMENT, legacy_fixture_digest, normalize
 
 
 class NativeCollectionTest(unittest.TestCase):
@@ -59,26 +59,89 @@ class NativeCollectionTest(unittest.TestCase):
                 raw["checks"].remove(name)
                 self.assertIn("settings", normalize(raw, "modern")["incomplete_checks"])
 
-    def legacy(self):
-        return {"minecraft": "1.12.2", "platform": "forge", "sdk": "14.23.5.2864",
-                "artifact_sha256": "c" * 64, "status": "passed", "exit_code": 0,
-                "restart": {"status": "passed"}, "vanilla_socket_login": {"status": "passed"},
-                "synthetic_behavior": {"status": "passed"}, "protocol_observers": {"status": "passed"},
-                "native_checks": [{"name": name, "passed": True}
-                                  for name in sorted({n for v in [*LEGACY.values(), *MOD_ATTACHMENT.values()] for n in v})]}
+    def legacy(self, minecraft="1.12.2"):
+        sdk, carrier = {
+            "1.7.10": ("10.13.4.1614", "signed-size-slime"),
+            "1.8.9": ("11.15.1.2318", "marker-armor-stand"),
+            "1.12.2": ("14.23.5.2864", "area-effect-cloud"),
+        }[minecraft]
+        checks = [
+            "ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
+            "server-native-horse-keeps-first-driver-control", "movement-and-turn-pose-with-driver-preserved",
+            "third-rider-rejected-without-disruption", "normal-native-dismount-cleans-seat",
+            "driver-dismount-cleans-passenger", "cancelled-interaction-no-join",
+            "ordinary-player-settings-permission-denied", "vertical-independent-and-live", "rear-independent-and-live",
+            "nonfinite-config-rejected", "command-chat-has-color-and-style", "command-chat-has-clickable-adjustments",
+            "command-click-adjustment-applies", "missing-settings-use-owner-defaults", "saved-settings-remain-preserved",
+            "fresh-config-uses-owner-defaults", "reset-restores-owner-defaults", "multiple-rides-isolated",
+            "native-disconnect-cleans-seat", "real-vanilla-disconnect-cleans-seat", "same-identity-reconnect-can-ride",
+            "passenger-death-cleans-seat", "driver-death-cleans-seat", "horse-death-cleans-passenger",
+            "native-passenger-dimension-transfer-completes", "native-passenger-world-change-cleans-seat",
+            "native-driver-dimension-transfer-completes", "native-driver-world-change-cleans-seat",
+            "native-passenger-teleport-cleans-seat", "native-driver-teleport-cleans-seat",
+            "native-chunk-unload-cleans-without-reloading", "native-server-stop-cleans-seat",
+            "restart-seat-absent-from-native-world",
+        ]
+        if minecraft != "1.7.10":
+            checks += ["cancelled-dismount-stays-mounted", "cancelled-driver-dismount-keeps-ride"]
+        observers = {"status": "passed", "real_client_interaction_mounted": True,
+                     "native_attachment": {"mode": "early-follower", "shared_horse_root": False}}
+        received = {"seat_spawned": True, "driver_spawned": True, "rider_spawned": True,
+                    "driver_on_horse": True, "rider_on_seat": True, "position_matches_native": True}
+        for phase, horse, yaw, feet in (
+            ("initial", [8, 5, 8], 0, [8, 5.8125, 7.5]),
+            ("movement", [20, 5, 8], 90, [20.5, 5.8125, 8]),
+            ("live_adjustment", [20, 5, 8], 90, [20.5625, 5.875, 8]),
+        ):
+            observers[phase] = {"native": {"joined": True, "horse_position": horse, "horse_yaw": yaw, "rider_feet": feet},
+                                "existing_observer": received.copy(), "late_observer": received.copy()}
+        probe = {"minecraft": minecraft, "carrier": carrier, "status": "passed", "probe_exit_code": 0,
+                 "ticks": 264, "spawn_settling_ticks": 24, "removed": False, "unobstructed_picking": True,
+                 "native_packets_consumed": 300, "official_client_sha256": "d" * 64,
+                 "packet_sequence_sha256": "e" * 64, "probe_report_sha256": "f" * 64}
+        return {"minecraft": minecraft, "platform": "forge", "artifact_sha256": "c" * 64,
+                "server": {"minecraft": minecraft, "platform": "forge", "sdk": sdk},
+                "status": "passed", "exit_code": 0, "restart": {"status": "passed"},
+                "vanilla_socket_login": {"status": "passed", "ordered_play_login": True},
+                "network_policy": {"status": "not-applicable" if minecraft == "1.12.2" else "passed"},
+                "synthetic_behavior": {"status": "passed", "checks": [{"name": name, "passed": True} for name in checks]},
+                "protocol_observers": observers, "client_lifetime": {role: probe.copy() for role in ("existing", "late")},
+                "final_checks": [{"name": "vanilla-client-seat-survives-native-ticks", "passed": True}]}
 
-    def test_legacy_protocol_login_and_follower_cannot_pass_final_attachment(self):
-        self.assertEqual(normalize(self.legacy(), "legacy")["result"], "pass")
-        for version in ("1.7.10", "1.8.9", "1.12.2"):
-            with self.subTest(minecraft=version):
+    def test_all_three_exact_legacy_forge_followers_qualify(self):
+        for minecraft in ("1.7.10", "1.8.9", "1.12.2"):
+            with self.subTest(minecraft=minecraft):
+                report = normalize(self.legacy(minecraft), "legacy")
+                self.assertEqual(report["result"], "pass", report)
+                self.assertEqual(report["attachment_mode"], "early-follower")
+        self.assertEqual(normalize(self.legacy("1.7.10"), "legacy")["checks"]["cancelled-dismount"], "not-applicable")
+
+    def test_legacy_requires_real_follower_geometry_before_believing_observers(self):
+        for phase, feet in (("initial", [8, 5, 7.5]), ("movement", [8, 5.8125, 7.5]),
+                            ("live_adjustment", [20.5, 5.875, 7.9375])):
+            with self.subTest(phase=phase):
                 raw = self.legacy()
-                raw["minecraft"] = version
-                missing = {name for required in MOD_ATTACHMENT.values() for name in required}
-                raw["native_checks"] = [item for item in raw["native_checks"] if item["name"] not in missing]
+                raw["protocol_observers"][phase]["native"]["rider_feet"] = feet
                 report = normalize(raw, "legacy")
                 self.assertEqual(report["result"], "fail")
-                self.assertIn("mount", report["incomplete_checks"])
                 self.assertIn("late-observer", report["incomplete_checks"])
+
+    def test_legacy_requires_both_received_mounts_and_both_original_client_probes(self):
+        for role, edge in (("existing", "driver_on_horse"), ("late", "rider_on_seat")):
+            with self.subTest(observer=role):
+                raw = self.legacy()
+                del raw["protocol_observers"]["movement"][role + "_observer"][edge]
+                self.assertIn("late-observer", normalize(raw, "legacy")["incomplete_checks"])
+                raw = self.legacy()
+                del raw["client_lifetime"][role]
+                self.assertIn("mount", normalize(raw, "legacy")["incomplete_checks"])
+
+    def test_legacy_original_client_pass_requires_complete_replay(self):
+        for field, value in (("ticks", 263), ("unobstructed_picking", False), ("packet_sequence_sha256", "")):
+            with self.subTest(field=field):
+                raw = self.legacy()
+                raw["client_lifetime"]["late"][field] = value
+                self.assertIn("mount", normalize(raw, "legacy")["incomplete_checks"])
 
     def test_failed_final_client_probe_overrides_legacy_server_success(self):
         raw = self.legacy()
@@ -206,25 +269,30 @@ class NativeCollectionTest(unittest.TestCase):
 
 
 class LegacyFixtureBindingTest(unittest.TestCase):
+    inputs = ("tools/legacy-native-test.py", "forge/legacy/native-test/NativeChecks.java", "tools/legacy-client-test.py",
+              "forge/legacy/client-test/ClientChecks.java", "tools/legacy-build.py", "tools/project_metadata.py",
+              "tools/runtime_storage.py", "tools/legacy_evidence.py", "project.json")
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        for name in self.inputs:
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(name.encode())
+
     def test_each_native_and_original_client_input_invalidates_evidence(self):
-        paths = ("tools/legacy-native-test.py", "forge/legacy/native-test/NativeChecks.java",
-                 "tools/legacy-client-test.py", "forge/legacy/client-test/ClientChecks.java")
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            for name in paths:
-                path = root / name
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(name.encode())
-            for name in paths:
-                with self.subTest(input=name):
-                    before = legacy_fixture_digest(root)
-                    (root / name).write_bytes(b"changed executable probe input")
-                    self.assertNotEqual(before, legacy_fixture_digest(root))
+        for name in self.inputs:
+            with self.subTest(input=name):
+                before = legacy_fixture_digest(self.root)
+                (self.root / name).write_bytes(b"changed executable probe input")
+                self.assertNotEqual(before, legacy_fixture_digest(self.root))
 
     def test_missing_original_client_probe_cannot_use_the_old_native_digest(self):
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaises(FileNotFoundError):
-                legacy_fixture_digest(Path(directory))
+        (self.root / "forge/legacy/client-test/ClientChecks.java").unlink()
+        with self.assertRaises(FileNotFoundError):
+            legacy_fixture_digest(self.root)
 
 
 if __name__ == "__main__":

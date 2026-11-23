@@ -2,6 +2,7 @@
 
 from email import policy
 from email.parser import BytesParser
+import hashlib
 import io
 import json
 from pathlib import Path
@@ -17,18 +18,20 @@ class ModrinthPublishTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.project = json.loads((publish_modrinth.ROOT / "release/project.json").read_text())
+        cls.plan = {"tag": "tandemount-1.0.0", "source": {"file": "dist/candidate-source.zip"},
+                    "verification": "dist/candidate-verification.json"}
 
     def test_plugin_and_mod_versions_get_exact_loader_and_game_tags(self):
         plugin = {
             "family": "plugin", "platforms": ["folia", "paper", "spigot"],
-            "minecraft": ["1.21.11"], "version_number": "1.0.0+plugin-mc1.21.11",
+            "minecraft": ["1.21.11"], "version_number": "1.0.0+plugin-mc1.21.11", "sha256": "a" * 64,
         }
         mod = {
             "family": "neoforge", "platforms": ["neoforge"],
-            "minecraft": ["26.3"], "version_number": "1.0.0+neoforge-mc26.3",
+            "minecraft": ["26.3"], "version_number": "1.0.0+neoforge-mc26.3", "sha256": "b" * 64,
         }
-        plugin_payload = publish_modrinth.version_payload("AbCd1234", plugin, self.project)
-        mod_payload = publish_modrinth.version_payload("AbCd1234", mod, self.project)
+        plugin_payload = publish_modrinth.version_payload("AbCd1234", plugin, self.project, self.plan)
+        mod_payload = publish_modrinth.version_payload("AbCd1234", mod, self.project, self.plan)
         self.assertEqual(plugin_payload["loaders"], ["folia", "paper", "spigot"])
         self.assertEqual(plugin_payload["game_versions"], ["1.21.11"])
         self.assertEqual(mod_payload["loaders"], ["neoforge"])
@@ -89,18 +92,81 @@ class ModrinthPublishTests(unittest.TestCase):
 
     def test_version_payload_links_its_published_source_and_verification(self):
         batches = (
-            (("1.7.10", "1.8.9", "1.12.2"), "Tandemount-1.0.0-legacy-forge-source.zip", "verification-legacy-forge.json"),
-            (("26.3",), "Tandemount-1.0.0-source.zip", "verification.json"),
+            ("26.3", "forge", ["forge"], "6185d9c41ecb91b85701f1d59a6b8f795f865ff5c1cb2753171b702324e4f897",
+             "Tandemount-1.0.0-source.zip", "verification.json"),
+            ("1.8.9", "forge", ["forge"], "8d7a8ce46b8095e72094095a2f52ac199c1cad45aa3339b6c75c9e8bd8b3e14f",
+             "Tandemount-1.0.0-legacy-forge-source.zip", "verification-legacy-forge.json"),
+            ("1.19.4", "forge", ["forge"], "4c3b0004b97483fd302f66264467fc283abaaf5ae63ef4c1684d9e92a21c7528",
+             "Tandemount-1.0.0-modern-backports-source.zip", "verification-modern-backports.json"),
+            ("1.12.2", "plugin", ["paper", "spigot"], "42803114852a875e4a7079988b00226b6b06463510f7da2d65fcb5208efa35e6",
+             "Tandemount-1.0.0-bukkit-backports-source.zip", "verification-bukkit-backports.json"),
         )
         assets = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
-        for versions, source, verification in batches:
-            for mc in versions:
-                with self.subTest(minecraft=mc):
-                    entry = {"family": "forge", "minecraft": [mc], "version_number": f"1.0.0+forge-mc{mc}"}
-                    changelog = publish_modrinth.version_payload("Project1", entry, self.project)["changelog"]
-                    self.assertIn(f"[Complete GPL source]({assets}/{source})", changelog)
-                    self.assertIn(f"[Verification report]({assets}/{verification})", changelog)
-                    self.assertIn("/blob/tandemount-1.0.0/docs/INSTALL.md", changelog)
+        for mc, family, platforms, digest, source, verification in batches:
+            with self.subTest(minecraft=mc, family=family):
+                entry = {"family": family, "minecraft": [mc], "platforms": platforms,
+                         "version_number": f"1.0.0+{family}-mc{mc}", "sha256": digest}
+                changelog = publish_modrinth.version_payload("Project1", entry, self.project, self.plan)["changelog"]
+                self.assertIn(f"[Complete GPL source]({assets}/{source})", changelog)
+                self.assertIn(f"[Verification report]({assets}/{verification})", changelog)
+                self.assertIn("/blob/tandemount-1.0.0/docs/INSTALL.md", changelog)
+
+    def test_changed_bytes_or_additional_core_use_the_plan_assets(self):
+        cases = (
+            {"family": "forge", "minecraft": ["1.19.4"], "platforms": ["forge"], "sha256": "d" * 64},
+            {"family": "plugin", "minecraft": ["26.3"], "platforms": ["paper", "folia"],
+             "sha256": "01d27648fb0bdba6377e213c029ddcdb02dadc5008756bb3e2f52f866fe3fc04"},
+        )
+        assets = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
+        for entry in cases:
+            with self.subTest(entry=entry):
+                changelog = publish_modrinth.release_changelog(self.project, entry, self.plan)
+                self.assertIn(f"[Complete GPL source]({assets}/candidate-source.zip)", changelog)
+                self.assertIn(f"[Verification report]({assets}/candidate-verification.json)", changelog)
+
+    def test_plan_verifies_staged_source_and_exact_native_report(self):
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            archive = directory / "source-candidate.zip"
+            archive.write_bytes(b"source archive for this commit")
+            artifact = directory / "forge.jar"
+            artifact.write_bytes(b"audited Forge artifact")
+            manifest = directory / "artifacts.json"
+            manifest.write_bytes(b'{"schema":1}')
+            verification = directory / "verification-candidate.json"
+            commit = "a" * 40
+            checksums = {algorithm: hashlib.new(algorithm, artifact.read_bytes()).hexdigest()
+                         for algorithm in ("sha1", "sha256", "sha512")}
+            report = {"minecraft": "1.19.4", "platform": "forge", "result": "pass", "artifact_sha256": checksums["sha256"]}
+            plan = {"schema": 1, "audit": {"result": "pass", "artifacts": 1}, "tag": "tandemount-1.0.0",
+                    "manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+                    "source": {"file": str(archive), "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(), "source_commit": commit},
+                    "verification": str(verification),
+                    "entries": [{"id": "forge-1.19.4", "family": "forge", "minecraft": ["1.19.4"], "platforms": ["forge"],
+                                 "file": str(artifact), "version_number": "1.0.0+forge-mc1.19.4", **checksums}]}
+            matrix = {"targets": [{"minecraft": "1.19.4", "platforms": {"forge": {"available": True}}}]}
+
+            def store_report():
+                verification.write_text(json.dumps({"result": "pass", "source_commit": commit, "native_reports": [report]}))
+                plan["verification_sha256"] = hashlib.sha256(verification.read_bytes()).hexdigest()
+
+            def validate():
+                with patch("publish_modrinth.subprocess.check_output", side_effect=[commit, ""]):
+                    return publish_modrinth.validate_plan(plan, matrix, manifest, self.project)
+
+            store_report()
+            self.assertEqual(validate(), 1)
+            archive.write_bytes(b"changed archive")
+            with self.assertRaisesRegex(ValueError, "source archive SHA-256 mismatch"):
+                validate()
+            archive.write_bytes(b"source archive for this commit")
+            verification.write_bytes(b"changed verification report")
+            with self.assertRaisesRegex(ValueError, "verification report SHA-256 mismatch"):
+                validate()
+            report["artifact_sha256"] = "f" * 64
+            store_report()
+            with self.assertRaisesRegex(ValueError, "does not cover the staged artifact"):
+                validate()
 
     def test_provider_description_resolves_documents_modules_and_artwork_on_main(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -108,8 +174,7 @@ class ModrinthPublishTests(unittest.TestCase):
             (root / "bukkit").mkdir()
             (root / 'README.md').write_text(
                 '[Install](docs/INSTALL.md) [Bukkit](bukkit) [License](https://example.test/license) [Here](#section)\n'
-                '<img src="branding/icon.png" width="128" alt="Tandemount">\n'
-                '![Tandemount](./branding/icon.png)\n',
+                '<img src="branding/icon.png" width="128" alt="Tandemount">\n',
                 encoding="utf-8",
             )
             with patch('publish_modrinth.ROOT', root):
@@ -118,7 +183,6 @@ class ModrinthPublishTests(unittest.TestCase):
         self.assertIn('[Bukkit](https://github.com/eyecrasher0/Tandemount/tree/main/bukkit)', text)
         icon = "https://github.com/eyecrasher0/Tandemount/raw/main/branding/icon.png"
         self.assertIn(f'<img src="{icon}" width="128" alt="Tandemount">', text)
-        self.assertIn(f'![Tandemount]({icon})', text)
         self.assertIn('[License](https://example.test/license)', text)
         self.assertIn('[Here](#section)', text)
 

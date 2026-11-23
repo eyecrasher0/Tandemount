@@ -74,7 +74,7 @@ def multipart(metadata, path):
     return body, f"multipart/form-data; boundary={boundary}"
 
 
-def metadata_for(entry, project, version_names):
+def metadata_for(entry, project, version_names, plan):
     family = entry["family"]
     mc = entry["minecraft"][0]
     platform_names = {"paper": "Paper", "spigot": "Spigot", "purpur": "Purpur", "folia": "Folia",
@@ -84,7 +84,7 @@ def metadata_for(entry, project, version_names):
         raise ValueError("Unverified CurseForge game version names")
     implementation = ", ".join(platform_names[name] for name in entry["platforms"])
     return {
-        "changelog": publish_modrinth.release_changelog(project, entry),
+        "changelog": publish_modrinth.release_changelog(project, entry, plan),
         "changelogType": "markdown",
         "displayName": f"Tandemount {project['version']} | {implementation} | Minecraft {mc}",
         # The documented names field avoids confusing equal version names
@@ -130,7 +130,7 @@ def main():
         plan = json.loads(args.plan.read_text(encoding="utf-8"))
         matrix = json.loads((ROOT / "platforms.json").read_text(encoding="utf-8"))
         project = json.loads((ROOT / "release/project.json").read_text(encoding="utf-8"))
-        targets = publish_modrinth.validate_plan(plan, matrix, args.manifest)
+        targets = publish_modrinth.validate_plan(plan, matrix, args.manifest, project)
         summary = {"mode": "apply" if args.apply else "dry-run", "entries": len(plan["entries"]),
                    "targets": targets,
                    "projects": {"mods": args.mods_project_id, "plugins": args.plugins_project_id}}
@@ -166,7 +166,7 @@ def main():
                     raise ValueError("Unknown CurseForge ledger state for " + key)
 
             project_id = args.plugins_project_id if entry["family"] == "plugin" else args.mods_project_id
-            payload = metadata_for(entry, project, version_names)
+            payload = metadata_for(entry, project, version_names, plan)
             state["files"][key] = {"status": "pending", "sha256": file_hash,
                                    "project_id": project_id, "display_name": payload["displayName"]}
             write_state(args.state, state)

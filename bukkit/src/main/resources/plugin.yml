@@ -3,7 +3,7 @@ version: '${projectVersion}'
 main: dev.eyecrasher.tandemount.TandemountPlugin
 author: EyeCrasher
 description: Share an ordinary horse with a second rider. Server only.
-website: https://github.com/EyeCrasher/Tandemount
+website: https://github.com/eyecrasher0/Tandemount
 folia-supported: true
 api-version: '1.13'
 commands:

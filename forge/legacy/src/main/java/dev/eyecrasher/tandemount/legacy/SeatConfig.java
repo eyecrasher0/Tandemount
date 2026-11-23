@@ -3,7 +3,6 @@
 package dev.eyecrasher.tandemount.legacy;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
@@ -78,13 +77,7 @@ final class SeatConfig {
                 return super.put(key, value);
             }
         };
-        if (Files.exists(path)) for (String line : Files.readAllLines(path, StandardCharsets.ISO_8859_1)) {
-            String stripped = line.trim();
-            if (stripped.isEmpty() || stripped.startsWith("#") || stripped.startsWith("!")) continue;
-            if (!stripped.matches("(?:[^\\\\=:\\s]|\\\\.)+\\s*[:=].*") || stripped.endsWith("\\"))
-                throw new IllegalArgumentException("Expected one key=value setting per line.");
-            p.load(new StringReader(line));
-        }
+        if (Files.exists(path)) try (InputStream in = Files.newInputStream(path)) { p.load(in); }
         return new SeatConfig(p);
     }
     void save(Path path) throws IOException {

@@ -3,8 +3,8 @@
 Choose a download only if the release table lists your exact Minecraft release
 and server platform. [Verified 1.0.0 downloads](../README.md#choose-your-server-build)
 
-Put the Paper JAR in `plugins/` or the Fabric, Forge, or NeoForge JAR in `mods/`,
-then start the server normally. Clients need no Tandemount installation, resource
+Put the Paper or Spigot JAR in `plugins/` or the Fabric, Forge, or NeoForge JAR
+in `mods/`, then start the server normally. Clients need no Tandemount installation, resource
 pack, or custom entity registry. Do not install the native-test fixture JARs. A
 modded server may still require client mods because of its other installed mods.
 

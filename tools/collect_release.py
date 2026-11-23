@@ -10,6 +10,8 @@ import subprocess
 
 from matrix_verify import sources
 from attachment_evidence import passed_probe
+from legacy_evidence import (LEGACY_CARRIERS, LEGACY_REPORT, OBSERVER_OFFSETS, horse_moved,
+                             legacy_fixture_digest, lifetime_passed, observer_snapshot_passed)
 from release_audit import ROOT, REQUIRED_CHECKS, PLUGIN_PLATFORMS, audit, digest, unavailable_check
 
 
@@ -82,11 +84,11 @@ PLUGIN_ATTACHMENT = {
 LEGACY = {
     "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
               "vanilla-client-seat-survives-native-ticks"),
-    "driver-control": ("movement-and-turn-pose-with-driver-preserved",),
+    "driver-control": ("movement-and-turn-pose-with-driver-preserved", "server-native-horse-keeps-first-driver-control"),
     "third-rider-rejected": ("third-rider-rejected-without-disruption",),
     "dismount": ("normal-native-dismount-cleans-seat", "driver-dismount-cleans-passenger"),
     "cancelled-interaction": ("cancelled-interaction-no-join",),
-    "cancelled-dismount": ("cancelled-dismount-stays-mounted",),
+    "cancelled-dismount": ("cancelled-dismount-stays-mounted", "cancelled-driver-dismount-keeps-ride"),
     "permissions": ("ordinary-player-settings-permission-denied",),
     "settings": ("vertical-independent-and-live", "rear-independent-and-live", "nonfinite-config-rejected") + FINAL_SETTINGS,
     "late-observer": ("protocol-observers-passed",),
@@ -119,6 +121,7 @@ def index_assertions(items, name_key="name", pass_key="passed", success=True):
 
 def normalize(raw, family):
     """Require named behavioral outcomes; an overall PASS alone is insufficient."""
+    server = raw.get("server", {})
     if family == "modern":
         observed = {name: True for name in raw.get("checks", [])}
         observed.update({name: True for name in raw.get("restart_fixture", {}).get("checks", [])})
@@ -143,14 +146,32 @@ def normalize(raw, family):
         items = (raw.get("native_checks", []) + raw.get("synthetic_behavior", {}).get("checks", [])
                  + raw.get("restart", {}).get("checks", []) + raw.get("final_checks", []))
         observed = index_assertions(items)
-        observers = raw.get("protocol_observers", {})
-        observed["protocol-observers-passed"] = isinstance(observers, dict) and observers.get("status") == "passed"
-        good = (raw.get("status") == "passed" and raw.get("exit_code") == 0
+        observers = raw.get("protocol_observers")
+        if not isinstance(observers, dict):
+            observers = {}
+        attachment = observers.get("native_attachment", {})
+        minecraft = raw["minecraft"]
+        observed["protocol-observers-passed"] = (
+            observed.get("protocol-observers-passed", True) and observers.get("status") == "passed"
+            and observers.get("real_client_interaction_mounted") is True
+            and attachment.get("mode") == "early-follower" and attachment.get("shared_horse_root") is False
+            and all(observer_snapshot_passed(observers.get(phase, {}), phase) for phase in OBSERVER_OFFSETS)
+            and horse_moved(observers["initial"]["native"], observers["movement"]["native"])
+        )
+        observed["vanilla-client-seat-survives-native-ticks"] = (
+            observed.get("vanilla-client-seat-survives-native-ticks") is True
+            and lifetime_passed(raw.get("client_lifetime", {}), minecraft)
+        )
+        login = raw.get("vanilla_socket_login", {})
+        good = (minecraft in LEGACY_CARRIERS and raw["platform"] == "forge"
+                and server.get("minecraft") == minecraft and server.get("platform") == "forge"
+                and raw.get("status") == "passed" and raw.get("exit_code") == 0
                 and raw.get("restart", {}).get("status") == "passed"
-                and raw.get("vanilla_socket_login", {}).get("status") == "passed"
+                and login.get("status") == "passed" and login.get("ordered_play_login") is True
                 and raw.get("synthetic_behavior", {}).get("status") == "passed"
-                and bool(items) and all(observed.values()))
-        groups = with_attachment(LEGACY, MOD_ATTACHMENT)
+                and raw.get("network_policy", {}).get("status") == ("not-applicable" if minecraft == "1.12.2" else "passed")
+                and all(observed.values()))
+        groups = LEGACY
     else:
         raise ValueError("Unknown native report family: " + family)
     if family in {"modern", "plugin"}:
@@ -173,10 +194,11 @@ def normalize(raw, family):
         if capability.get("status") == "not-applicable" and capability.get("reason"):
             checks["cancelled-dismount"] = "not-applicable"
             report["not_applicable"]["cancelled-dismount"] = capability["reason"]
-    if family == "legacy" and raw["minecraft"] == "1.7.10":
-        checks["cancelled-dismount"] = "not-applicable"
-        report["not_applicable"]["cancelled-dismount"] = "Forge 1.7.10 does not expose a cancellable EntityMountEvent; ordinary native dismount was tested."
-    server = raw.get("server", {})
+    if family == "legacy":
+        report["attachment_mode"] = attachment.get("mode")
+        if raw["minecraft"] == "1.7.10":
+            checks["cancelled-dismount"] = "not-applicable"
+            report["not_applicable"]["cancelled-dismount"] = "Forge 1.7.10 does not expose a cancellable EntityMountEvent; ordinary native dismount was tested."
     identity = server.get("build", server.get("sdk", server.get("loader", raw.get("sdk"))))
     report["server_version"] = f"{raw['platform']} {identity} / Minecraft {raw['minecraft']}" if identity else ""
     for key in ("world_change_fixture", "unloaded_chunk_fixture", "renderer_analysis", "official_client_attachment"):
@@ -203,17 +225,11 @@ def load_matrix_record(directory, key, mode):
     return raw, native_path, artifact
 
 
-def legacy_fixture_digest(root):
-    paths = ("tools/legacy-native-test.py", "forge/legacy/native-test/NativeChecks.java",
-             "tools/legacy-client-test.py", "forge/legacy/client-test/ClientChecks.java")
-    return hashlib.sha256(b"".join((root / path).read_bytes() for path in paths)).hexdigest()
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--modern", type=Path, default=ROOT / ".agents/matrix-modern")
     parser.add_argument("--plugins", type=Path, default=ROOT / ".agents/matrix-plugins")
-    parser.add_argument("--legacy", type=Path, default=ROOT / ".agents/legacy-final-native.json")
+    parser.add_argument("--legacy", type=Path, default=ROOT / LEGACY_REPORT)
     parser.add_argument("--evidence", type=Path, default=ROOT / ".agents/native")
     parser.add_argument("--output", type=Path, default=ROOT / "build/release/artifacts.json")
     args = parser.parse_args()
@@ -236,7 +252,7 @@ def main():
                 if platform in PLUGIN_PLATFORMS:
                     raw, native_path, artifact = load_matrix_record(args.plugins, key, "plugins")
                     family, identifier = "plugin", "plugin-" + mc
-                elif mc in {"1.7.10", "1.8.9", "1.12.2"}:
+                elif platform == "forge" and mc in LEGACY_CARRIERS:
                     if legacy is None:
                         test_sha = legacy_fixture_digest(ROOT)
                         legacy = {r["minecraft"]: r for r in json.loads(args.legacy.read_text())["targets"]}
