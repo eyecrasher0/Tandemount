@@ -47,6 +47,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
     private String wireCancelledEvent;
     private org.bukkit.permissions.PermissionAttachment wireAdmin;
     private Snapshot wireSettings;
+    private Location captureStart;
 
     @Override public void onEnable() {
         tandem = (TandemountPlugin)getServer().getPluginManager().getPlugin("Tandemount");
@@ -142,6 +143,8 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             if (args[0].equals("wire-cancelled")) wireCancelled(20);
             if (args[0].equals("wire-mounted")) wireMounted();
             if (args[0].equals("wire-menu-finish")) wireMenuFinish(100);
+            if (args[0].equals("wire-stationary")) beginLegacyStationaryCapture();
+            if (args[0].equals("wire-drive")) endLegacyStationaryCapture();
             if (args[0].equals("late")) late();
             if (args[0].equals("saveprobe")) saveprobe();
             if (args[0].equals("finish")) finish();
@@ -514,6 +517,23 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             }});
         } catch (Throwable failure) { failed("mounted", failure); }
     }
+    private void beginLegacyStationaryCapture() {
+        horse.setVelocity(new org.bukkit.util.Vector());
+        later(8, new Runnable() { public void run() {
+            captureStart = horse.getLocation();
+            state("wire-stationary-ready", "");
+        }});
+    }
+
+    private void endLegacyStationaryCapture() {
+        double distance = captureStart.distanceSquared(horse.getLocation());
+        record("stationary-client-capture-keeps-the-shared-ride",
+                distance < 0.0001 && driver.getVehicle() == horse && rider.isInsideVehicle() && countSeats() == 1,
+                "Squared native horse movement during capture: " + distance);
+        driveStart = horse.getLocation();
+        state("wire-drive-ready", "");
+    }
+
     private void late() {
         later(8, new Runnable() { public void run() {
             try {
@@ -535,6 +555,9 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     rider.leaveVehicle();
                     later(3, new Runnable() { public void run() {
                         require("passenger-dismount-cleans-seat", !rider.isInsideVehicle() && countSeats() == 0 && driver.getVehicle() == horse);
+                    if (Boolean.TRUE.equals(field(field(tandem, "nativeAccess"), "oldest")))
+                        require("legacy-dismount-restores-passenger-collision",
+                                Boolean.TRUE.equals(field(invoke(rider, "getHandle"), "collidesWithEntities")));
                         interact(rider);
                         later(3, new Runnable() { public void run() {
                             require("retry-after-dismount", rider.isInsideVehicle() && countSeats() == 1);

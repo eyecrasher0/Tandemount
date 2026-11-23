@@ -250,6 +250,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             } else {
                 nativeAccess.addSeat(horse, seat);
                 if (!nativeAccess.mount(seat, player) || player.getVehicle() != seat) { close(ride); return; }
+                nativeAccess.suppressLegacyPassengerPush(ride);
                 nativeAccess.place(seat);
                 ride.passengerOffset = player.getLocation().getY() - seat.getLocation().getY();
                 nativeAccess.place(seat);
@@ -349,6 +350,8 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         }
         catch (RuntimeException failure) { debug("Native seat removal details", failure); }
         finally {
+            try { nativeAccess.restoreLegacyPassengerPush(ride); }
+            catch (IllegalAccessException failure) { debug("Legacy passenger push restoration details", failure); }
             horses.remove(ride.horse.getUniqueId(), ride);
             riders.remove(ride.driver.getUniqueId(), ride); riders.remove(ride.rider.getUniqueId(), ride);
             NativeSeat.RIDES.remove(ride.nativeSeat, ride);

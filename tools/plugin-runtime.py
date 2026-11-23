@@ -551,6 +551,18 @@ def main():
             legacy_capture = args.minecraft in {'1.7.10', '1.12.2'}
             handled = set()
 
+            def fixture_transition(command, expected):
+                command_line('tmfixture ' + command)
+                transition_deadline = min(deadline, time.monotonic() + 10)
+                while time.monotonic() < transition_deadline:
+                    current = phase()
+                    if current.get('phase') == expected:
+                        return
+                    if current.get('phase') == 'failed':
+                        raise RuntimeError('Fixture failed: ' + str(current))
+                    time.sleep(.05)
+                raise TimeoutError('No native fixture transition to ' + expected)
+
             def drive_horse(value):
                 horse_id, x, y, z, yaw, pitch = map(float, value.split(','))
                 for step in range(30):
@@ -598,9 +610,13 @@ def main():
                     time.sleep(3)
                     graph = properties(fixture_config / 'initial-graph.properties')
                     if legacy_capture:
+                        if args.minecraft == '1.7.10':
+                            fixture_transition('wire-stationary', 'wire-stationary-ready')
                         settled_at = time.monotonic_ns()
                         time.sleep(5)
                         legacy_observation = ([clients[2], late], graph, settled_at, time.monotonic_ns())
+                        if args.minecraft == '1.7.10':
+                            fixture_transition('wire-drive', 'wire-drive-ready')
                         drive_horse(current['value'])
                     result['packet_assertions'] = packet_checks([clients[2], late], graph, args.minecraft)
                     result.setdefault('client_attachment_windows', {})['late_end_ns'] = time.monotonic_ns()

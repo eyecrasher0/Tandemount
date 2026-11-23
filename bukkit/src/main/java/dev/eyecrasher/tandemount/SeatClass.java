@@ -63,7 +63,8 @@ final class SeatClass extends ClassLoader {
             boolean damage = false;
             for (Class<?> arg : args) if (arg.getSimpleName().equals("DamageSource")) damage = true;
             boolean asyncTransfer = args.length == 0 && m.getName().equals("canTeleportAsync");
-            if ((save || damage || asyncTransfer) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
+            boolean oldSeatPush = oldest && args.length == 0 && m.getName().equals("S");
+            if ((save || damage || asyncTransfer || oldSeatPush) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
         }
         boolean tick = explicitTick != null;
         if (explicitTick != null) writer.tick(explicitTick);

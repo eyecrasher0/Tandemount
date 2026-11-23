@@ -188,9 +188,12 @@ transfer entry points:
 | Spigot 1.12.2 | BuildTools revision `1573k`; CraftBukkit `f4830a1687f37a4ee7c0bd08a30d925fbe0f9349`, Spigot `79a30d7d26b9078dbf6071cbbfa060673bf117b2`, BuildData `be360cc298a06b5355ecd057f5b1feb894a73f0f` | `63fdb6df3327787f91fa469fd1cb323466e4b0ee3a3bdacb0ef2347f83cc9a08` |
 | Folia 1.21.11 build 14 | [PaperMC distribution](https://fill-data.papermc.io/v1/objects/f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39/folia-1.21.11-14.jar), distribution SHA-256 `f52c408490a0225611e67907a3ca19f7e6da2c6bc899e715d5f46844e7103c39` | Patched SDK `6bfd94ffd8649cf416d247e849214667ac91759699a4c3536eef2307277c4e33` |
 
-Paper 1.7.10 exposes `CraftFallingSand.getHandle(): EntityFallingBlock` and a
-per-entity final `Entity.boundingBox`. Its `AxisAlignedBB.b(DDDDDD)` mutates
-that instance in place. No final reference or static box is written.
+The Paper 1.7.10 seat uses the vanilla slime type. The per-entity
+`Entity.boundingBox` is final and its `AxisAlignedBB.b(DDDDDD)` mutates the
+existing instance. The same SDK exposes `EntityPlayer.collidesWithEntities`
+for both directions of its native entity push loop. The detached passenger
+uses that flag during the shared ride. Cleanup restores the passenger's
+original value, and the generated seat itself opts out through `S()`.
 
 Paper and Spigot 1.12.2 `EntityPlayer.a(Entity, boolean)` call the native player
 connection's position-correction method after mounting. That method emits an

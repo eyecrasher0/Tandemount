@@ -25,6 +25,7 @@ final class NativeAccess {
     private final Field bounds;
     private final Constructor<?> boxConstructor;
     private final Method boxMutator;
+    private final Field legacyPlayerCollision;
     final Method position;
     final int legacySeatType;
     private final String oldPackage;
@@ -88,6 +89,8 @@ final class NativeAccess {
         boxConstructor = mutate == null ? box.getType().getConstructor(double.class, double.class,
                 double.class, double.class, double.class, double.class) : null;
         oldPackage = entityClass.getPackage().getName();
+        legacyPlayerCollision = oldest
+                ? Class.forName(oldPackage + ".EntityPlayer").getField("collidesWithEntities") : null;
         int numericType = -1;
         if (oldPackage.startsWith("net.minecraft.server.v")) {
             Class<?> types = Class.forName(oldPackage + ".EntityTypes");
@@ -218,6 +221,23 @@ final class NativeAccess {
         Reflect.call(position, seat, at.getX(), at.getY(), at.getZ());
         shape(seat);
         return bukkit;
+    }
+
+    void suppressLegacyPassengerPush(Ride ride) throws ReflectiveOperationException {
+        if (legacyPlayerCollision == null) return;
+        // The detached 1.7 passenger can overlap the horse's native push box.
+        Object passenger = Reflect.handle(ride.rider);
+        if (legacyPlayerCollision.getBoolean(passenger)) {
+            legacyPlayerCollision.setBoolean(passenger, false);
+            ride.legacyCollisionPlayer = passenger;
+        }
+    }
+
+    void restoreLegacyPassengerPush(Ride ride) throws IllegalAccessException {
+        if (ride.legacyCollisionPlayer != null) {
+            legacyPlayerCollision.setBoolean(ride.legacyCollisionPlayer, true);
+            ride.legacyCollisionPlayer = null;
+        }
     }
 
     private Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
