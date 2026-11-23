@@ -64,9 +64,13 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
                     MethodInsnNode call=(MethodInsnNode)instruction;
                     if (!call.name.equals("schedule") || !call.desc.startsWith("(Ljava/util/concurrent/Callable;JLjava/util/concurrent/TimeUnit;)")) continue;
                     InsnList delay=new InsnList();
+                    LabelNode upstream=new LabelNode();
+                    delay.add(new MethodInsnNode(INVOKESTATIC,HOOK,"oldestVanillaAllowed","()Z",false));
+                    delay.add(new JumpInsnNode(IFEQ,upstream));
                     delay.add(new InsnNode(POP)); delay.add(new InsnNode(POP2));
                     delay.add(new LdcInsnNode(5L));
                     delay.add(new FieldInsnNode(GETSTATIC,"java/util/concurrent/TimeUnit","SECONDS","Ljava/util/concurrent/TimeUnit;"));
+                    delay.add(upstream);
                     m.instructions.insertBefore(call,delay); changed=true;
                 }
             }
@@ -113,7 +117,6 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
             }
         }
         if (!changed) return bytes;
-        // Each injection leaves the original operand stack unchanged; preserve existing frames.
-        ClassWriter out=new ClassWriter(ClassWriter.COMPUTE_MAXS);c.accept(out);return out.toByteArray();
+        ClassWriter out=new ClassWriter(vanillaWaiter?ClassWriter.COMPUTE_FRAMES:ClassWriter.COMPUTE_MAXS);c.accept(out);return out.toByteArray();
     }
 }

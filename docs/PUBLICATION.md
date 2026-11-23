@@ -1,9 +1,8 @@
 # Publication status
 
-GitHub hosts 15 Tandemount 1.0.0 JARs for the 16 exact Minecraft and platform
-pairs in the download table. The original, legacy Forge, Fabric and Forge
-backport, and Bukkit backport batches each have corresponding source archives,
-verification reports, and SHA-256 checksums.
+GitHub hosts 19 Tandemount 1.0.0 JARs for the 22 exact Minecraft and platform
+pairs in the download table. Each published batch links to its corresponding
+source archive, verification report, and SHA-256 checksums.
 Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·
 [Build targets](../BACKPORTS.md)
 
@@ -82,6 +81,5 @@ a conflicting source, another license, or existing files block that initializati
 The publisher keeps the installed icon and verifies the resulting source URL
 and license after a refresh. Project description links point to `main`.
 Both publishers link to the source archive and verification report for the
-JAR's SHA-256 and exact platforms. New artifacts use the checked archive and
-report named by the publication plan. Upload those assets under the plan's tag
-before publishing the storefront versions.
+JAR's SHA-256 and exact platforms. New releases use the checked archive and
+report named by the audited publication plan.

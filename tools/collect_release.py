@@ -84,14 +84,14 @@ PLUGIN_ATTACHMENT = {
 LEGACY = {
     "mount": ("ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
               "vanilla-client-seat-survives-native-ticks"),
-    "driver-control": ("movement-and-turn-pose-with-driver-preserved", "server-native-horse-keeps-first-driver-control"),
+    "driver-control": ("native-driver-input-turns-and-moves-shared-ride",),
     "third-rider-rejected": ("third-rider-rejected-without-disruption",),
     "dismount": ("normal-native-dismount-cleans-seat", "driver-dismount-cleans-passenger"),
     "cancelled-interaction": ("cancelled-interaction-no-join",),
     "cancelled-dismount": ("cancelled-dismount-stays-mounted", "cancelled-driver-dismount-keeps-ride"),
     "permissions": ("ordinary-player-settings-permission-denied",),
     "settings": ("vertical-independent-and-live", "rear-independent-and-live", "nonfinite-config-rejected") + FINAL_SETTINGS,
-    "late-observer": ("protocol-observers-passed",),
+    "late-observer": ("protocol-observers-passed", "movement-and-turn-pose-with-driver-preserved"),
     "multiple-rides": ("multiple-rides-isolated",),
     "disconnect": ("native-disconnect-cleans-seat", "real-vanilla-disconnect-cleans-seat", "same-identity-reconnect-can-ride"),
     "death": ("passenger-death-cleans-seat", "driver-death-cleans-seat", "horse-death-cleans-passenger"),
@@ -171,7 +171,18 @@ def normalize(raw, family):
                 and raw.get("synthetic_behavior", {}).get("status") == "passed"
                 and raw.get("network_policy", {}).get("status") == ("not-applicable" if minecraft == "1.12.2" else "passed")
                 and all(observed.values()))
-        groups = LEGACY
+        groups = dict(LEGACY)
+        if minecraft == "1.8.9":
+            groups["cancelled-dismount"] += ("cancelled-outer-passenger-dismount-keeps-ride",
+                                            "cancelled-outer-driver-dismount-keeps-ride")
+            groups["dismount"] += ("allowed-passenger-dismount-fires-both-events-once",
+                                   "allowed-driver-dismount-fires-both-events-once")
+        if minecraft == "1.12.2":
+            groups["driver-control"] = ("native-first-rider-can-steer-shared-ride", "shared-ride-driver-vehicle-move-accepted")
+            observed["shared-ride-driver-vehicle-move-accepted"] = (
+                observed.get("shared-ride-driver-vehicle-move-accepted") is True
+                and observers.get("driver_vehicle_move_accepted") is True
+            )
     else:
         raise ValueError("Unknown native report family: " + family)
     if family in {"modern", "plugin"}:
@@ -196,6 +207,8 @@ def normalize(raw, family):
             report["not_applicable"]["cancelled-dismount"] = capability["reason"]
     if family == "legacy":
         report["attachment_mode"] = attachment.get("mode")
+        report["driver_control_scope"] = ("Native steering eligibility and accepted driver vehicle movement over loopback"
+                                          if minecraft == "1.12.2" else "Native server travel from synthetic first-rider steering input")
         if raw["minecraft"] == "1.7.10":
             checks["cancelled-dismount"] = "not-applicable"
             report["not_applicable"]["cancelled-dismount"] = "Forge 1.7.10 does not expose a cancellable EntityMountEvent; ordinary native dismount was tested."

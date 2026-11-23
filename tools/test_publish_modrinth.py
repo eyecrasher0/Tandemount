@@ -100,6 +100,8 @@ class ModrinthPublishTests(unittest.TestCase):
              "Tandemount-1.0.0-modern-backports-source.zip", "verification-modern-backports.json"),
             ("1.12.2", "plugin", ["paper", "spigot"], "42803114852a875e4a7079988b00226b6b06463510f7da2d65fcb5208efa35e6",
              "Tandemount-1.0.0-bukkit-backports-source.zip", "verification-bukkit-backports.json"),
+            ("1.19.4", "plugin", ["paper", "purpur", "folia"], "e88dbc439cf9e6de6a92c7c1fc39be87531c127339dce70bcd7f7a2c6ac6a121",
+             "Tandemount-1.0.0-bukkit-backports-source.zip", "verification-1.19.4-1.21.1.json"),
         )
         assets = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
         for mc, family, platforms, digest, source, verification in batches:
@@ -127,13 +129,13 @@ class ModrinthPublishTests(unittest.TestCase):
     def test_plan_verifies_staged_source_and_exact_native_report(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
-            archive = directory / "source-candidate.zip"
+            archive = directory / "Tandemount-1.0.0-source.zip"
             archive.write_bytes(b"source archive for this commit")
             artifact = directory / "forge.jar"
             artifact.write_bytes(b"audited Forge artifact")
             manifest = directory / "artifacts.json"
             manifest.write_bytes(b'{"schema":1}')
-            verification = directory / "verification-candidate.json"
+            verification = directory / "verification.json"
             commit = "a" * 40
             checksums = {algorithm: hashlib.new(algorithm, artifact.read_bytes()).hexdigest()
                          for algorithm in ("sha1", "sha256", "sha512")}

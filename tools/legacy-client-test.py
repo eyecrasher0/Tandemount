@@ -18,6 +18,14 @@ import urllib.request
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
+spec=importlib.util.spec_from_file_location("legacy_build",Path(__file__).with_name("legacy-build.py"))
+build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
+SRG_ARCHIVES={
+    "1.7.10": ("mcp/1.7.10/mcp-1.7.10-srg.zip", "d49df5c445dcf00ada532ab3b0e4283bf4b05ac13f210647658dfd3cec8b34c2"),
+    "1.8.9": ("mcp/1.8.9/mcp-1.8.9-srg.zip", "ea6fdd37e68569a378fd149b0ab7cfede1de7fa3e794f4ed81f9018366fbdc51"),
+    "1.12.2": ("mcp_config/1.12.2-20200226.224830/mcp_config-1.12.2-20200226.224830.zip",
+               "e2ddd3a7bb65618ad0de1d8fc0334527e5c346180300d94bfc7d3727b1976b42"),
+}
 METADATA={
     "1.7.10":"https://piston-meta.mojang.com/v1/packages/ed5d8789ed29872ea2ef1c348302b0c55e3f3468/1.7.10.json",
     "1.8.9":"https://piston-meta.mojang.com/v1/packages/d546f1707a3f2b7d034eece5ea2e311eda875787/1.8.9.json",
@@ -53,9 +61,12 @@ def fetch(path,url,sha1=None):
     return path
 
 def mapping(mc,sdk):
-    with zipfile.ZipFile(sdk/f"mcp-{mc}-names.zip") as z:
+    names_archive=build.mcp_names(mc,sdk)
+    srg_path,srg_hash=SRG_ARCHIVES[mc]
+    srg_archive=build.fetch(sdk,f"mcp-{mc}-srg.zip",build.MAVEN+"de/oceanlabs/mcp/"+srg_path,srg_hash)
+    with zipfile.ZipFile(names_archive) as z:
         names={r["searge"]:r["name"] for f in ("methods.csv","fields.csv") for r in csv.DictReader(io.StringIO(z.read(f).decode()))}
-    with zipfile.ZipFile(sdk/f"mcp-{mc}-srg.zip") as z:
+    with zipfile.ZipFile(srg_archive) as z:
         lines=z.read(next(n for n in z.namelist() if n.endswith(("joined.srg","joined.tsrg")))).decode().splitlines()
     classes={};members={};owner=None
     for line in lines:
@@ -122,7 +133,6 @@ def probe(mc,java,sdk,cache,trace,seat_id,state_id,ticks=1200,graph=False,carrie
     return record
 
 def main():
-    spec=importlib.util.spec_from_file_location("legacy_build",Path(__file__).with_name("legacy-build.py"));build=importlib.util.module_from_spec(spec);spec.loader.exec_module(build)
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("--minecraft",required=True,choices=METADATA)
     p.add_argument("--java",type=Path);p.add_argument("--sdk-cache",type=Path,required=True);p.add_argument("--cache",type=Path,required=True)
     p.add_argument("--trace",type=Path);p.add_argument("--seat-id",type=int,default=1);p.add_argument("--state-id",type=int,default=0);p.add_argument("--graph",action="store_true")

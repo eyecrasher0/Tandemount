@@ -67,7 +67,7 @@ class NativeCollectionTest(unittest.TestCase):
         }[minecraft]
         checks = [
             "ordinary-native-driver-mounted", "uncancelled-native-interaction-joins",
-            "server-native-horse-keeps-first-driver-control", "movement-and-turn-pose-with-driver-preserved",
+            "movement-and-turn-pose-with-driver-preserved",
             "third-rider-rejected-without-disruption", "normal-native-dismount-cleans-seat",
             "driver-dismount-cleans-passenger", "cancelled-interaction-no-join",
             "ordinary-player-settings-permission-denied", "vertical-independent-and-live", "rear-independent-and-live",
@@ -84,8 +84,18 @@ class NativeCollectionTest(unittest.TestCase):
         ]
         if minecraft != "1.7.10":
             checks += ["cancelled-dismount-stays-mounted", "cancelled-driver-dismount-keeps-ride"]
+        if minecraft == "1.8.9":
+            checks += ["cancelled-outer-passenger-dismount-keeps-ride", "cancelled-outer-driver-dismount-keeps-ride",
+                       "allowed-passenger-dismount-fires-both-events-once", "allowed-driver-dismount-fires-both-events-once"]
+        steering = ("native-first-rider-can-steer-shared-ride" if minecraft == "1.12.2"
+                    else "native-driver-input-turns-and-moves-shared-ride")
+        checks.append(steering)
+        final_checks = [{"name": "vanilla-client-seat-survives-native-ticks", "passed": True}]
         observers = {"status": "passed", "real_client_interaction_mounted": True,
                      "native_attachment": {"mode": "early-follower", "shared_horse_root": False}}
+        if minecraft == "1.12.2":
+            observers["driver_vehicle_move_accepted"] = True
+            final_checks.append({"name": "shared-ride-driver-vehicle-move-accepted", "passed": True})
         received = {"seat_spawned": True, "driver_spawned": True, "rider_spawned": True,
                     "driver_on_horse": True, "rider_on_seat": True, "position_matches_native": True}
         for phase, horse, yaw, feet in (
@@ -106,7 +116,7 @@ class NativeCollectionTest(unittest.TestCase):
                 "network_policy": {"status": "not-applicable" if minecraft == "1.12.2" else "passed"},
                 "synthetic_behavior": {"status": "passed", "checks": [{"name": name, "passed": True} for name in checks]},
                 "protocol_observers": observers, "client_lifetime": {role: probe.copy() for role in ("existing", "late")},
-                "final_checks": [{"name": "vanilla-client-seat-survives-native-ticks", "passed": True}]}
+                "final_checks": final_checks}
 
     def test_all_three_exact_legacy_forge_followers_qualify(self):
         for minecraft in ("1.7.10", "1.8.9", "1.12.2"):
@@ -115,6 +125,23 @@ class NativeCollectionTest(unittest.TestCase):
                 self.assertEqual(report["result"], "pass", report)
                 self.assertEqual(report["attachment_mode"], "early-follower")
         self.assertEqual(normalize(self.legacy("1.7.10"), "legacy")["checks"]["cancelled-dismount"], "not-applicable")
+
+    def test_legacy_steering_eligibility_alone_does_not_prove_driver_movement(self):
+        raw = self.legacy()
+        del raw["protocol_observers"]["driver_vehicle_move_accepted"]
+        report = normalize(raw, "legacy")
+        self.assertEqual(report["result"], "fail")
+        self.assertIs(report["checks"]["late-observer"], True)
+        self.assertIn("driver-control", report["incomplete_checks"])
+
+    def test_forge_189_requires_each_outer_dismount_veto(self):
+        for role in ("driver", "passenger"):
+            with self.subTest(role=role):
+                raw = self.legacy("1.8.9")
+                checks = raw["synthetic_behavior"]["checks"]
+                checks.remove({"name": f"cancelled-outer-{role}-dismount-keeps-ride", "passed": True})
+                report = normalize(raw, "legacy")
+                self.assertIn("cancelled-dismount", report["incomplete_checks"])
 
     def test_legacy_requires_real_follower_geometry_before_believing_observers(self):
         for phase, feet in (("initial", [8, 5, 7.5]), ("movement", [8, 5.8125, 7.5]),

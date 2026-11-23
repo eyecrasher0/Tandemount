@@ -23,7 +23,7 @@ The default cache is `$TANDEMOUNT_CACHE/legacy`, or `.agents/cache/legacy` when
 that environment variable is unset. `--cache` specifies the complete legacy
 cache directory. Artifacts default to its `artifacts/` subdirectory.
 
-The build reads the release version from `project.json`, expands the annotation templates, and writes `tandemount-forge-VERSION+MINECRAFT.jar` with matching Forge and manifest metadata. It fetches the exact official Forge APIs and MCP mappings. It does not
+The build reads the release version from `project.json`, expands the annotation templates, and writes `tandemount-forge-VERSION+MINECRAFT.jar` with matching Forge and manifest metadata. It fetches the exact official Forge APIs and MCP name mappings. The client probe prepares its pinned SRG archive in the same SDK cache. The build does not
 compile against stubs or depend on another mod. Each jar accepts unmodified
 clients and installs only on the server. Do not install the native-test jar on
 a real server. The compatibility matrix and artifact-bound evidence determine
@@ -96,8 +96,11 @@ status. Console can use all text commands.
 
 On Forge 1.7.10, the vanilla handshake timeout completes the connection
 through the native dispatcher when FML's `isVanillaAccepted(CLIENT)` allows
-vanilla clients. This leaves the modded handshake time to process a Forge
-client response. On Forge 1.8.9 the asynchronous dispatcher can race immediate
+vanilla clients. The fallback uses a five-second delay. Servers that require a
+client mod keep Forge's original ten-hour handshake deadline and rejection
+handler. The disposable fixture checks the scheduled deadline and delivers the
+native timeout event to a pending vanilla connection to verify the rejection.
+On Forge 1.8.9 the asynchronous dispatcher can race immediate
 vanilla completion. The bridge initializes the native play connection only
 when FML accepts vanilla clients and the FML marker is absent or false. Both
 old loaders retain their client-required mod rejections. The native test also
@@ -113,9 +116,9 @@ method is also respected. Forge 1.8.9 and 1.12.2 have a cancellable
 dismount uses the native riding path. Cancellation on supported APIs leaves
 the ride intact. Destroying a vanished/dead ride removes dangling references;
 this is lifecycle cleanup, not a queued retry of a cancelled user operation.
-The 1.8.9 hook emits one dismount permission event for a managed passenger or
-driver before the outer `mountEntity(null)` clears references. A veto leaves
-both riders in place. Explicit rider teleports and world
+The 1.8.9 hook checks Forge's outer null-target event and then its inner
+dismount event for a managed passenger or driver. Either veto leaves both
+riders in place. An allowed dismount emits each event once. Explicit rider teleports and world
 changes end the shared ride. Expired seats detach their native relationships
 without searching for terrain or reloading an unloading chunk.
 

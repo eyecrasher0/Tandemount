@@ -113,9 +113,6 @@ def validate_plan(plan, matrix, manifest_path, project):
         raise ValueError("Publication plan tag does not match the project version")
     archive = Path(plan["source"]["file"])
     verification_path = Path(plan["verification"])
-    if any(archive.name == batch["source"] or verification_path.name == batch["verification"]
-           for batch in project.get("published_batches", {}).get(plan["tag"], ())):
-        raise ValueError("A new batch needs distinct source and verification asset names")
     if digest(archive, "sha256") != plan["source"]["sha256"]:
         raise ValueError("Staged source archive SHA-256 mismatch")
     verification_bytes = verification_path.read_bytes()

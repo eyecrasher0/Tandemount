@@ -51,11 +51,12 @@ ambiguous method selection are superseded by descriptor-bound execution.
 
 The 1.12.2 play-state registration in the original client identifies entity
 metadata as packet `0x3c`; the probe consumes the actual captured metadata
-before checking `hasNoGravity`. Original-client horse controls are also tested
-at the correct ownership boundary: the older two releases integrate travel on
-the server, while 1.12.2 integrates a local client's vehicle travel. The server
-suite checks that the first controlling passenger remains the driver; the
-1.12.2 original-client fixture additionally requires actual horizontal travel.
+before checking `hasNoGravity`. The original-client control probe uses a single
+rider. The shared-ride fixture for 1.7.10 and 1.8.9 checks server travel from
+simulated driver steering. On 1.12.2 it checks native first-controller
+ownership and steering eligibility, then sends vehicle-move packets from the
+seated driver and checks the resulting horse position with the passenger still
+seated. Jump charge and rendered prediction require separate evidence.
 
 ## Native graph capability evidence
 
@@ -100,7 +101,7 @@ Forge-hosted mappings used for those symbols:
 |---|---|---|
 | 1.7.10 | [`mcp_stable-12-1.7.10.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_stable/12-1.7.10/mcp_stable-12-1.7.10.zip) `83d303a80071582cd07d41b35aa77c178d609a27c69c8472b794636eb50905b0` | [`mcp-1.7.10-srg.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp/1.7.10/mcp-1.7.10-srg.zip) `d49df5c445dcf00ada532ab3b0e4283bf4b05ac13f210647658dfd3cec8b34c2` |
 | 1.8.9 | [`mcp_stable-22-1.8.9.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_stable/22-1.8.9/mcp_stable-22-1.8.9.zip) `aeed0aaba9d159b7ce60a21e2dcc36adb249fade65ce2f76c730dd0ec7270763` | [`mcp-1.8.9-srg.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp/1.8.9/mcp-1.8.9-srg.zip) `ea6fdd37e68569a378fd149b0ab7cfede1de7fa3e794f4ed81f9018366fbdc51` |
-| 1.12.2 | [`mcp_stable-39-1.12.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_stable/39-1.12/mcp_stable-39-1.12.zip) `13a31f28c11f8f395ffe7e8563ade459f5a0ee46493abbbde3ce6e9493ac4152` | [`mcp-1.12.2-srg.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp/1.12.2/mcp-1.12.2-srg.zip) `e2ddd3a7bb65618ad0de1d8fc0334527e5c346180300d94bfc7d3727b1976b42` |
+| 1.12.2 | [`mcp_stable-39-1.12.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_stable/39-1.12/mcp_stable-39-1.12.zip) `13a31f28c11f8f395ffe7e8563ade459f5a0ee46493abbbde3ce6e9493ac4152` | [`mcp_config-1.12.2-20200226.224830.zip`](https://maven.minecraftforge.net/de/oceanlabs/mcp/mcp_config/1.12.2-20200226.224830/mcp_config-1.12.2-20200226.224830.zip) `e2ddd3a7bb65618ad0de1d8fc0334527e5c346180300d94bfc7d3727b1976b42` |
 
 Forge describes [MCPConfig](https://github.com/MinecraftForge/MCPConfig) as its public SRG-mapping project. These are Forge-hosted MCP mappings, not Mojang-published named mappings.
 

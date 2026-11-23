@@ -5,7 +5,9 @@
 - Published verified builds for Forge 1.7.10, 1.8.9, and 1.12.2, and a shared
   Bukkit JAR for Paper and Spigot 1.12.2.
 - Published verified Fabric and Forge builds for 1.16.5, 1.19.4, 1.20.6,
-  and 26.3, NeoForge builds for 1.20.6 and 26.3, and a Paper build for 26.3.
+  1.21.1, and 26.3, plus NeoForge builds for 1.20.6, 1.21.1, and 26.3.
+- Published verified Bukkit builds for Paper, Purpur, and Folia 1.19.4 and for
+  Paper 26.3.
   [Release assets and evidence](https://github.com/eyecrasher0/Tandemount/releases/tag/tandemount-1.0.0)
 
 - Independent server-side implementation by EyeCrasher under GPL-3.0-only.

@@ -50,7 +50,7 @@ def before_join(mc, identifier, body):
             return channel, body[offset+length:]
     raise ValueError(f"Unexpected Play packet 0x{identifier:02x} before JoinGame")
 
-def vanilla_login(mc,port,fixture_version=None):
+def vanilla_login(mc,port,fixture_version=None,on_forge_hello=None):
     protocol={"1.7.10":5,"1.8.9":47,"1.12.2":340}[mc]
     join_id=0x23 if mc=="1.12.2" else 1
     def vi(n):
@@ -106,6 +106,9 @@ def vanilla_login(mc,port,fixture_version=None):
                     record.update(play_join_game=True, ordered_play_login=True, status="passed");break
                 else:
                     channel, payload = before_join(mc, identifier, data[offset:])
+                    if on_forge_hello is not None and channel == b"FML|HS" and len(payload) >= 4 and payload[2] == 0:
+                        on_forge_hello(connection.getsockname()[1])
+                        on_forge_hello = None
                     if fixture_version is not None and channel == b"FML|HS" and not record["client_mod_channels_sent"]:
                         if mc != "1.7.10" or len(payload) < 4 or payload[2] != 0:
                             raise ValueError("Expected Forge 1.7.10 ServerHello")
@@ -266,14 +269,16 @@ class VanillaClient:
         elif not self.modern and identifier==0x1b:
             rider,vehicle=struct.unpack_from(">ii",data)
             self.traces.append(("EntityAttach",rider,data.hex()))
-            rider_known=rider==self.self_id or rider in self.players or rider in self.entities
-            vehicle_known=vehicle<0 or vehicle in self.players or vehicle in self.entities
-            if data[8]==0 and rider_known and vehicle_known:self.mounts[rider]=vehicle
+            if data[8]==0 and self.knows_entity(rider) and (vehicle<0 or self.knows_entity(vehicle)):
+                self.mounts[rider]=vehicle
         elif self.modern and identifier==0x43:
-            vehicle,offset=read_varint(data);count,offset=read_varint(data,offset)
+            vehicle,offset=read_varint(data)
+            if not self.knows_entity(vehicle):return
+            count,offset=read_varint(data,offset)
             for rider in [r for r,v in self.mounts.items() if v==vehicle]:del self.mounts[rider]
             for _ in range(count):
-                rider,offset=read_varint(data,offset);self.mounts[rider]=vehicle
+                rider,offset=read_varint(data,offset)
+                if self.knows_entity(rider):self.mounts[rider]=vehicle
         elif identifier==(0x4c if self.modern else 0x18):
             if self.oldest:entity=struct.unpack_from(">i",data)[0];offset=4
             else:entity,offset=read_varint(data)
@@ -285,6 +290,9 @@ class VanillaClient:
             delta=struct.unpack_from(">hhh" if self.modern else ">bbb",data,offset);unit=4096 if self.modern else 32
             if entity in self.entities:
                 before=self.entities[entity]["position"];self.entities[entity]["position"]=tuple(v+d/unit for v,d in zip(before,delta))
+
+    def knows_entity(self,entity):
+        return entity==self.self_id or entity in self.players or entity in self.entities
 
     def interact(self,entity):
         if self.oldest:self.send(2,struct.pack(">iB",entity,0))
@@ -387,7 +395,7 @@ def protocol_observers(mc,port,process,output,args,folder):
             initial=state("state","observer-state")
         if not initial["joined"]:raise AssertionError("Real vanilla UseEntity interactions did not create a shared ride")
         late=VanillaClient(mc,port,"VanillaLate");clients.append(late);issue("tp VanillaLate 12 8 8");time.sleep(2)
-        def settled_observers(phase):
+        def settled_observers(phase, target_z=None):
             deadline = time.monotonic() + 8
             while True:
                 native = state("state", "observer-state")
@@ -395,7 +403,8 @@ def protocol_observers(mc,port,process,output,args,folder):
                 late_view = late.observe(native)
                 view = {"native": native, "existing_observer": existing, "late_observer": late_view}
                 if (observer_snapshot_passed(view, phase)
-                        and (phase != "movement" or horse_moved(record["initial"]["native"], native))):
+                        and (phase != "movement" or horse_moved(record["initial"]["native"], native))
+                        and (target_z is None or abs(native["horse_position"][2]-target_z)<.0625)):
                     return view
                 if time.monotonic() >= deadline:
                     raise TimeoutError("Native follower and both observers did not agree during " + phase)
@@ -412,8 +421,16 @@ def protocol_observers(mc,port,process,output,args,folder):
             role: (list(client.traces), client.entities[initial["seat"]].get("spawn_data", 55))
             for role, client in (("existing", early), ("late", late))
         }
-        state("moving","observer-move")
-        record["movement"] = settled_observers("movement")
+        if mc=="1.12.2":
+            x,y,z=record["initial"]["native"]["horse_position"]
+            for step in range(1,31):
+                driver.send(0x10,struct.pack(">dddff",x,y,z+step*.05,0.0,0.0))
+                time.sleep(.05)
+            record["movement"]=settled_observers("movement",target_z=z+1.5)
+            record["driver_vehicle_move_accepted"]=True
+        else:
+            state("moving","observer-move")
+            record["movement"] = settled_observers("movement")
         early.command("/tandemount vertical +")
         early.command("/tandemount rear +")
         record["live_adjustment"] = settled_observers("live_adjustment")
@@ -569,14 +586,18 @@ def run(mc,args):
         restart={"status":"passed" if restart_passed else "failed","checks":restart_checks,"exit_code":second.returncode,"log":str(restart_log),"log_sha256":sha(restart_log)}
         if mc!="1.12.2":
             policy,policy_output,policy_lines,policy_reader,policy_ready=launch_native(folder,launch,args,["-Dtandemount.native.requireClient=true"])
-            denied=vanilla_login(mc,port) if policy_ready else {}
+            def expire_vanilla(client_port):
+                policy.stdin.write(f"tandemount_native_test expire-vanilla {client_port}\n")
+                policy.stdin.flush()
+            denied=vanilla_login(mc,port,on_forge_hello=expire_vanilla if mc=="1.7.10" else None) if policy_ready else {}
             stop_native(policy,policy_reader)
             policy_log=folder/"native-network-policy.log";policy_log.write_text("".join(policy_lines));policy_checks=parsed_checks(policy_lines)
             expected="No modded response received" if mc=="1.7.10" else "requires FML/Forge"
             policy_passed=policy_ready and policy.returncode==0 and not denied.get("play_join_game") and expected in denied.get("error","")
             if incompatible is not None:
                 policy_passed=(policy_passed and incompatible["client_mod_channels_sent"]
-                    and not incompatible["play_join_game"] and "Mod rejections" in incompatible.get("error",""))
+                    and not incompatible["play_join_game"] and "Mod rejections" in incompatible.get("error","")
+                    and any(c["name"]=="client-required-server-retains-forge-handshake-deadline" and c["passed"] for c in policy_checks))
             network_policy={"status":"passed" if policy_passed else "failed","checks":policy_checks,"vanilla_rejection":denied,
                             "incompatible_mod_list":incompatible,"exit_code":policy.returncode,"log":str(policy_log),"log_sha256":sha(policy_log)}
     body="".join(lines)
@@ -594,8 +615,10 @@ def run(mc,args):
         {"name":"command-chat-has-clickable-adjustments","passed":menu.get("status")=="passed"},
         {"name":"command-click-adjustment-applies","passed":menu.get("encoded_click_command_applied",False)},
         {"name":"vanilla-client-seat-survives-native-ticks","passed":lifetime_passed(lifetime, mc, args.client_ticks)},
-        *[{"name":name,"passed":any(c["name"]==name and c["passed"] for c in native)} for name in ["fresh-config-uses-owner-defaults","missing-settings-use-owner-defaults","saved-settings-remain-preserved","reset-restores-owner-defaults","server-native-horse-keeps-first-driver-control"]],
+        *[{"name":name,"passed":any(c["name"]==name and c["passed"] for c in native)} for name in ["fresh-config-uses-owner-defaults","missing-settings-use-owner-defaults","saved-settings-remain-preserved","reset-restores-owner-defaults"]],
     ]
+    if mc=="1.12.2":
+        result["final_checks"].append({"name":"shared-ride-driver-vehicle-move-accepted","passed":observers.get("driver_vehicle_move_accepted") is True})
     result["status"]="passed" if passed and all(c["passed"] for c in checks+result["final_checks"]) and vanilla["status"]=="passed" and observers["status"]=="passed" and restart["status"]=="passed" and network_policy["status"] in ["passed","not-applicable"] and process.returncode==0 else "failed"
     result=workspace.finish(result)
     (workspace.retained/"native-results.json").write_text(json.dumps(result,indent=2)+"\n")

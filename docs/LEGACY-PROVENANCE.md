@@ -27,9 +27,9 @@ The following upstream material was consulted or used as build/runtime input:
 | [Forge Maven](https://maven.minecraftforge.net/) | Forge `1.12.2-14.23.5.2864` universal, userdev3, MDK and installer artifacts; universal supplies the actual compile API. The MDK and userdev configuration were inspected to assess development tooling. |
 | [Forge source, 1.7.10](https://github.com/MinecraftForge/MinecraftForge/tree/1.7.10) | Official `EntityInteractEvent` and the vanilla `Entity.java.patch`, to check cancellation and riding hooks. |
 | [Forge source, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/tree/1.8.9) | Official `EntityInteractEvent`, `EntityMountEvent`, and vanilla `Entity.java.patch`. |
-| [Forge EntityLivingBase patch, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/blob/1.8.9/patches/minecraft/net/minecraft/entity/EntityLivingBase.java.patch) | Checked exact cancellation APIs. The outer `mountEntity(null)` uses `isMounting=true`, calls the cancellable inner `dismountEntity`, then clears relationships regardless of that inner cancellation. An original hook performs one dismount permission event for a managed ride's driver or passenger before the outer clear. |
+| [Forge EntityLivingBase patch, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/blob/1.8.9/patches/minecraft/net/minecraft/entity/EntityLivingBase.java.patch) | Checked both cancellation points. A managed driver or passenger goes through the native null-target permission and then the vehicle's dismount permission. An allowed attempt emits each event once before vanilla clears the relationship. |
 | [Forge source, 1.12.x](https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x) | Official `EntityMountEvent` and vanilla `Entity.java.patch`. |
-| [Official FML source, 1.7.10](https://github.com/MinecraftForge/FML/tree/1.7.10) | Exact Forge 1614 userdev FML sources: `FMLNetworkHandler`, `NetworkDispatcher`, `NetworkRegistry`, `NetworkModHolder`, `FMLHandshakeServerState`, and `ChannelRegistrationHandler`. Checked the loader's vanilla policy and handshake lifecycle. The bridge completes the vanilla timeout through `NetworkDispatcher.completeServerSideConnection(VANILLA)` only after `NetworkRegistry.isVanillaAccepted(CLIENT)` approves it. |
+| [Official FML source, 1.7.10](https://github.com/MinecraftForge/FML/tree/1.7.10) | Exact Forge 1614 userdev FML sources: `FMLNetworkHandler`, `NetworkDispatcher`, `NetworkRegistry`, `NetworkModHolder`, `FMLHandshakeServerState`, and `ChannelRegistrationHandler`. Checked the original timeout and `NetworkRegistry.isVanillaAccepted(CLIENT)` gate for the short delay and `NetworkDispatcher.completeServerSideConnection(VANILLA)`. |
 | [Official FML player connection patch, 1.7.10](https://github.com/MinecraftForge/FML/blob/1.7.10/patches/minecraft/net/minecraft/server/management/ServerConfigurationManager.java.patch) | Checked `initializeConnectionToPlayer`'s Forge-added third `NetHandlerPlayServer` argument and native login events. |
 | [MCP distributions on Forge Maven](https://maven.minecraftforge.net/de/oceanlabs/mcp/) | `mcp_stable:12-1.7.10`, `22-1.8.9`, and `39-1.12`, plus exact 1.7.10/1.8.9 SRG bundles and `mcp_config:1.12.2-20200226.224830`. Only the used MCP/SRG symbol subset is included in production jars. Native tests use a separate test symbol table. |
 | [Mojang libraries](https://libraries.minecraft.net/) | `net.minecraft:launchwrapper:1.12`; Forge's own dependency. |
@@ -89,6 +89,9 @@ Additional upstream use for the client-lifetime repair and capability audit:
 - Exact original `C15PacketClientSettings` / `CPacketClientSettings` serializers:
   the wire fixture sends ordinary client settings after JoinGame and waits for
   the first native server position before beginning periodic movement frames.
+- The official 1.12.2 `EnumConnectionState` Play registration and
+  `CPacketVehicleMove` format identify the driver movement packet used by the
+  loopback test. [Official 1.12.2 version metadata](https://piston-meta.mojang.com/v1/packages/832d95b9f40699d4961394dcf6cf549e65f15dc5/1.12.2.json)
 
 The native report's source digest binds both test runners, both Java fixtures,
 the build, metadata, runtime storage and evidence helpers, and `project.json`.

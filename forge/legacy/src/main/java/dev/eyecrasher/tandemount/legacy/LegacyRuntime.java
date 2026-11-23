@@ -64,19 +64,19 @@ public final class LegacyRuntime {
     /** Correct the 1.8.9 outer mount(null) path, which otherwise ignores its nested dismount cancellation. */
     public static boolean legacyMountPermission(Object entity, Object target, boolean mounting) {
         LegacyRuntime runtime=instance;
-        if (runtime != null && Names.minecraft().equals("1.8.9")) {
-            if (!mounting && LEGACY_DISMOUNTS.remove(entity)) return true;
-            if (mounting && target == null) {
-                Object current=runtime.vehicle(entity);
-                Ride ride=runtime.rides.get(current);
-                if (isSeat(current) || (ride != null && ride.driver == entity)) {
-                    boolean allowed=Boolean.TRUE.equals(Reflect.call(Reflect.type("net.minecraftforge.event.ForgeEventFactory"),"canMountEntity",entity,current,false));
-                    if (allowed) LEGACY_DISMOUNTS.add(entity);
-                    return allowed;
-                }
+        boolean legacy=runtime != null && Names.minecraft().equals("1.8.9");
+        if (legacy && !mounting && LEGACY_DISMOUNTS.remove(entity)) return true;
+        Class<?> events=Reflect.type("net.minecraftforge.event.ForgeEventFactory");
+        if (!Boolean.TRUE.equals(Reflect.call(events,"canMountEntity",entity,target,mounting))) return false;
+        if (legacy && mounting && target == null) {
+            Object current=runtime.vehicle(entity);
+            Ride ride=runtime.rides.get(current);
+            if (isSeat(current) || (ride != null && ride.driver == entity)) {
+                if (!Boolean.TRUE.equals(Reflect.call(events,"canMountEntity",entity,current,false))) return false;
+                LEGACY_DISMOUNTS.add(entity);
             }
         }
-        return Boolean.TRUE.equals(Reflect.call(Reflect.type("net.minecraftforge.event.ForgeEventFactory"),"canMountEntity",entity,target,mounting));
+        return true;
     }
     public static void finishLegacyMount(Object entity) { LEGACY_DISMOUNTS.remove(entity); }
     public static void entityTeleport(Object entity) {
@@ -93,8 +93,11 @@ public final class LegacyRuntime {
         Object client=Reflect.enumValue(fml+".relauncher.Side","CLIENT");
         return Boolean.TRUE.equals(Reflect.call(registry,"isVanillaAccepted",client));
     }
+    public static boolean oldestVanillaAllowed() {
+        return instance != null && acceptsVanilla("cpw.mods.fml");
+    }
     public static boolean oldestVanillaTimeout(Object dispatcher) {
-        if (instance == null || !acceptsVanilla("cpw.mods.fml")) return false;
+        if (!oldestVanillaAllowed()) return false;
         Object vanilla=Reflect.enumValue(dispatcher.getClass().getName()+"$ConnectionType","VANILLA");
         Reflect.call(dispatcher,"completeServerSideConnection",vanilla);
         return true;

@@ -57,6 +57,16 @@
         "artifacts": {
           "42803114852a875e4a7079988b00226b6b06463510f7da2d65fcb5208efa35e6": {"minecraft": "1.12.2", "platforms": ["paper", "spigot"]}
         }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-backports-source.zip",
+        "verification": "verification-1.19.4-1.21.1.json",
+        "artifacts": {
+          "e88dbc439cf9e6de6a92c7c1fc39be87531c127339dce70bcd7f7a2c6ac6a121": {"minecraft": "1.19.4", "platforms": ["paper", "purpur", "folia"]},
+          "fce99cbb061daaddf0ebe1b32108af5b42b86866938ea1c9be2b2941fc8ea85d": {"minecraft": "1.21.1", "platforms": ["fabric"]},
+          "56e597aeb80193c215f39d557228fd21a9b0b2048b389b684268fcbc8b1e916c": {"minecraft": "1.21.1", "platforms": ["forge"]},
+          "3e7d2be188202af759760d7581ec7c463b18ed483c37c554e92188a94b5b575a": {"minecraft": "1.21.1", "platforms": ["neoforge"]}
+        }
       }
     ]
   }

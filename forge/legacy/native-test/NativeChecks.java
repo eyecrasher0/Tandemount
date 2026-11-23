@@ -6,14 +6,17 @@ package dev.eyecrasher.tandemount.nativetest;
 import dev.eyecrasher.tandemount.legacy.LegacyRuntime;
 import java.io.*;
 import java.lang.reflect.*;
+import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.Delayed;
+import java.util.concurrent.TimeUnit;
 
 /** These are native server object checks, not protocol observers or visual checks. */
 public final class NativeChecks {
     private static final Properties NAMES=new Properties();
-    private static boolean multi, oldest, cancelInteraction, cancelMount, cancelDismount;
+    private static boolean multi, oldest, cancelInteraction, cancelMount, cancelDismount, cancelOuterDismount;
     private static Object server,world;
-    private static int dismountEvents;
+    private static int dismountEvents, outerDismountEvents;
     private static Object observerHorse,observerDriver,observerRider,observerSeat,stopSeat,stopRider;
     private static final File RESTART_MARKER=new File("tandemount-native-restart-seat.txt");
     static {
@@ -109,7 +112,27 @@ public final class NativeChecks {
             call(world,"removeEntity",observerHorse);observerHorse=null;return;
         }
         if(args[0].equals("stop-fixture")){stopFixture();return;}
+        if(oldest&&args.length==2&&args[0].equals("expire-vanilla")&&Boolean.getBoolean("tandemount.native.requireClient")){
+            expireVanilla(Integer.parseInt(args[1]));return;
+        }
         throw new IllegalArgumentException("Unknown native test phase");
+    }
+    private static void expireVanilla(int port){
+        List<?> managers=(List<?>)get(call(server,"getNetworkSystem"),"networkManagers");
+        synchronized(managers){
+            for(Object manager:managers){
+                Object channel=call(manager,"channel");
+                Object address=call(channel,"remoteAddress");
+                if(!(address instanceof InetSocketAddress)||((InetSocketAddress)address).getPort()!=port)continue;
+                Object pipeline=call(channel,"pipeline"), waiter=call(pipeline,"get","fml:vanilla_detector");
+                long remaining=((Delayed)get(waiter,"future")).getDelay(TimeUnit.SECONDS);
+                long upstream=TimeUnit.HOURS.toSeconds(10);
+                check("client-required-server-retains-forge-handshake-deadline",remaining>upstream-20&&remaining<=upstream);
+                call(pipeline,"fireUserEventTriggered",constant("cpw.mods.fml.common.network.handshake.NetworkDispatcher$ConnectionType","VANILLA"));
+                return;
+            }
+        }
+        throw new IllegalStateException("Vanilla fixture connection missing from the native network system");
     }
     private static void verifyRestart(){
         if(!RESTART_MARKER.isFile())return;
@@ -172,11 +195,23 @@ public final class NativeChecks {
     public static void mountEvent(Object event){
         boolean mounting=Boolean.TRUE.equals(call(event,"isMounting"));
         if(!mounting)dismountEvents++;
+        if(!oldest&&!multi&&mounting&&get(event,"entityBeingMounted")==null){
+            outerDismountEvents++;
+            if(cancelOuterDismount)call(event,"setCanceled",true);
+        }
         if((mounting&&cancelMount)||(!mounting&&cancelDismount))call(event,"setCanceled",true);
     }
     private static Object vehicle(Object player){return multi?call(player,"getRidingEntity"):get(player,"ridingEntity");}
     private static void mount(Object player,Object target){if(multi)call(player,"startRiding",target,false);else call(player,"mountEntity",target);}
     private static void dismount(Object player){if(multi)call(player,"dismountRidingEntity");else call(player,"mountEntity",(Object)null);}
+    private static void outerDismountVeto(String name,Object player,Object driver,Object horse,Object rider,Object seat){
+        int outer=outerDismountEvents, inner=dismountEvents;
+        cancelOuterDismount=true;
+        try { dismount(player); } finally { cancelOuterDismount=false; }
+        LegacyRuntime.worldTick(world);
+        check(name,outerDismountEvents==outer+1&&dismountEvents==inner
+                &&vehicle(driver)==horse&&vehicle(rider)==seat&&LegacyRuntime.isSeat(seat));
+    }
     private static void interact(Object player,Object horse){if(multi)call(player,"interactOn",horse,constant("net.minecraft.util.EnumHand","MAIN_HAND"));else call(player,"interactWith",horse);}
     private static void command(Object sender,String c){call(call(server,"getCommandManager"),"executeCommand",sender,c);}
     private static Object airBlock(){return get(type("net.minecraft.init.Blocks"),multi?"AIR":"air");}
@@ -345,7 +380,7 @@ public final class NativeChecks {
             // 1.12's local driver owns vehicle travel. The server consumes its
             // ordinary vehicle-move packets; it intentionally does not integrate
             // the client's movement a second time in AbstractHorse.travel.
-            check("server-native-horse-keeps-first-driver-control",vehicle(a)==horse&&vehicle(b)==seat
+            check(multi?"native-first-rider-can-steer-shared-ride":"native-driver-input-turns-and-moves-shared-ride",vehicle(a)==horse&&vehicle(b)==seat
                     &&Math.abs(number(horse,"rotationYaw")-90)<1e-6
                     &&(multi ? call(horse,"getControllingPassenger")==a&&Boolean.TRUE.equals(call(horse,"canBeSteered"))
                     : Math.abs(number(horse,"posX")-beforeControlX)+Math.abs(number(horse,"posZ")-beforeControlZ)>1e-6));
@@ -379,21 +414,31 @@ public final class NativeChecks {
             check("multiple-rides-isolated",seatTwo!=null&&seatTwo!=seat&&LegacyRuntime.isSeat(seatTwo)&&vehicle(b)==seat);
             strictReloadAndExclusions(a,b,c,d,e,horse,horseTwo,seat,seatTwo);
             seat=vehicle(b);seatTwo=vehicle(e);
+            if(!oldest&&!multi)outerDismountVeto("cancelled-outer-passenger-dismount-keeps-ride",b,a,horse,b,seat);
             if(!oldest){
-                int before=dismountEvents;
+                int before=dismountEvents, outer=outerDismountEvents;
                 cancelDismount=true;dismount(b);cancelDismount=false;LegacyRuntime.worldTick(world);
-                check("cancelled-dismount-stays-mounted",vehicle(b)==seat&&LegacyRuntime.isSeat(seat)&&dismountEvents==before+1);
+                check("cancelled-dismount-stays-mounted",vehicle(b)==seat&&LegacyRuntime.isSeat(seat)&&dismountEvents==before+1
+                        &&(multi||outerDismountEvents==outer+1));
             }
-            dismount(b);LegacyRuntime.worldTick(world);
+            int passengerOuter=outerDismountEvents, passengerInner=dismountEvents;
+            dismount(b);
+            if(!oldest&&!multi)check("allowed-passenger-dismount-fires-both-events-once",outerDismountEvents==passengerOuter+1&&dismountEvents==passengerInner+1);
+            LegacyRuntime.worldTick(world);
             check("normal-native-dismount-cleans-seat",vehicle(b)==null&&!LegacyRuntime.isSeat(seat)&&Boolean.TRUE.equals(get(seat,"isDead")));
             call(b,"setPosition",9.0D,66.0D,9.0D);interact(b,horse);Object retry=vehicle(b);
             check("retry-after-dismount",retry!=null&&retry!=seat&&LegacyRuntime.isSeat(retry));
+            if(!oldest&&!multi)outerDismountVeto("cancelled-outer-driver-dismount-keeps-ride",a,a,horse,b,retry);
             if(!oldest){
-                int before=dismountEvents;
+                int before=dismountEvents, outer=outerDismountEvents;
                 cancelDismount=true;dismount(a);cancelDismount=false;LegacyRuntime.worldTick(world);
-                check("cancelled-driver-dismount-keeps-ride",vehicle(a)==horse&&vehicle(b)==retry&&LegacyRuntime.isSeat(retry)&&dismountEvents==before+1);
+                check("cancelled-driver-dismount-keeps-ride",vehicle(a)==horse&&vehicle(b)==retry&&LegacyRuntime.isSeat(retry)&&dismountEvents==before+1
+                        &&(multi||outerDismountEvents==outer+1));
             }
-            dismount(a);LegacyRuntime.worldTick(world);
+            int driverOuter=outerDismountEvents, driverInner=dismountEvents;
+            dismount(a);
+            if(!oldest&&!multi)check("allowed-driver-dismount-fires-both-events-once",outerDismountEvents==driverOuter+1&&dismountEvents==driverInner+1);
+            LegacyRuntime.worldTick(world);
             check("driver-dismount-cleans-passenger",vehicle(b)==null&&!LegacyRuntime.isSeat(retry)&&vehicle(e)==seatTwo);
             check("inventory-health-experience-and-horse-state-preserved",riderBefore.equals(preservedState(b,playerKeys))&&driverBefore.equals(preservedState(a,playerKeys))&&horseBefore.equals(preservedState(horse,horseKeys)));
             call(horseTwo,"setDead");LegacyRuntime.worldTick(world);
