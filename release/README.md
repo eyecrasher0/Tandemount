@@ -46,7 +46,7 @@ test player data, worlds, and downloaded game binaries. The publication plan
 stages this report with the source archive and checksums so the large local SDK
 cache can be removed after uploads have been verified.
 
-The eight published 1.0.0 batches have corresponding source and verification
+Each published 1.0.0 batch has corresponding source and verification
 assets. The publishers match those batches by JAR hash and platform. For an
 audited release plan, the publishers check the staged archive and report and
 verify the report covers every artifact's exact native targets.

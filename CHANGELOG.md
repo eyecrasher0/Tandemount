@@ -2,6 +2,8 @@
 
 ## 1.0.0
 
+- Published 93 server mod builds across all 38 supported Minecraft releases.
+  Bukkit downloads cover 37 Minecraft releases.
 - Added a Paper 1.7.10 build with stable idle horses and restored passenger
   collision after dismount.
 - Published verified builds for Forge 1.7.10, 1.8.9, and 1.12.2, and a shared

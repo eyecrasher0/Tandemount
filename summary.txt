@@ -1,1 +1,1 @@
-Let two players share a tamed horse on a Minecraft server. One player steers as usual while a friend rides behind.
+Server-side Minecraft mods and Bukkit plugins that add a rear seat to tamed horses for a second player.

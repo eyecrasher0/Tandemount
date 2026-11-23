@@ -6,7 +6,7 @@
   "author": "EyeCrasher",
   "license": "GPL-3.0-only",
   "repository": "eyecrasher0/Tandemount",
-  "summary": "Share a horse with a friend while the first rider stays in control.",
+  "summary": "Share a tamed horse with a friend. One player steers and jumps while the other rides behind. Players can use a standard Minecraft client.",
   "environment": "server_only",
   "source_url": "https://github.com/eyecrasher0/Tandemount",
   "issues_url": "https://github.com/eyecrasher0/Tandemount/issues",
@@ -285,6 +285,650 @@
             "minecraft": "1.7.10",
             "platforms": [
               "paper"
+            ]
+          }
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-backports-source.zip",
+        "verification": "verification-mod-matrix.json",
+        "artifacts": {
+          "da94e3a300a7421a4f3f14865087d26e9315ccc23d7edc478c0c14346e774f42": {
+            "minecraft": "1.17",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "3f2d638eb92ac0b213f1dfc72111d75e1bedbe5293117a02ccfa0a2a045c2069": {
+            "minecraft": "1.18",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "18b54da84bb9dbbb7881bfaec778639e85679d7c2de6d143c18cd256cfb04926": {
+            "minecraft": "1.18.1",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "77bf4c22c8db13b169c399593c1712e0d3614a2cd24eeeb3fc6fe1de94bd9a7e": {
+            "minecraft": "1.19",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "a08676c8846755b8836373118d26d26d5276923705ae3b1bb4618866485700aa": {
+            "minecraft": "1.19.1",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "61538d942993ae843f80dd32d8814bcaad0904ca57edd46b2cedb0d4eaeb0334": {
+            "minecraft": "1.19.2",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "64c182971623ab1b4f825d231bfdd2e683ac00a0cce8c8e692e1ba7f8a11ff76": {
+            "minecraft": "1.19.3",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "9d03f43bdd33133205c5fc7d859030495f52ba61159f26b2bee093d1e4bc6c13": {
+            "minecraft": "1.20",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "badb43783035b2063a43032b2af69cecf1acf44fd9e53c404ed527478c90c023": {
+            "minecraft": "1.20.1",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "a3ac9a259a61bd701b807af0360ec1c6aaee5dd7a6cb4224e672e6008f946d3b": {
+            "minecraft": "1.20.2",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "9f1b2df493c944ab12c64835801f1696d3290fb00bebf53415224f0cd62802cb": {
+            "minecraft": "1.20.3",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "fe6698f91e27ad1f7ad12ea266f900a90834f62419ee66f090790e6a7834f688": {
+            "minecraft": "1.20.4",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "d103416b31a961d888a05c570277ba70dd2ca7612a9834391818ddc34a40b13a": {
+            "minecraft": "1.20.5",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "5aeefab5f60037cc79c091b48a07f5992113e2f57079220d0826ff77ee20d6cc": {
+            "minecraft": "1.21",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "024dcb9800816ca6949e503a3ad25fcc887e51849aa689cbe7786e3d5409b7a5": {
+            "minecraft": "1.21.10",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "4284b87e81e29c437ab475b67e638bd36bc7fff7d3f8aea2fc922f995cfe69d6": {
+            "minecraft": "1.21.2",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "6053eacac151543386e7ec1ee729d3050f723f6831ec6505663c0b0af157ab68": {
+            "minecraft": "1.21.3",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "978664ec2d35bd4d66c944c1bff44b4d235cc5849666cd6b7215768bfd8cc88f": {
+            "minecraft": "1.21.4",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "13ac9f7dfd6c512a4e23422edcb4ecf2ebebd90527c83fb879fa386e982c260a": {
+            "minecraft": "1.21.5",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "4267dd74b3d5d752bd388959ecf03d6ea45816eb6b291f455392e38c00638f38": {
+            "minecraft": "1.21.6",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "478f6720fa04ff63cf38f2d101d096ad5a695595d4e3737fcdd62e29872e937c": {
+            "minecraft": "1.21.7",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "cd54ef5068a796f0e5cc72004caa77446a3d47a3e29b1b1b3dfca4b3a9b3c444": {
+            "minecraft": "1.21.8",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "55ad5c8dbb4f022bd2c8ac6ac85a4124feb22724069a0c785a7a5814aade75d2": {
+            "minecraft": "1.21.9",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "a43dfb87a5a5983c7d31e50e6cca217e1d8e64a67ffb411341bf37eab7dc4638": {
+            "minecraft": "26.1",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "4f8e2816561fd16b212152ec3b58a0d54f22e0b97392a76209d13281d41e46ad": {
+            "minecraft": "26.1.1",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "d57a58556777f6217284e4bf4d6d405a37447aa71cc82ffedf674df74707efb0": {
+            "minecraft": "26.1.2",
+            "platforms": [
+              "fabric"
+            ]
+          },
+          "00e5dae750d8d4100809945ec68701d860e21ade81b6397656ee01add1f5d419": {
+            "minecraft": "1.18",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "51feaa7a288e6f9efd7d82f4cfd82678103bcc9ca3013c5712cbaf68c7973e39": {
+            "minecraft": "1.18.1",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "6965e82516e751b10effc122e8be62c193e6fe674b0818d71e2f2ab220b2c681": {
+            "minecraft": "1.19",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "8f33a1a8787d2c2dacdf0d34aa8c4babf17f3b02ce2301021ee10129450e4ae2": {
+            "minecraft": "1.19.1",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "626e17fdf30c70556de6b47613d4b2426628ddbb2231c9048a5ddace7a7b0974": {
+            "minecraft": "1.19.2",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "35f4528eb7ae1c971c54e44da22505fa7b2586c5df497c98bf0a596c8cce8768": {
+            "minecraft": "1.19.3",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "d1e9df8d6fa66bec0c7489d9b489a3ae62b985aa8fbaaf16ed296e97f3ca490b": {
+            "minecraft": "1.20",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "127d1fd2b617f95e1b5f54502db8da8129532dcbd5692873439fd448124d1848": {
+            "minecraft": "1.20.1",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "d3a0f0d0b0d3efd620004aa58034b727d52a9b69a15342200297afb7c7193bd4": {
+            "minecraft": "1.20.2",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "9b85060bc0f15ab3317f47a460f84983392a27c388896e4a74cd01149d3c351f": {
+            "minecraft": "1.20.3",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "eb87b49245230283a1d278a6b13c2675975c5b722f50b0fe65ba6a3cc0b8fa3e": {
+            "minecraft": "1.20.4",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "6ed256fb78a85b4a2291a9cc7e422ca3507e65cbf111a13a5802008864270eb9": {
+            "minecraft": "1.21",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "a59a35884db9cc68aee5395176d13c0f338cc7966880268a04aef9a0cb6cf363": {
+            "minecraft": "1.21.10",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "345f52e07d758d44133daf37052db1fd7ae4ae8bad1528dcbe5642f437a6f129": {
+            "minecraft": "1.21.3",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "df262c7b942b21fb4e14f59fb9878e786b32f788bfd9c24e70a63c20f2835584": {
+            "minecraft": "1.21.4",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "96cdc35f2e3508b3eb732a7dfb7fe0908ffb52cdc163b2e3b64d7709c4642a25": {
+            "minecraft": "1.21.5",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "177a5ac4c8d586dd2a930c8f779d93fc49b241c016de7b56b82ca282e4747b85": {
+            "minecraft": "1.21.6",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "9b686c4b9e3f10c851fc34f3110f0e47ced4b2e304b7918256dfb500af0a2170": {
+            "minecraft": "1.21.7",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "d8024daa25dc4b0af995bce7cf7871bf28e49682462afebe221f9c48268c8ef9": {
+            "minecraft": "1.21.8",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "b7c1717e5fc892e448003558e6b88f516c4403c1f7c6ac5bb08ab7776e148602": {
+            "minecraft": "1.21.9",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "b54634f85e5f73df3404a065b953e06890433f17c9a9889e38b52225edaf1b80": {
+            "minecraft": "26.1",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "70742b12c12163a29b4c0dab334a4a7635fcb4d0d937a1a5bcbb1a6a0398c882": {
+            "minecraft": "26.1.1",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "1373a2bf619e56e90282bad1285456f104dd996cb6768b481e3b9b204b041f34": {
+            "minecraft": "26.1.2",
+            "platforms": [
+              "forge"
+            ]
+          },
+          "bd9b4d372890d2aded1cd62561e5ced23cf532aae2bcb51e878c46a0ee4cb54a": {
+            "minecraft": "1.20.1",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "57e11b13ab1f2c1fd873d79671d02c9935652d7f9d534747142fc946b0aca5d9": {
+            "minecraft": "1.20.2",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "3685672d7e962417f3c1ed1ebf3a9bd0dc1d78d88537f8a02c3f9aaaab77b0cd": {
+            "minecraft": "1.20.3",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "9d827037525a45c98238c1bf6a1702b58ae5f5297dd8d677411478918e4c8d8d": {
+            "minecraft": "1.20.4",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "a773c53433e70bfa58de0e1ffaa1f21ad715bbfad11396dab1346563e6a68009": {
+            "minecraft": "1.20.5",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "64da46659d07cf02b52b516b5f689918a9ccc0f6fdc787147716bdfc3da6011e": {
+            "minecraft": "1.21",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "2f90aee1a821d990a4923b138dd7879c216de0b2e97514985a3ab659c318486d": {
+            "minecraft": "1.21.10",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "6201c9f2d4b4534147d527689935d2a76082c0c02a77042ec3ae18fc21c36082": {
+            "minecraft": "1.21.2",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "41e27d6345bbb0f1be9d91481b6b49fff83f2c7211ff70a97b0821f86e7d93bd": {
+            "minecraft": "1.21.3",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "888899984eae8ad7b0a0b80ab3fcb1bcd63e01fc97bbcda6fc713716ee418871": {
+            "minecraft": "1.21.4",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "b1ef8ed628d6121fa0d26d8d528b89e9bad499de1d102dd25445769f55ab1057": {
+            "minecraft": "1.21.5",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "0ebc41fb4c4b82d9f0c4479e425bba6632b90009382fddaf703f81b741978844": {
+            "minecraft": "1.21.6",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "bce81733e20b57c61cea9d5e65c79a6eda9805ab7a75abe2146ce1ae1840de9d": {
+            "minecraft": "1.21.7",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "a46d6e0ef88a021edc9cefb57c927e61552cfe0d678fae00fb255fa1dc4acd33": {
+            "minecraft": "1.21.8",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "f1fecf7f904bb0294d01815e6cf890cbb80171c6a3b225a1fa42a5e44cccdd19": {
+            "minecraft": "1.21.9",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "34f9240703a151f788f7a41087e1308a1e4df35d3d063841bddea5073103fced": {
+            "minecraft": "26.1",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "3ea76d3c897ddedfd6207b6dfcae2b3e7673c6bdab39427a74d0b2780839c831": {
+            "minecraft": "26.1.1",
+            "platforms": [
+              "neoforge"
+            ]
+          },
+          "3946ea40a75c158dec8ad11809593050c540e9ddd1c9f34e22e0d78f771e6f61": {
+            "minecraft": "26.1.2",
+            "platforms": [
+              "neoforge"
+            ]
+          }
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-backports-source.zip",
+        "verification": "verification-bukkit-modern.json",
+        "artifacts": {
+          "45324393d53015e46c7d9b2918c4de52251a0f99fa663d7806d1c5b3488d94b5": {
+            "minecraft": "1.20",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "c061400df95afd71467bf0cca4c4949ec06d2115a3a7a319ac02cb54f60cb7e0": {
+            "minecraft": "1.20.1",
+            "platforms": [
+              "paper",
+              "purpur",
+              "folia"
+            ]
+          },
+          "f2cc09c6ca78958f7136405d0239b64140341b4aa0eaf4c820d1342e611ead18": {
+            "minecraft": "1.20.2",
+            "platforms": [
+              "paper",
+              "purpur",
+              "folia"
+            ]
+          },
+          "a6c0e5d32d49865d202feded24a946c82de61158cb156ced7e863a8328191293": {
+            "minecraft": "1.20.4",
+            "platforms": [
+              "paper",
+              "purpur",
+              "folia"
+            ]
+          },
+          "8372f88afee73b68aba8b805547f558cfd6b670049553364d5ddbdb2dd1fcf4e": {
+            "minecraft": "1.20.5",
+            "platforms": [
+              "paper"
+            ]
+          },
+          "fb733bde5da5daef50bacb543dc212e9c1430060bd7b4dfc81d8f8c403f28529": {
+            "minecraft": "1.21",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "2e6292dd37a5eb228c2e239b7d898e405509a84e298c17ebd58838c37a02954f": {
+            "minecraft": "1.21.1",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "b81d669000a54daeec078111569c1d82b0af35ab07300005f3c8af71e18699cc": {
+            "minecraft": "1.21.2",
+            "platforms": [
+              "spigot"
+            ]
+          },
+          "bac9ed269d4a62097456fe582c397ad84d5de21e55f00f130760785fa072c4cb": {
+            "minecraft": "1.21.3",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "e14bd510a92fd4221d6774801aff4293ccb8ada90ce363c5beacc57180e3bc3c": {
+            "minecraft": "1.21.4",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur",
+              "folia"
+            ]
+          },
+          "6209253a4fd768266320af88a853488273013bb28dbe91b35ae82fce5bbf00c4": {
+            "minecraft": "1.21.5",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur",
+              "folia"
+            ]
+          },
+          "665e46f96d56f20e7ba7cf4cba3026c6f01d56e046c067f36f4e8c597c945d22": {
+            "minecraft": "1.21.6",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur",
+              "folia"
+            ]
+          },
+          "caf3958bac88793a2b010e24063fe2c247ec7a25e2b04bee7cbc4bcbef6dc590": {
+            "minecraft": "1.21.7",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "fb76521efd00f54d674ce5d6b12902c277b956c84744dd8c904799f3e5d446f9": {
+            "minecraft": "1.21.8",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur",
+              "folia"
+            ]
+          },
+          "a79dcf339248f061e895aee398882aa89bc0ae19cf1fcefad45c7a99d906456a": {
+            "minecraft": "1.21.9",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "99e2744bb242f88f2d68268e329fda651d9ec6042f14535196016f1d8b5bb964": {
+            "minecraft": "1.21.10",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur"
+            ]
+          },
+          "d5dd09e30ff74f11b78882800d695c524e0b55910338c56ce089b2cdbb9425c3": {
+            "minecraft": "26.1",
+            "platforms": [
+              "spigot"
+            ]
+          },
+          "d7e015b890886b32ea8d2f47789e09841d5c24a13865491566b45199f5473e8b": {
+            "minecraft": "26.1.1",
+            "platforms": [
+              "paper",
+              "spigot"
+            ]
+          },
+          "5278c81e5a978f039851f49bf11daa6a991701567e73f5699810b1365301000d": {
+            "minecraft": "26.1.2",
+            "platforms": [
+              "paper",
+              "spigot",
+              "purpur",
+              "folia"
+            ]
+          }
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-early-source.zip",
+        "verification": "verification-bukkit-early.json",
+        "artifacts": {
+          "9e823f0c879d8f088cc67888998c174f34402a5b7bfab68116eddd6d17264e54": {
+            "minecraft": "1.17",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "318db9a76533d98c67558b2cdc621bcc2c20f5c1864fa58d60a5829cf600923b": {
+            "minecraft": "1.17.1",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "f245e60f10b5db51261ab5aa85f8bc5f64dfb25e04eae7b0b573243d667b5f29": {
+            "minecraft": "1.18",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "76bfd334f0c3d42ec73513a556f957859ee39a3a8377fff0935088d5bce5bbb2": {
+            "minecraft": "1.18.1",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "232fade92d8c38ab109fcd6ad82fe129a32268fa558c60017643a151e53512ae": {
+            "minecraft": "1.19",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "d290f73b4b52018dff6b0671992f7ac4d1c57b25e8d1ca8fbc98011394bc5099": {
+            "minecraft": "1.19.1",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "8ad8c5529085aeb6be3c5fbfbfbc1a490e8a029d982f6f825e1f4f283d73305e": {
+            "minecraft": "1.19.2",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          }
+        }
+      },
+      {
+        "source": "Tandemount-1.0.0-bukkit-early-boundaries-source.zip",
+        "verification": "verification-bukkit-early-boundaries.json",
+        "artifacts": {
+          "6f5bbb4cd6a1d2f75876e9b206a79ace28a0aa8b70bfbd6c626c1c26942e0ab1": {
+            "minecraft": "1.16.5",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "a43166c68c7929b57a32acca51ec555bc02943e6e7759ce3bddc442de9cc5cda": {
+            "minecraft": "1.19.3",
+            "platforms": [
+              "paper",
+              "purpur"
+            ]
+          },
+          "661a245cebdb907d35ba14a4c5920b0c0ed50450ce034c3f70f22f8f365dd0d4": {
+            "minecraft": "1.20.3",
+            "platforms": [
+              "spigot"
             ]
           }
         }

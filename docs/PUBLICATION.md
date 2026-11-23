@@ -1,14 +1,15 @@
 # Publication status
 
-GitHub hosts 34 Tandemount 1.0.0 JARs for the 46 exact Minecraft and platform
-pairs in the download table. Each published batch links to its corresponding
-source archive, verification report, and SHA-256 checksums.
-Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·
+GitHub hosts 130 JARs covering 186 verified Minecraft and platform pairs for
+Tandemount 1.0.0. The 93 server mod builds cover all 38 Minecraft releases and
+their available mod loaders. The Bukkit builds cover 37 Minecraft releases
+and 93 verified server-core pairs. [Verified downloads](../README.md#choose-your-server-build) ·
 [Build targets](../BACKPORTS.md)
 
 The Modrinth project remains a draft. CurseForge listing visibility depends on moderation.
-The Paper 1.7.10 download is on GitHub and in the Modrinth draft. CurseForge
-rejected the Minecraft 1.7.10 and 1.7 tags for the Bukkit Plugins project.
+The verified Bukkit builds for 1.7.10, 1.16.5, and 1.17.1 are hosted on GitHub
+and in the Modrinth draft. CurseForge rejected their exact game version tags
+for the Bukkit Plugins project.
 The repository and storefronts use the owner's supplied artwork.
 [Project icon](../branding/icon.png)
 
