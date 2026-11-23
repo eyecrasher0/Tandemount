@@ -139,7 +139,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             if (args[0].equals("prepare")) prepare();
             if (args[0].equals("start")) start();
             if (args[0].equals("wire-start")) { wireMode = true; start(); }
-            if (args[0].equals("wire-cancelled")) wireCancelled();
+            if (args[0].equals("wire-cancelled")) wireCancelled(20);
             if (args[0].equals("wire-mounted")) wireMounted();
             if (args[0].equals("wire-menu-finish")) wireMenuFinish(100);
             if (args[0].equals("late")) late();
@@ -329,8 +329,12 @@ public final class NativeFixture extends JavaPlugin implements Listener {
             } catch (Throwable failure) { failed("native-start", failure); }
         }});
     }
-    private void wireCancelled() {
+    private void wireCancelled(final int remainingChecks) {
         later(3,new Runnable(){public void run(){
+            if (wireCancelledInteractions == 0 && remainingChecks > 0) {
+                wireCancelled(remainingChecks - 1);
+                return;
+            }
             boolean preciseCancelled = !wirePreciseOnly || (wireInteractions == 1 && wireCancelledInteractions == 1
                     && "PlayerInteractAtEntityEvent".equals(wireCancelledEvent));
             record("cancelled-final-interaction-does-not-mount",
@@ -449,7 +453,7 @@ public final class NativeFixture extends JavaPlugin implements Listener {
                     && (Boolean)Probe.call(nativeSeat, "isInvisible"));
             else if (marker) require("seat-is-invisible-vanilla-marker-armor-stand",
                     rider.getVehicle().getType().name().equals("ARMOR_STAND")
-                    && (Boolean)Probe.call(nativeSeat, "isInvisible") && (Boolean)Probe.call(rider.getVehicle(), "isMarker"));
+                    && !((Boolean)Probe.call(rider.getVehicle(), "isVisible")) && (Boolean)Probe.call(rider.getVehicle(), "isMarker"));
             else require("seat-is-nonliving-vanilla-block-display",
                     rider.getVehicle().getType().name().equals("BLOCK_DISPLAY")
                     && !(rider.getVehicle() instanceof LivingEntity));

@@ -195,7 +195,7 @@ final class NativeAccess {
             Reflect.call(bukkit, "setSize", -1);
         }
         if (markerSeat) {
-            Reflect.call(seat, "setInvisible", true);
+            Reflect.call(bukkit, "setVisible", false);
             Reflect.call(bukkit, "setMarker", true);
         }
         if (interpolatedSeat) Reflect.optional(bukkit, "setTeleportDuration", 0);
