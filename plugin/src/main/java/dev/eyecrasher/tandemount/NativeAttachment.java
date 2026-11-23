@@ -39,9 +39,7 @@ final class NativeAttachment {
         carrier = SeatClass.create(base, nativeConstructor, access.position, false, base.getMethod(tick)).getConstructor(entityType, level);
         Class<?> interaction = handleType(Class.forName(craft + ".entity.CraftInteraction"));
         Constructor<?> interactionConstructor = interaction.getConstructor(entityType, level);
-        Method portalTeleport = access.minecraft.equals("26.3") && "Paper".equals(org.bukkit.Bukkit.getName())
-                ? access.entityClass.getMethod("teleport", Class.forName("net.minecraft.world.level.portal.TeleportTransition")) : null;
-        spacer = SeatClass.create(interaction, interactionConstructor, access.position, false, interaction.getMethod(tick), portalTeleport).getConstructor(entityType, level);
+        spacer = SeatClass.create(interaction, interactionConstructor, access.position, false, interaction.getMethod(tick)).getConstructor(entityType, level);
         llamaType = NativeAccess.vanillaEntityType(entityType, "minecraft:llama", "LLAMA");
         interactionType = NativeAccess.vanillaEntityType(entityType, "minecraft:interaction", "INTERACTION");
         Object scaleAttribute = null;
@@ -247,7 +245,6 @@ final class NativeAttachment {
         double riderOffset = passengerHeight(ride.seat, ride.rider);
         float height = (float)((settings.vertical - riderOffset - anchor) / ride.attachmentLiftRatio);
         height(ride, lift, height);
-        ride.attachmentVertical = settings.vertical;
     }
 
     private Entity carrier(Ride ride, int index) { return ride.helpers[1 + index * carrierStride]; }
@@ -283,7 +280,8 @@ final class NativeAttachment {
     }
 
     Object portalTransition(Ride ride, Object anchor, Object transition) throws ReflectiveOperationException {
-        if (ride.helpers.length == 0 || Reflect.handle(ride.helpers[0]) != anchor
+        if (!transition.getClass().getSimpleName().equals("TeleportTransition")
+                || ride.helpers.length == 0 || Reflect.handle(ride.helpers[0]) != anchor
                 || !Boolean.TRUE.equals(Reflect.call(transition, "asPassenger"))
                 || !"NETHER_PORTAL".equals(String.valueOf(Reflect.call(transition, "cause")))
                 || Reflect.call(transition, "newLevel") == Reflect.handle(ride.horse.getWorld())) return null;

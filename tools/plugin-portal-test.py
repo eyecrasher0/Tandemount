@@ -55,43 +55,63 @@ def mounted_graph(snapshot, tree):
             and seen == by_id.keys() and len(seen) == len(tree))
 
 
-def assertions(result, scenario):
-    """Evaluate actual server positions and ownership, not a fixture PASS label."""
+def transferred(result, passenger_cancelled=False):
     before = result["beforePortal"]
-    checks = {"second-rider-mounted-before-portal": before["rider"]["vehicle"] != -1,
-              "native-helper-graph-present-before-portal": mounted_graph(before, result["treeBeforePortal"]),
-              "driver-keeps-native-horse-before-portal": before["driver"]["vehicle"] != -1}
-    if scenario == "cancel-portal":
-        after = result["afterCancelled"]
-        checks.update({"cancelled-portal-keeps-source-world": all(after[p]["world"] == before[p]["world"] for p in ("driver", "rider")),
-                       "cancelled-portal-preserves-ride": after["nativeRideEntries"] == before["nativeRideEntries"]
-                       and all(after[p]["vehicle"] == before[p]["vehicle"] for p in ("driver", "rider"))})
-        return checks
+    start = result["treeBeforePortal"][0]
     after = result["after10Ticks"]
+    arrival = result["afterSynchronous"]
+    horse = result["treeAfterSynchronous"][0]
     target = result["nativeExit"]
     target_world = result["nativeExitWorld"]
-    checks.update({"native-portal-exit-recorded": target_world != before["driver"]["world"],
-                   "driver-arrives-at-native-exit": after["driver"]["world"] == target_world and abs(after["driver"]["xyz"][1] - target[1]) < 2,
-                   "driver-retains-native-horse": after["driver"]["vehicle"] != -1,
-                   "helpers-cleaned-before-target-cloning": after["nativeRideEntries"] == 0 and len(result["treeAfter10Ticks"]) == 2})
-    if scenario == "cancel-passenger":
+    def at(actual, expected):
+        return all(abs(a - b) < .002 for a, b in zip(actual, expected, strict=True))
+    def placed(player):
+        expected = [target[i] + before[player]["xyz"][i] - start["xyz"][i] for i in range(3)]
+        return arrival[player]["world"] == target_world and at(arrival[player]["xyz"], expected)
+    checks = {"native-helper-graph-present-before-portal": mounted_graph(before, result["treeBeforePortal"]),
+              "native-portal-exit-recorded": target_world != start["world"],
+              "horse-arrives-at-native-exit": horse["world"] == target_world and at(horse["xyz"], target),
+              "driver-arrives-at-native-exit": placed("driver") and after["driver"]["vehicle"] == horse["id"],
+              "helpers-cleaned-before-target-cloning": arrival["nativeRideEntries"] == after["nativeRideEntries"] == 0
+              and len(result["treeAfterSynchronous"]) == len(result["treeAfter10Ticks"]) == 2}
+    if passenger_cancelled:
+        checks["native-passenger-teleport-cancelled"] = any(
+            event.get("kind") == "teleport-monitor" and event.get("cause") == "NETHER_PORTAL"
+            and event.get("playerId") == before["rider"]["id"] and event.get("cancelled") is True
+            for event in result["events"])
         checks["cancelled-passenger-teleport-not-forced"] = after["rider"]["world"] == before["rider"]["world"] and after["rider"]["vehicle"] == -1
-        checks["cancelled-passenger-has-no-arrival-cooldown"] = result["afterSynchronous"]["rider"]["portalCooldown"] == before["rider"]["portalCooldown"]
+        checks["cancelled-passenger-has-no-arrival-cooldown"] = arrival["rider"]["portalCooldown"] == before["rider"]["portalCooldown"]
     else:
-        checks.update({"second-rider-arrives-in-native-target-world": after["rider"]["world"] == target_world,
-                       "second-rider-has-no-helper-height-error": abs(after["rider"]["xyz"][1] - target[1] - .8125) < .002,
-                       "second-rider-not-at-source-coordinates": abs(after["rider"]["xyz"][0] - target[0]) < 3 and abs(after["rider"]["xyz"][2] - target[2]) < 3,
-                       "second-seat-ends-on-world-transfer": after["rider"]["vehicle"] == -1,
-                       "second-rider-retains-independent-look": abs((after["rider"]["yaw"] - 135 + 180) % 360 - 180) < .02 and abs(after["rider"]["pitch"] - 25) < .02,
-                       "native-arrival-cooldown-applied": result["afterSynchronous"]["rider"]["portalCooldown"] == result["afterSynchronous"]["rider"]["nativeArrivalCooldown"] > 0})
+        checks.update({"second-rider-arrives-with-pretransfer-pose": placed("rider"),
+                       "second-seat-ends-on-world-transfer": after["rider"]["world"] == target_world and after["rider"]["vehicle"] == -1,
+                       "second-rider-retains-independent-look": abs((arrival["rider"]["yaw"] - before["rider"]["yaw"] + 180) % 360 - 180) < .02
+                       and abs(arrival["rider"]["pitch"] - before["rider"]["pitch"]) < .02,
+                       "native-arrival-cooldown-applied": arrival["rider"]["portalCooldown"] == arrival["rider"]["nativeArrivalCooldown"] > 0})
+    return checks
+
+
+def assertions(result, scenario):
+    """Evaluate actual server positions, events and ownership."""
+    before = result["beforePortal"]
+    if scenario == "cancel-portal":
+        after = result.get("afterCancelled", result.get("afterSynchronous", {}))
+        return {
+            "native-helper-graph-present-before-portal": mounted_graph(before, result["treeBeforePortal"]),
+            "native-horse-portal-cancelled": any(event.get("kind") == "entity-portal" and event.get("cancelled") is True
+                and event["entity"]["id"] == before["driver"]["vehicle"] and event["entity"]["world"] == before["driver"]["world"]
+                and event.get("to") not in {None, "null"} for event in result["events"]),
+            "cancelled-portal-keeps-source-world": all(after[p]["world"] == before[p]["world"] for p in ("driver", "rider")),
+            "cancelled-portal-preserves-ride": after["nativeRideEntries"] == before["nativeRideEntries"]
+                and all(after[p]["vehicle"] == before[p]["vehicle"] for p in ("driver", "rider")),
+        }
+    checks = transferred(result, scenario == "cancel-passenger")
     if scenario == "return":
         retry, back = result["remountState"], result["returnState"]
         checks["second-rider-can-remount-after-portal"] = (retry["driver"]["vehicle"] != -1
             and retry["rider"]["vehicle"] not in (-1, retry["driver"]["vehicle"])
             and retry["nativeRideEntries"] == before["nativeRideEntries"])
-        checks["return-keeps-correct-world-and-height"] = (back["after10Ticks"]["rider"]["world"] == before["rider"]["world"]
-            and abs(back["after10Ticks"]["rider"]["xyz"][1] - back["nativeExit"][1] - .8125) < .002
-            and back["after10Ticks"]["nativeRideEntries"] == 0)
+        checks.update(("return-" + key, verified) for key, verified in transferred(back).items())
+        checks["return-keeps-original-world"] = back["nativeExitWorld"] == before["driver"]["world"]
     return checks
 
 
@@ -209,7 +229,7 @@ def main():
             command("return")
             back = wait("complete")
             raw["remountState"] = retry["retry"]
-            raw["returnState"] = {key: back.get(key) for key in ("nativeExit", "nativeExitWorld", "afterSynchronous", "after10Ticks")}
+            raw["returnState"] = back
         result["observations"] = raw
         result["checks"] = assertions(raw, args.scenario)
         if all(result["checks"].values()):

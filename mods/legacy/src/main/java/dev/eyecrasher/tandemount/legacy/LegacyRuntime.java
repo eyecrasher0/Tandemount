@@ -68,7 +68,8 @@ public final class LegacyRuntime {
             if (!mounting && LEGACY_DISMOUNTS.remove(entity)) return true;
             if (mounting && target == null) {
                 Object current=runtime.vehicle(entity);
-                if (isSeat(current)) {
+                Ride ride=runtime.rides.get(current);
+                if (isSeat(current) || (ride != null && ride.driver == entity)) {
                     boolean allowed=Boolean.TRUE.equals(Reflect.call(Reflect.type("net.minecraftforge.event.ForgeEventFactory"),"canMountEntity",entity,current,false));
                     if (allowed) LEGACY_DISMOUNTS.add(entity);
                     return allowed;
@@ -87,28 +88,29 @@ public final class LegacyRuntime {
     public static void entityWorldChange(Object entity,Object targetWorld) {
         if (instance != null && Reflect.get(entity,"world|worldObj") != targetWorld) entityTeleport(entity);
     }
-    /** Use native login only when FML confirms every loaded network mod accepts vanilla.
-     * 1.7.10 has no vanilla completion; 1.8.9 has an asynchronous handlerAdded race. */
-    public static boolean legacyVanillaLogin(Object players, Object network, Object player) {
-        if (instance == null || Names.minecraft().equals("1.12.2")) return false;
-        String fml=Names.minecraft().equals("1.7.10")?"cpw.mods.fml":"net.minecraftforge.fml";
-        Class<?> registryType=Reflect.type(fml+".common.network.NetworkRegistry");
-        Class<?> side=Reflect.type(fml+".relauncher.Side");
-        @SuppressWarnings({"unchecked","rawtypes"}) Object client=Enum.valueOf((Class)side,"CLIENT");
+    private static boolean acceptsVanilla(String fml) {
         Object registry=Reflect.enumValue(fml+".common.network.NetworkRegistry","INSTANCE");
-        if (!Boolean.TRUE.equals(Reflect.call(registry,"isVanillaAccepted",client))) return false;
-        if (Names.minecraft().equals("1.8.9")) {
-            Object channel=Reflect.call(network,"channel");
-            Object marker=Reflect.call(Reflect.call(channel,"attr",Reflect.get(registryType,"FML_MARKER")),"get");
-            if (Boolean.TRUE.equals(marker)) return false; // Keep actual Forge clients on their handshake.
-        }
+        Object client=Reflect.enumValue(fml+".relauncher.Side","CLIENT");
+        return Boolean.TRUE.equals(Reflect.call(registry,"isVanillaAccepted",client));
+    }
+    public static boolean oldestVanillaTimeout(Object dispatcher) {
+        if (instance == null || !acceptsVanilla("cpw.mods.fml")) return false;
+        Object vanilla=Reflect.enumValue(dispatcher.getClass().getName()+"$ConnectionType","VANILLA");
+        Reflect.call(dispatcher,"completeServerSideConnection",vanilla);
+        return true;
+    }
+    public static boolean legacyVanillaLogin(Object players, Object network, Object player) {
+        if (instance == null) return false;
+        String fml="net.minecraftforge.fml";
+        Class<?> registryType=Reflect.type(fml+".common.network.NetworkRegistry");
+        Object channel=Reflect.call(network,"channel");
+        Object marker=Reflect.call(Reflect.call(channel,"attr",Reflect.get(registryType,"FML_MARKER")),"get");
+        if (Boolean.TRUE.equals(marker) || !acceptsVanilla(fml)) return false;
         Object connection=Reflect.create("net.minecraft.network.NetHandlerPlayServer",instance.server,network,player);
-        Object common=Reflect.call(Reflect.type(fml+".common.FMLCommonHandler"),"instance");
+        Reflect.set(player,"playerNetServerHandler",null);
         Object event=Reflect.create(fml+".common.network.FMLNetworkEvent$ServerConnectionFromClientEvent",network);
-        if (Names.minecraft().equals("1.8.9")) Reflect.call(Reflect.call(common,"bus"),"post",event);
+        Reflect.call(Reflect.get(Reflect.type("net.minecraftforge.common.MinecraftForge"),"EVENT_BUS"),"post",event);
         Reflect.call(players,"initializeConnectionToPlayer",network,player,connection);
-        if (Names.minecraft().equals("1.7.10"))
-        Reflect.call(Reflect.call(common,"bus"),"post",event);
         return true;
     }
     /** Called inside the horse interaction after Forge has completed its cancellable event. */
@@ -192,11 +194,14 @@ public final class LegacyRuntime {
         if (runtime == null || Reflect.bool(world,"isRemote")) return;
         for (Ride ride : new ArrayList<Ride>(runtime.rides.values())) {
             if (ride.world != world) continue;
-            try {
-                if (!runtime.valid(ride)) runtime.remove(ride);
-                else runtime.pose(ride);
-            } catch (RuntimeException ex) { runtime.remove(ride); log("Removed a ride after a native lifecycle error."); }
+            runtime.refresh(ride);
         }
+    }
+    private void refresh(Ride ride) {
+        try {
+            if (valid(ride)) { pose(ride); return; }
+        } catch (RuntimeException ex) { log("Removed a ride after a native lifecycle error."); }
+        remove(ride);
     }
     private boolean valid(Ride r) {
         if (!config.enabled) return invalid("disabled");
@@ -361,9 +366,12 @@ public final class LegacyRuntime {
             } else if (args.length == 2 && (key.equals("types") || key.equals("debug"))) next=config.change(key,args[1]);
             else { message(sender,"Invalid command. Use /tandemount help.",null); return; }
             next.save(configPath); config=next;
-            for (Ride r : new ArrayList<Ride>(rides.values())) { if (!config.enabled || excluded(r.world)) remove(r); else pose(r); }
-            message(sender,"Tandemount settings saved.",null);
-        } catch (Exception ex) { message(sender,"Settings unchanged: "+(ex.getMessage()==null?ex.getClass().getSimpleName():ex.getMessage()),null); }
+        } catch (Exception ex) {
+            message(sender,"Settings unchanged: "+(ex.getMessage()==null?ex.getClass().getSimpleName():ex.getMessage()),null);
+            return;
+        }
+        message(sender,"Tandemount settings saved.",null);
+        for (Ride ride : new ArrayList<Ride>(rides.values())) refresh(ride);
     }
     private final class Command implements InvocationHandler {
         @Override public Object invoke(Object proxy,Method method,Object[] args) {

@@ -6,6 +6,7 @@ import java.nio.file.*;
 import java.util.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.PositionMoveRotation;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.NetherPortalBlock;
 import net.minecraft.world.level.portal.TeleportTransition;
@@ -20,7 +21,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.command.*;
 import org.bukkit.craftbukkit.entity.CraftEntity;
-import org.bukkit.craftbukkit.CraftWorld;
 
 /** Disposable native portal regression fixture. Never a distribution artifact. */
 public final class PortalTransferFixture extends JavaPlugin implements Listener {
@@ -33,7 +33,8 @@ public final class PortalTransferFixture extends JavaPlugin implements Listener 
  List<Map<String,Object>> tree(org.bukkit.entity.Entity e){List<Map<String,Object>> out=new ArrayList<>();out.add(state(e));for(var child:e.getPassengers())out.addAll(tree(child));return out;}
  Map<String,Object> players(){Map<String,Object> value=new LinkedHashMap<>();value.put("driver",state(driver));value.put("rider",state(rider));try{JavaPlugin subject=(JavaPlugin)Bukkit.getPluginManager().getPlugin("Tandemount");Class<?> bridge=Class.forName("dev.eyecrasher.tandemount.NativeSeat",true,subject.getClass().getClassLoader());var f=bridge.getDeclaredField("RIDES");f.setAccessible(true);value.put("nativeRideEntries",((Map<?,?>)f.get(null)).size());}catch(Exception e){value.put("nativeRideEntriesError",e.toString());}return value;}
  void frame(World w,int x,int y,int z){for(int a=-2;a<=6;a++)for(int b=-3;b<=3;b++){w.getBlockAt(x+a,y-1,z+b).setType(Material.OBSIDIAN,false);for(int dy=0;dy<=6;dy++)w.getBlockAt(x+a,y+dy,z+b).setType(Material.AIR,false);}for(int a=-1;a<=4;a++)for(int b=-1;b<=5;b++)w.getBlockAt(x+a,y+b,z).setType(a==-1||a==4||b==-1||b==5?Material.OBSIDIAN:Material.NETHER_PORTAL,false);}
- public boolean onCommand(CommandSender sender,Command command,String label,String[] args){try{switch(args[0]){
+ void positionTree(Entity vehicle){for(Entity passenger:vehicle.getPassengers()){vehicle.positionRider(passenger);positionTree(passenger);}}
+ public boolean onCommand(CommandSender sender,Command command,String label,String[] args){if(!(sender instanceof ConsoleCommandSender)||args.length==0)return true;try{switch(args[0]){
  case "setup":{
   driver=Bukkit.getPlayerExact("PortalDriver");rider=Bukkit.getPlayerExact("PortalRider");if(driver==null||rider==null)throw new IllegalStateException("two sockets required");
   source=Bukkit.getWorlds().stream().filter(w->w.getEnvironment()==World.Environment.NORMAL).findFirst().orElseThrow();target=Bukkit.getWorlds().stream().filter(w->w.getEnvironment()==World.Environment.NETHER).findFirst().orElseThrow();
@@ -56,18 +57,19 @@ public final class PortalTransferFixture extends JavaPlugin implements Listener 
  }
  case "return":returning=true;
  case "travel":{
-  Entity nativeHorse=((CraftEntity)horse).getHandle();nativeHorse.snapTo(returning?105.5:833.5,64,returning?1.5:8.5,0,0);for(var passenger:nativeHorse.getPassengers())nativeHorse.positionRider(passenger);
+  Entity nativeHorse=((CraftEntity)horse).getHandle();nativeHorse.snapTo(returning?105.5:833.5,64,returning?1.5:8.5,0,0);positionTree(nativeHorse);
   nativeHorse.setPortalCooldown(300);
   report.put("beforePortal",players());report.put("treeBeforePortal",tree(horse));
   TeleportTransition transition=((NetherPortalBlock)Blocks.NETHER_PORTAL).getPortalDestination((ServerLevel)nativeHorse.level(),nativeHorse,new BlockPos(returning?105:833,64,returning?1:8));
-  if(transition==null){report.put("portalCancelled",cancelPortal);report.put("afterCancelled",players());write("complete");break;}
-  report.put("nativeExit",List.of(transition.position().x(),transition.position().y(),transition.position().z()));report.put("nativeExitWorld",transition.newLevel().getWorld().getName());
+  if(transition==null){report.put("afterCancelled",players());write("complete");break;}
+  var exit=PositionMoveRotation.calculateAbsolute(PositionMoveRotation.of(nativeHorse),PositionMoveRotation.of(transition),transition.relatives()).position();
+  report.put("nativeExit",List.of(exit.x(),exit.y(),exit.z()));report.put("nativeExitWorld",transition.newLevel().getWorld().getName());
   result=nativeHorse.teleport(transition);report.put("afterSynchronous",players());if(result!=null)result.setPortalCooldown(300);((CraftEntity)driver).getHandle().setPortalCooldown(300);if(result!=null)report.put("treeAfterSynchronous",tree(result.getBukkitEntity()));write("transferred");
   Bukkit.getScheduler().runTaskLater(this,()->{report.put("after10Ticks",players());if(result!=null)report.put("treeAfter10Ticks",tree(result.getBukkitEntity()));write("complete");},10);break;
  }
  default:throw new IllegalArgumentException("setup|travel");}
  }catch(Throwable e){getLogger().log(java.util.logging.Level.SEVERE,"PORTAL_DIAGNOSIS",e);report.put("error",e.toString());write("failed");}return true;}
- void event(String kind,PlayerTeleportEvent e){Map<String,Object> r=new LinkedHashMap<>();r.put("kind",kind);r.put("player",e.getPlayer().getName());r.put("cause",e.getCause().toString());r.put("cancelled",e.isCancelled());r.put("from",String.valueOf(e.getFrom()));r.put("to",String.valueOf(e.getTo()));r.put("current",state(e.getPlayer()));events.add(r);}
+ void event(String kind,PlayerTeleportEvent e){Map<String,Object> r=new LinkedHashMap<>();r.put("kind",kind);r.put("playerId",e.getPlayer().getEntityId());r.put("cause",e.getCause().toString());r.put("cancelled",e.isCancelled());r.put("from",String.valueOf(e.getFrom()));r.put("to",String.valueOf(e.getTo()));r.put("current",state(e.getPlayer()));events.add(r);}
  @EventHandler(priority=EventPriority.HIGHEST)public void cancelEntity(EntityPortalEvent e){if(cancelPortal&&e.getEntity()==horse)e.setCancelled(true);}
  @EventHandler(priority=EventPriority.HIGHEST)public void cancelPlayer(PlayerTeleportEvent e){if(cancelPassenger&&e.getPlayer()==rider&&e.getCause()==PlayerTeleportEvent.TeleportCause.NETHER_PORTAL)e.setCancelled(true);}
  @EventHandler(priority=EventPriority.LOWEST)public void before(PlayerTeleportEvent e){event("teleport-lowest",e);}

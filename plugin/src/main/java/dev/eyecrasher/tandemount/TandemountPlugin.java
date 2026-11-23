@@ -30,7 +30,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     private volatile boolean stopping, packetHealthy = true;
     private final ConcurrentMap<UUID, Ride> horses = new ConcurrentHashMap<UUID, Ride>();
     private final ConcurrentMap<UUID, Ride> riders = new ConcurrentHashMap<UUID, Ride>();
-    private final Set<UUID> pending = Collections.newSetFromMap(new ConcurrentHashMap<UUID, Boolean>());
+    private final ConcurrentMap<UUID, PlayerInteractEntityEvent> pending = new ConcurrentHashMap<UUID, PlayerInteractEntityEvent>();
     private final AtomicBoolean packetErrorReported = new AtomicBoolean();
     private final Object settingsLock = new Object();
     private YamlConfiguration configuration;
@@ -48,8 +48,8 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             if (command == null) throw new IllegalStateException("Missing /tandemount command declaration");
             command.setExecutor(this); command.setTabCompleter(this);
             for (final Player player : onlinePlayers()) scheduler.next(player, new Runnable() {
-                public void run() { install(player); }
-            });
+                public void run() { if (player.isOnline()) install(player); }
+            }, null);
             getLogger().info("Tandemount 1.0.0 enabled; ordinary adult tamed saddled horses, server only.");
         } catch (Exception failure) {
             getLogger().severe("Tandemount could not initialize: " + failure.getClass().getSimpleName() + ": " + failure.getMessage());
@@ -124,8 +124,12 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
     }
     @EventHandler(priority = EventPriority.MONITOR) public void joined(PlayerJoinEvent event) { install(event.getPlayer()); }
     @EventHandler(priority = EventPriority.MONITOR) public void quit(PlayerQuitEvent event) {
-        Ride ride = riders.get(event.getPlayer().getUniqueId()); if (ride != null) ride.closing = true;
-        pending.remove(event.getPlayer().getUniqueId()); packets.uninstall(event.getPlayer());
+        Player player = event.getPlayer();
+        UUID id = player.getUniqueId();
+        Ride ride = riders.get(id);
+        if (ride != null && (ride.rider == player || ride.driver == player)) ride.closing = true;
+        pending.computeIfPresent(id, (key, request) -> request.getPlayer() == player ? null : request);
+        packets.uninstall(player);
     }
     @EventHandler(priority = EventPriority.MONITOR) public void died(EntityDeathEvent event) {
         Ride ride = horses.get(event.getEntity().getUniqueId());
@@ -161,7 +165,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             if (!event.isCancelled() && !ride.closed && !event.getFrom().equals(event.getTo())
                     && !(cancelledExitCorrection && exit.isCancelled() && event.getTo() != null
                         && event.getFrom().getWorld().equals(event.getTo().getWorld()))) close(ride);
-        }});
+        }}, () -> ride.closing = true);
     }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true) public void unloading(ChunkUnloadEvent event) {
         // The save entry points return false even if a later listener cancels
@@ -188,19 +192,27 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         if (stopping || active == null || !packetHealthy || !(event.getRightClicked() instanceof Horse)) return;
         final Player player = event.getPlayer();
         final Horse horse = (Horse)event.getRightClicked();
-        if (!active.allows(horse.getWorld().getName()) || !eligible(horse)
-                || nativeAccess.passengers(horse).isEmpty() || player.isInsideVehicle()) return;
-        if (!pending.add(player.getUniqueId())) return;
+        final World world = horse.getWorld();
+        if (!active.allows(world.getName()) || !eligible(horse) || player.isInsideVehicle()) return;
+        List<Entity> passengers = nativeAccess.passengers(horse);
+        if (passengers.size() != 1 || !(passengers.get(0) instanceof Player)) return;
+        final Player driver = (Player)passengers.get(0);
+        final UUID id = player.getUniqueId();
+        if (pending.putIfAbsent(id, event) != null) return;
         // The event object is checked after the COMPLETE synchronous dispatch,
         // including later MONITOR listeners. Cancelled interactions never mount.
-        scheduler.next(horse, new Runnable() {
-            public void run() {
+        Runnable release = () -> pending.remove(id, event);
+        try {
+            scheduler.next(horse, () -> {
                 try {
-                    if (!event.isCancelled() && !stopping && isEnabled() && packetHealthy
-                            && scheduler.owns(player)) join(horse, player);
-                } finally { pending.remove(player.getUniqueId()); }
-            }
-        });
+                    if (pending.get(id) == event && !event.isCancelled() && !stopping && isEnabled() && packetHealthy
+                            && scheduler.owns(player) && horse.getWorld() == world) join(horse, driver, player);
+                } finally { release.run(); }
+            }, release);
+        } catch (RuntimeException failure) {
+            release.run();
+            throw failure;
+        }
     }
 
     private boolean eligible(Horse horse) {
@@ -213,20 +225,19 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
         return saddle != null && saddle.getType() == Material.SADDLE;
     }
 
-    private void join(Horse horse, Player player) {
+    private void join(Horse horse, Player driver, Player player) {
         if (!settings.allows(horse.getWorld().getName()) || !player.isOnline() || player.isDead()
                 || player.isInsideVehicle() || !eligible(horse)
                 || !player.getWorld().equals(horse.getWorld()) || player.getLocation().distanceSquared(horse.getLocation()) > 36.0
                 || horses.containsKey(horse.getUniqueId()) || riders.containsKey(player.getUniqueId())) return;
         List<Entity> passengers = nativeAccess.passengers(horse);
-        if (passengers.size() != 1 || !(passengers.get(0) instanceof Player)) return;
-        Player driver = (Player)passengers.get(0);
-        if (!driver.isOnline() || !scheduler.owns(driver) || riders.containsKey(driver.getUniqueId())) return;
+        if (passengers.size() != 1 || passengers.get(0) != driver || !scheduler.owns(driver)
+                || !driver.isOnline() || riders.containsKey(driver.getUniqueId())) return;
         Ride ride = null;
         Entity seat = null;
         try {
             if (!nativeAccess.canSee(player, horse) || !nativeAccess.canSee(player, driver)
-                    || (!nativeAccess.oldest && (!packets.installed(player) || !packets.installed(driver)))) return;
+                    || !packets.installed(player) || !packets.installed(driver)) return;
             seat = nativeAccess.createSeat(horse);
             ride = new Ride(this, horse, driver, player, seat, Reflect.handle(seat));
             if (!registerRide(ride)) { seat.remove(); return; }
@@ -238,15 +249,11 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
                 nativeAccess.attachment.mount(ride);
             } else {
                 nativeAccess.addSeat(horse, seat);
-                if (!nativeAccess.oldest) {
-                    packets.add(horse.getEntityId(), seat.getEntityId());
-                    if (!nativeAccess.mount(horse, seat)) { close(ride); return; }
-                }
                 if (!nativeAccess.mount(seat, player) || player.getVehicle() != seat) { close(ride); return; }
                 nativeAccess.place(seat);
                 ride.passengerOffset = player.getLocation().getY() - seat.getLocation().getY();
                 nativeAccess.place(seat);
-                nativeAccess.broadcast(seat, nativeAccess.positionPacket(seat));
+                nativeAccess.broadcastSeatPose(seat);
             }
             follow(ride);
             debug("Started a shared ride", null);
@@ -271,10 +278,27 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
                 tickRide(ride);
                 if (!ride.closed) follow(ride);
             }
-        });
+        }, () -> ride.closing = true);
     }
 
-    void tickRide(Ride ride) {
+    void tickNativeSeat(Ride ride) {
+        if (stopping || ride.closing) {
+            close(ride);
+            return;
+        }
+        if (!nativeAccess.oldest || ride.closed) return;
+        // The detached seat ticks after the horse has moved on 1.7.10.
+        // Refresh here so its geometry uses that tick's native coordinates.
+        try {
+            nativeAccess.place(ride.seat);
+            nativeAccess.broadcastSeatPose(ride.seat);
+        } catch (ReflectiveOperationException failure) {
+            debug("A legacy seat could not follow its horse", failure);
+            close(ride);
+        }
+    }
+
+    private void tickRide(Ride ride) {
         if (ride.closed) return;
         try {
             org.bukkit.event.vehicle.VehicleExitEvent driverExit = ride.driverExit, riderExit = ride.riderExit;
@@ -286,14 +310,12 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
                     || ride.horse.isDead() || !ride.seat.isValid() || !ride.driver.isOnline() || !ride.rider.isOnline()
                     || ride.driver.isDead() || ride.rider.isDead() || ride.driver.getVehicle() != ride.horse
                     || ride.rider.getVehicle() != ride.seat || !ride.horse.getWorld().equals(ride.rider.getWorld())
-                    || (nativeAccess.attachment != null ? !nativeAccess.attachment.valid(ride)
-                        : !nativeAccess.oldest && ride.seat.getVehicle() != ride.horse)) { close(ride); return; }
+                    || (nativeAccess.attachment != null && !nativeAccess.attachment.valid(ride))) { close(ride); return; }
             if (nativeAccess.attachment != null) nativeAccess.attachment.place(ride);
-            else {
+            else if (!nativeAccess.oldest) {
                 nativeAccess.place(ride.seat);
-                nativeAccess.broadcast(ride.seat, nativeAccess.positionPacket(ride.seat));
+                nativeAccess.broadcastSeatPose(ride.seat);
             }
-            ride.ticks++;
         } catch (Throwable failure) {
             debug("A shared ride ended because native validation failed", failure);
             close(ride);
@@ -302,14 +324,14 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
 
     boolean portalTeleport(Ride ride, Object anchor, Object transition) {
         try {
-            Object riderTransition = nativeAccess.attachment.portalTransition(ride, anchor, transition);
-            if (riderTransition == null) return false;
+            Object riderTransition = nativeAccess.attachment == null || scheduler.folia ? null
+                    : nativeAccess.attachment.portalTransition(ride, anchor, transition);
             // No helper enters the target world or becomes a vanilla replacement.
             // Let the rider's own native teleport fire its ordinary cancellable
             // PlayerTeleportEvent; a cancellation never forces a later retry.
             close(ride);
             Object rider = Reflect.handle(ride.rider);
-            if (Reflect.call(rider, "teleport", riderTransition) != null)
+            if (riderTransition != null && Reflect.call(rider, "teleport", riderTransition) != null)
                 Reflect.call(rider, "setPortalCooldown");
         } catch (Throwable failure) {
             close(ride);
@@ -336,7 +358,7 @@ public class TandemountPlugin extends JavaPlugin implements Listener, TabComplet
             }
             catch (ReflectiveOperationException failure) { debug("Native attachment retirement details", failure); }
             if (packets != null) {
-                packets.remove(ride.horse.getEntityId(), ride.seat.getEntityId());
+                packets.removeSeat(ride.seat.getEntityId());
             }
         }
     }

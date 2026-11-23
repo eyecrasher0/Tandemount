@@ -31,34 +31,55 @@ class ReleaseAuditTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.evidence = self.root / "evidence"
-        self.evidence.mkdir()
+        (self.evidence / "raw").mkdir(parents=True)
         self.license = b"Release audit fixture license contract\n"
         (self.root / "LICENSE").write_bytes(self.license)
-        self.jar = self.root / "Tandemount.jar"
+        (self.root / "project.json").write_text(json.dumps({
+            "name": "Tandemount", "id": "tandemount", "version": "1.0.0", "group": "dev.eyecrasher",
+            "author": "EyeCrasher", "license": "GPL-3.0-only", "github": "eyecrasher0/Tandemount",
+        }))
+        self.jar = self.root / "tandemount-forge-1.0.0+1.7.10.jar"
         self.write_jar()
         self.matrix = {"targets": [
-            {"minecraft": v, "platforms": {"forge": {"available": v == "1.7.10"}}}
+            {"minecraft": v, "java": 8, "platforms": {"forge": {"available": v == "1.7.10"}}}
             for v in VERSIONS]}
-        self.artifact = {"id": "forge-1.7.10", "file": "Tandemount.jar", "sha256": digest(self.jar),
+        self.artifact = {"id": "forge-1.7.10", "file": self.jar.name, "sha256": digest(self.jar),
                          "java_min": 8, "minecraft": ["1.7.10"], "platforms": ["forge"],
-                         "native_results": ["forge-1.7.10.json"]}
+                         "native_results": []}
         self.manifest = {"schema": 1, "name": "Tandemount", "license": "GPL-3.0-only",
-                         "source_commit": "a" * 40, "artifacts": [self.artifact]}
+                         "release_version": "1.0.0", "source_commit": "a" * 40, "artifacts": [self.artifact]}
         self.report = {"minecraft": "1.7.10", "platform": "forge", "kind": "native",
                        "artifact_sha256": self.artifact["sha256"], "result": "pass",
                        "server_version": "Fixture server metadata", "checks": {k: True for k in REQUIRED_CHECKS}}
         self.save_report()
+        self.save_matrix()
 
     def write_jar(self, extra=None):
         with zipfile.ZipFile(self.jar, "w") as jar:
             jar.writestr("AuditFixture.class", self.class_bytes)
             jar.writestr("LICENSE", self.license)
-            jar.writestr("mcmod.info", '[{"modid":"tandemount","version":"1.0.0"}]')
+            jar.writestr("mcmod.info", '[{"modid":"tandemount","version":"1.0.0","mcversion":"1.7.10"}]')
+            jar.writestr("META-INF/MANIFEST.MF",
+                         "Manifest-Version: 1.0\nImplementation-Version: 1.0.0\n"
+                         "Tandemount-Minecraft: 1.7.10\nTandemount-Loader: forge\n"
+                         "FMLCorePlugin: dev.eyecrasher.tandemount.legacy.core.CorePlugin\n")
             for key, value in (extra or {}).items():
                 jar.writestr(key, value)
 
     def save_report(self):
-        (self.evidence / "forge-1.7.10.json").write_text(json.dumps(self.report))
+        raw = self.evidence / "raw" / "fixture.json"
+        raw.write_text(json.dumps({"fixture_assertions": self.report["checks"]}))
+        raw_hash = digest(raw)
+        raw.replace(raw.with_name(raw_hash + ".json"))
+        self.report["raw_report_sha256"] = raw_hash
+        normal = self.evidence / "forge-1.7.10.json"
+        normal.write_text(json.dumps(self.report))
+        self.artifact["native_results"] = [{"file": normal.name, "sha256": digest(normal), "raw_sha256": raw_hash}]
+
+    def save_matrix(self):
+        path = self.root / "platforms.json"
+        path.write_text(json.dumps(self.matrix))
+        self.manifest["matrix_sha256"] = digest(path)
 
     def run_audit(self):
         return audit(self.root, self.matrix, self.manifest, self.evidence)
@@ -128,6 +149,7 @@ class ReleaseAuditTest(unittest.TestCase):
 
     def test_missing_available_target_is_rejected(self):
         self.matrix["targets"][1]["platforms"]["forge"]["available"] = True
+        self.save_matrix()
         self.assert_failed("do not cover all requested available targets")
 
     def test_unavailable_target_claim_is_rejected(self):
@@ -140,6 +162,7 @@ class ReleaseAuditTest(unittest.TestCase):
 
     def test_wrong_platform_descriptor_is_rejected(self):
         self.matrix["targets"][0]["platforms"] = {"paper": {"available": True}}
+        self.save_matrix()
         self.artifact["platforms"] = ["paper"]
         self.assert_failed("Plugin descriptor missing")
 

@@ -36,22 +36,21 @@ final class SeatClass extends ClassLoader {
     }
     static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest, Method explicitTick)
             throws IOException {
-        return create(base, constructor, position, oldest, explicitTick, null);
-    }
-    static Class<?> create(Class<?> base, Constructor<?> constructor, Method position, boolean oldest, Method explicitTick, Method portalTeleport)
-            throws IOException {
         SeatClass writer = new SeatClass(base);
         writer.constructor(constructor);
         writer.position(position);
-        if (portalTeleport != null) writer.portalTeleport(portalTeleport);
         // Vanilla save entry points and damage entry points are identified by their
         // actual upstream signatures. A seat never serializes and never drops loot.
         Set<String> seen = new HashSet<String>();
         for (Method m : Reflect.methods(base)) {
             int modifiers = m.getModifiers();
             if (Modifier.isFinal(modifiers) || Modifier.isStatic(modifiers)
-                    || Modifier.isPrivate(modifiers) || m.getReturnType() != boolean.class) continue;
+                    || (!Modifier.isPublic(modifiers) && !Modifier.isProtected(modifiers))) continue;
             Class<?>[] args = m.getParameterTypes();
+            if (args.length == 1 && m.getReturnType().isAssignableFrom(base)
+                    && (args[0].getSimpleName().equals("TeleportTransition") || args[0].getSimpleName().equals("DimensionTransition"))
+                    && seen.add(m.getName() + descriptor(args, m.getReturnType()))) writer.portalTeleport(m);
+            if (m.getReturnType() != boolean.class) continue;
             boolean save = args.length >= 1 && (args[0].getSimpleName().equals("NBTTagCompound")
                     || args[0].getSimpleName().equals("CompoundTag")
                     || args[0].getSimpleName().equals("ValueOutput"))
@@ -63,7 +62,8 @@ final class SeatClass extends ClassLoader {
             for (int i = 1; save && i < args.length; i++) if (args[i] != boolean.class) save = false;
             boolean damage = false;
             for (Class<?> arg : args) if (arg.getSimpleName().equals("DamageSource")) damage = true;
-            if ((save || damage) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
+            boolean asyncTransfer = args.length == 0 && m.getName().equals("canTeleportAsync");
+            if ((save || damage || asyncTransfer) && seen.add(m.getName() + descriptor(args, boolean.class))) writer.constantFalse(m);
         }
         boolean tick = explicitTick != null;
         if (explicitTick != null) writer.tick(explicitTick);

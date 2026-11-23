@@ -77,8 +77,11 @@ public final class NativeChecks {
                 if(n.equals("getCommandName")||n.equals("getName"))return "tandemount_native_test";
                 if(n.equals("getCommandUsage")||n.equals("getUsage"))return "tandemount_native_test";
                 if(n.equals("getCommandAliases")||n.equals("getAliases")||n.equals("addTabCompletionOptions")||n.equals("getTabCompletions"))return Collections.emptyList();
-                if(n.equals("canCommandSenderUseCommand")||n.equals("checkPermission"))return true;
-                if(n.equals("processCommand")||n.equals("execute")){dispatch((String[])a[a.length-1]);return null;}
+                if(n.equals("canCommandSenderUseCommand")||n.equals("checkPermission"))return a[a.length-1]==server;
+                if(n.equals("processCommand")||n.equals("execute")){
+                    if(a[a.length-2]==server)dispatch((String[])a[a.length-1]);
+                    return null;
+                }
                 if(n.equals("isUsernameIndex"))return false;
                 if(n.equals("compareTo"))return 0;
                 if(n.equals("hashCode"))return System.identityHashCode(p);
@@ -89,8 +92,6 @@ public final class NativeChecks {
         });
         call(event,"registerServerCommand",proxy);
         verifyRestart();
-        if(!multi&&Boolean.getBoolean("tandemount.native.requireClient"))
-            check("client-required-mod-prevents-vanilla-bridge",!LegacyRuntime.legacyVanillaLogin(new Object(),new Object(),new Object()));
     }
     private static void selectWorld(){world=multi?call(server,"getWorld",0):call(server,"worldServerForDimension",0);}
     private static void dispatch(String[] args){
@@ -386,6 +387,11 @@ public final class NativeChecks {
             check("normal-native-dismount-cleans-seat",vehicle(b)==null&&!LegacyRuntime.isSeat(seat)&&Boolean.TRUE.equals(get(seat,"isDead")));
             call(b,"setPosition",9.0D,66.0D,9.0D);interact(b,horse);Object retry=vehicle(b);
             check("retry-after-dismount",retry!=null&&retry!=seat&&LegacyRuntime.isSeat(retry));
+            if(!oldest){
+                int before=dismountEvents;
+                cancelDismount=true;dismount(a);cancelDismount=false;LegacyRuntime.worldTick(world);
+                check("cancelled-driver-dismount-keeps-ride",vehicle(a)==horse&&vehicle(b)==retry&&LegacyRuntime.isSeat(retry)&&dismountEvents==before+1);
+            }
             dismount(a);LegacyRuntime.worldTick(world);
             check("driver-dismount-cleans-passenger",vehicle(b)==null&&!LegacyRuntime.isSeat(retry)&&vehicle(e)==seatTwo);
             check("inventory-health-experience-and-horse-state-preserved",riderBefore.equals(preservedState(b,playerKeys))&&driverBefore.equals(preservedState(a,playerKeys))&&horseBefore.equals(preservedState(horse,horseKeys)));

@@ -106,7 +106,12 @@ public final class ClientChecks {
     }
     private static Object entity(Object world,int id) throws Exception {return call(world,"World","getEntityByID",id);}
     private static boolean dead(Object e) throws Exception {return Boolean.TRUE.equals(get(e,"Entity","isDead"));}
-    private static void tick(Object seat) throws Exception {call(seat,seat.getClass()==type("FallingBlock")?"FallingBlock":multi?"Cloud":oldest?"Slime":"ArmorStand","onUpdate");}
+    private static void tick(Object seat) throws Exception {
+        Class<?> carrier = seat.getClass();
+        String alias = carrier == type("FallingBlock") ? "FallingBlock"
+                : oldest ? "Slime" : carrier == type("ArmorStand") ? "ArmorStand" : "Cloud";
+        call(seat, alias, "onUpdate");
+    }
     private static Object vehicle(Object entity) throws Exception {return multi?call(entity,"Entity","getRidingEntity"):get(entity,"Entity","ridingEntity");}
     private static Object first(Object entity) throws Exception {
         if(!multi)return get(entity,"Entity","riddenByEntity");
@@ -264,7 +269,23 @@ public final class ClientChecks {
             }
         }
         require(seat!=null&&ticks>=targetTicks+24,"Insufficient native client tick input after initial native spawn interpolation");
-        boolean collidable=Boolean.TRUE.equals(call(seat,multi||oldest?"Entity":"ArmorStand","canBeCollidedWith"));
+        String carrier;
+        if (type("Slime").isInstance(seat)) {
+            require(Boolean.TRUE.equals(call(seat,"Entity","isInvisible")) && ((Number)call(seat,"Slime","getSlimeSize")).intValue() == -1,
+                    "The received slime must be invisible with its signed size intact");
+            carrier="signed-size-slime";
+        } else if (type("FallingBlock").isInstance(seat)) {
+            Object barrier=get(null,"Blocks",multi?"BARRIER":"barrier");
+            Object state=call(seat,"FallingBlock","getBlock");
+            require(call(state,"BlockState","getBlock")==barrier,"The received falling block must retain the invisible barrier");
+            carrier="barrier-falling-block";
+        } else if (!oldest && type("ArmorStand").isInstance(seat)) {
+            require(Boolean.TRUE.equals(call(seat,"Entity","isInvisible"))
+                    && Boolean.TRUE.equals(call(seat,"ArmorStand","hasMarker")),
+                    "The received armor stand must be an invisible marker");
+            carrier="marker-armor-stand";
+        } else carrier="area-effect-cloud";
+        boolean collidable=Boolean.TRUE.equals(call(seat,carrier.equals("marker-armor-stand")?"ArmorStand":"Entity","canBeCollidedWith"));
         int hits=rayHits(seat);
         require(!collidable||hits==0,"Original vanilla picking must not select the helper");
         require(maximumTickDrift<0.000126,"Steady original native tick drift: "+maximumTickDrift+" (initial interpolation "+maximumSettlingDrift+")");
@@ -276,9 +297,9 @@ public final class ClientChecks {
                 +",\"final_position\":"+vector(last)+",\"position_min\":"+vector(minimum)+",\"position_max\":"+vector(maximum)
                 +",\"maximum_native_tick_drift\":"+maximumTickDrift+",\"one_tick_without_refresh_drift\":"+unrefreshedDrift
                 +",\"spawn_settling_ticks\":24,\"maximum_spawn_settling_drift\":"+maximumSettlingDrift
-                +",\"carrier\":\""+(multi?"area-effect-cloud":oldest?"signed-size-slime":"marker-armor-stand")+"\",\"client_can_be_collided_with\":"+collidable+",\"client_ray_intersections\":"+hits+",\"unobstructed_picking\":true"
+                +",\"carrier\":\""+carrier+"\",\"client_can_be_collided_with\":"+collidable+",\"client_ray_intersections\":"+hits+",\"unobstructed_picking\":true"
                 +",\"received_no_gravity\":"+(multi?String.valueOf(noGravity):"null")+",\"native_packets_consumed\":"+packets+",\"observed_correction_frames\":"+frames
-                +",\"original_local_client_horse_control\":"+nativeDriverControl+",\"native_control_mode\":\""+(multi?"local-client-travel":"server-travel; client-yaw-only")+"\",\"air_regression_removed_first_tick\":true,\"environment\":\"untouched-official-client; normal WorldClient and packet handlers; original carrier onUpdate and native picking; no graphics\"}";
+                +",\"single_driver_client_control_baseline\":"+nativeDriverControl+",\"native_control_mode\":\""+(multi?"local-client-travel":"server-travel; client-yaw-only")+"\",\"air_regression_removed_first_tick\":true,\"environment\":\"untouched-official-client; normal WorldClient and packet handlers; original carrier onUpdate and native picking; no graphics\"}";
         try(PrintWriter out=new PrintWriter(args[3])){out.println(result);}
         System.out.println("[TandemountClient] "+result);
     }

@@ -21,9 +21,9 @@ class NativePacketClient:
            "PacketPlayOutAttachEntity": 27, "PacketPlayOutEntityTeleport": 24}
 
     def __init__(self, attachments, attach_before_spawns=False):
-        # Native 1.7.10: SpawnEntity uses VarInt; AttachEntity and EntityTeleport
-        # use fixed 32-bit IDs. The leash discriminator follows both IDs.
-        spawns = [("game", 12, "00"), ("game", 12, "01"), ("game", 15, "0364"), ("game", 14, "0446")]
+        # The 1.7.10 horse and slime use the mob spawn packet. AttachEntity
+        # and EntityTeleport use fixed 32-bit IDs.
+        spawns = [("game", 12, "00"), ("game", 12, "01"), ("game", 15, "0364"), ("game", 15, "0437")]
         mounts = [("game", 27, struct.pack(">iiB", *edge).hex()) for edge in attachments]
         self.packets = mounts + spawns if attach_before_spawns else spawns + mounts
         self.packets.extend(("game", 24, struct.pack(">iiiiBB", 4, x, 2064, 226, 0, 0).hex())
@@ -34,8 +34,7 @@ class NativePacketClient:
 
 
 class PluginProtocolTest(unittest.TestCase):
-    graph = {"seat": 4, "horse": 3, "driver": 0, "rider": 1,
-             "seat_falling_block": 1, "seat_nonliving": 1}
+    graph = {"seat": 4, "horse": 3, "driver": 0, "rider": 1, "seat_slime": 1}
 
     def results(self, edges, attach_before_spawns=False):
         return {r["assertion"]: r["status"] for r in runtime.packet_checks(

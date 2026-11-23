@@ -42,6 +42,9 @@ public final class SeatConfigChecks {
         for (String value : new String[]{"overworld", "minecraft:overworld", "1.5", "1,,2", "1,", ",1", "1,1", "2147483648", "+1", "01", "null"}) rejected(path, "excluded-dimensions=" + value + "\n");
         rejected(path, "debug=true\ndebug=false\n");rejected(path, "types=donkey\n");rejected(path, "enabled=true\nverticl=1\n");
         rejected(path, "vertical-origin=unknown\nvertical=0.8125\n");rejected(path, "debug=\\uXXXX\n");
+        rejected(path, "vertical-origin=unknown\n");rejected(path, "excluded-dimensions\n");
+        Files.write(path, "excluded-dimensions=\n".getBytes(StandardCharsets.ISO_8859_1));
+        check(SeatConfig.load(path).excludedDimensions.isEmpty(), "Explicit empty exclusions are valid");
         System.out.println("[TandemountConfig] passed=" + checks);
     }
 }

@@ -13,6 +13,7 @@ import java.util.*;
 /** Narrow adapter discovered from the loaded upstream server's real signatures. */
 final class NativeAccess {
     final boolean oldest;
+    final boolean markerSeat;
     final boolean interpolatedSeat;
     final String minecraft;
     final NativeAttachment attachment;
@@ -20,7 +21,6 @@ final class NativeAccess {
     final Constructor<?> seatConstructor;
     private final Constructor<?> vehicleWrapper;
     private final Object craftServer;
-    private final Object seatBlock, seatState;
     private final Object vanillaSeatType;
     private final Field bounds;
     private final Constructor<?> boxConstructor;
@@ -39,55 +39,19 @@ final class NativeAccess {
         java.util.regex.Matcher version = java.util.regex.Pattern.compile("^(\\d+\\.\\d+(?:\\.\\d+)?).*").matcher(bukkitVersion);
         if (!version.matches()) throw new IllegalStateException("Exact Minecraft version unavailable: " + bukkitVersion);
         minecraft = version.group(1);
+        oldest = minecraft.equals("1.7.10");
         boolean displayAvailable;
         try { Class.forName(craft + ".entity.CraftBlockDisplay"); Class.forName(craft + ".entity.CraftInteraction"); displayAvailable = true; }
         catch (ClassNotFoundException absent) { displayAvailable = false; }
         interpolatedSeat = displayAvailable;
-        Class<?> craftSeat;
-        try { craftSeat = Class.forName(craft + (interpolatedSeat ? ".entity.CraftBlockDisplay" : ".entity.CraftFallingBlock")); }
-        catch (ClassNotFoundException oldName) { craftSeat = Class.forName(craft + ".entity.CraftFallingSand"); }
-        boolean legacy;
-        try { Class.forName(craft + ".entity.CraftArmorStand"); legacy = false; }
-        catch (ClassNotFoundException noArmorStand) { legacy = true; }
-        oldest = legacy;
+        markerSeat = !oldest && !interpolatedSeat;
+        String seatClass = oldest ? "CraftSlime" : markerSeat ? "CraftArmorStand" : "CraftBlockDisplay";
+        Class<?> craftSeat = Class.forName(craft + ".entity." + seatClass);
         Method getHandle = null;
         for (Method m : craftSeat.getMethods())
             if (m.getName().equals("getHandle") && m.getParameterTypes().length == 0 && !m.isBridge()) getHandle = m;
         if (getHandle == null) throw new NoSuchMethodException("Craft seat native handle");
         seatBase = getHandle.getReturnType();
-        Class<?> stateType = null;
-        for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
-            Class<?>[] p = c.getParameterTypes();
-            if (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class
-                    && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level"))) {
-                stateType = p[4]; break;
-            }
-        }
-        Class<?> magic = Class.forName(craft + ".util.CraftMagicNumbers");
-        // Vanilla clients discard an AIR falling block in their first entity
-        // tick. BARRIER has invisible render shape while remaining non-AIR.
-        // Keep this owner regression repair tied to its exact audited client.
-        org.bukkit.Material material;
-        try { material = org.bukkit.Material.valueOf("BARRIER"); }
-        catch (IllegalArgumentException beforeBarrier) { material = org.bukkit.Material.AIR; }
-        seatBlock = Reflect.call(magic.getMethod("getBlock", org.bukkit.Material.class), (Object)null, material);
-        Object state = null;
-        if (stateType != null) {
-            Method stateGetter = null;
-            for (Method m : seatBlock.getClass().getMethods())
-                if (!Modifier.isStatic(m.getModifiers()) && m.getParameterTypes().length == 0
-                        && stateType.isAssignableFrom(m.getReturnType())) {
-                    if (stateGetter != null) throw new NoSuchMethodException("Unambiguous native seat block state getter");
-                    stateGetter = m;
-                }
-            if (stateGetter != null) state = Reflect.call(stateGetter, seatBlock);
-        }
-        if (state == null && stateType != null) for (Field f : Reflect.fields(seatBlock.getClass()))
-            if (!Modifier.isStatic(f.getModifiers()) && stateType.isAssignableFrom(f.getType())) {
-                state = Reflect.get(f, seatBlock); break;
-            }
-        if (stateType != null && !stateType.isInstance(state)) throw new NoSuchFieldException("Native seat block state");
-        seatState = state;
         Class<?> root = seatBase;
         while (root.getSuperclass() != Object.class) root = root.getSuperclass();
         entityClass = root;
@@ -141,6 +105,7 @@ final class NativeAccess {
                 }
             }
         }
+        if (oldest && numericType != 55) throw new NoSuchFieldException("Vanilla 1.7.10 slime registry ID");
         legacySeatType = numericType;
         Method pos = null;
         // In the exact 1.19.3 Spigot mappings e(DDD) updates VecDeltaCodec;
@@ -165,8 +130,7 @@ final class NativeAccess {
         for (Constructor<?> c : seatBase.getDeclaredConstructors()) {
             Class<?>[] p = c.getParameterTypes();
             if (!Modifier.isPublic(c.getModifiers()) && !Modifier.isProtected(c.getModifiers())) continue;
-            if (((p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level")))
-                    || (p.length == 5 && p[1] == double.class && p[2] == double.class && p[3] == double.class && seatState != null && p[4].isInstance(seatState)))) {
+            if (p.length == 1 && (p[0].getSimpleName().equals("World") || p[0].getSimpleName().equals("Level"))) {
                 parentConstructor = c; break;
             }
             if (p.length == 2 && (p[0].getSimpleName().equals("EntityTypes") || p[0].getSimpleName().equals("EntityType"))
@@ -183,8 +147,7 @@ final class NativeAccess {
                 "org.spigotmc.event.entity.EntityDismountEvent"}) try {
             if (org.bukkit.event.Cancellable.class.isAssignableFrom(Class.forName(event))) cancellableDismount = true;
         } catch (ClassNotFoundException absent) { /* Older platform event family. */ }
-        // Some old Spigot APIs only offer cancellable VehicleExitEvent. Keep
-        // their falling-block wrapper a Vehicle without making it living.
+        // Some old Spigot APIs provide cancellation through VehicleExitEvent.
         vehicleWrapper = oldest || !cancellableDismount ? SeatClass.vehicleWrapper(craftSeat).getConstructors()[0] : null;
         Method factory = null;
         Constructor<?> constructor = null;
@@ -216,24 +179,24 @@ final class NativeAccess {
         Object world = Reflect.handle(horse.getWorld());
         int arguments = seatConstructor.getParameterTypes().length;
         Object seat = arguments == 1 ? seatConstructor.newInstance(world)
-                : arguments == 2 ? seatConstructor.newInstance(vanillaSeatType, world)
-                : seatConstructor.newInstance(world, at.getX(), at.getY(), at.getZ(), seatState);
-        for (Field f : Reflect.fields(seatBase)) if (!Modifier.isStatic(f.getModifiers())) {
-            if (seatState != null && f.getType().isInstance(seatState)) { f.setAccessible(true); f.set(seat, seatState); }
-            else if (oldest && f.getType().isInstance(seatBlock)) { f.setAccessible(true); f.set(seat, seatBlock); }
-        }
+                : seatConstructor.newInstance(vanillaSeatType, world);
         if (vehicleWrapper != null) for (Field f : Reflect.fields(entityClass)) if (f.getName().equals("bukkitEntity")) {
             f.setAccessible(true); f.set(seat, vehicleWrapper.newInstance(craftServer, seat)); break;
         }
         Entity bukkit = (Entity) Reflect.call(seat, "getBukkitEntity");
         if (interpolatedSeat) Reflect.call(bukkit, "setBlock", Reflect.call(org.bukkit.Material.valueOf("BARRIER"), "createBlockData"));
-        // The client LivingEntityRenderer clamps passenger body yaw against a
-        // LivingEntity vehicle. Keep this helper on the vanilla, nonliving
-        // falling-block entity so a head-yaw wrap cannot steer the rider model.
-        String requiredType = interpolatedSeat ? "BLOCK_DISPLAY" : "FALLING_BLOCK";
-        if (bukkit instanceof LivingEntity || !bukkit.getType().name().equals(requiredType)) {
+        String requiredType = oldest ? "SLIME" : markerSeat ? "ARMOR_STAND" : "BLOCK_DISPLAY";
+        if (!bukkit.getType().name().equals(requiredType) || (!oldest && !markerSeat && bukkit instanceof LivingEntity)) {
             bukkit.remove();
-            throw new IllegalStateException("The shared seat must be the audited nonliving vanilla type");
+            throw new IllegalStateException("The shared seat must use the expected vanilla type");
+        }
+        if (oldest) {
+            Reflect.call(seat, "setInvisible", true);
+            Reflect.call(bukkit, "setSize", -1);
+        }
+        if (markerSeat) {
+            Reflect.call(seat, "setInvisible", true);
+            Reflect.call(bukkit, "setMarker", true);
         }
         if (interpolatedSeat) Reflect.optional(bukkit, "setTeleportDuration", 0);
         Reflect.optional(bukkit, "setPersistent", false);
@@ -258,13 +221,12 @@ final class NativeAccess {
     }
 
     private Object vanillaSeatType(Class<?> type) throws ReflectiveOperationException {
-        String identifier = interpolatedSeat ? "minecraft:block_display" : "minecraft:falling_block";
-        String constant = interpolatedSeat ? "BLOCK_DISPLAY" : "FALLING_BLOCK";
-        return vanillaEntityType(type, identifier, constant);
+        if (markerSeat) return vanillaEntityType(type, "minecraft:armor_stand", "ARMOR_STAND");
+        return vanillaEntityType(type, "minecraft:block_display", "BLOCK_DISPLAY");
     }
     static Object vanillaEntityType(Class<?> type, String identifier, String constant) throws ReflectiveOperationException {
         Object value = null;
-        for (String name : new String[] {"byString", "a"}) try {
+        for (String name : new String[] {"byString", "getByName", "a"}) try {
             Method lookup = type.getMethod(name, String.class);
             if (Modifier.isStatic(lookup.getModifiers()) && lookup.getReturnType() == Optional.class) {
                 Optional<?> found = (Optional<?>)Reflect.call(lookup, (Object)null, identifier);
@@ -281,7 +243,7 @@ final class NativeAccess {
         } catch (ClassNotFoundException absent) { /* Pre-26.2 native holder. */ }
           catch (NoSuchFieldException absent) { /* Older obfuscated constants. */ }
         if (!type.isInstance(value)) throw new NoSuchFieldException("Existing vanilla seat entity type " + identifier);
-        for (String name : new String[] {"getKey", "a"}) try {
+        for (String name : new String[] {"getKey", "getName", "a"}) try {
             Method key = type.getMethod(name, type);
             String result = key.getReturnType().getSimpleName();
             if (Modifier.isStatic(key.getModifiers()) && (result.equals("Identifier")
@@ -385,6 +347,25 @@ final class NativeAccess {
         // Newer seats are updated once more here so configuration applies immediately.
         List<Entity> passengers = passengers(seat);
         for (Entity rider : passengers) positionRider(nativeSeat, Reflect.handle(rider));
+    }
+
+    void broadcastSeatPose(Entity seat) throws ReflectiveOperationException {
+        Object velocity = null;
+        if (oldest) {
+            Object handle = Reflect.handle(seat);
+            List<Entity> passengers = passengers(seat);
+            if (!passengers.isEmpty()) {
+                float yaw = passengers.get(0).getLocation().getYaw();
+                entityClass.getField("yaw").setFloat(handle, yaw);
+                Object rotation = Class.forName(oldPackage + ".PacketPlayOutEntityHeadRotation")
+                        .getConstructor(entityClass, byte.class).newInstance(handle, (byte)Math.floor(yaw * 256.0 / 360.0));
+                broadcast(seat, rotation);
+            }
+            velocity = Class.forName(oldPackage + ".PacketPlayOutEntityVelocity")
+                    .getConstructor(entityClass).newInstance(handle);
+        }
+        broadcast(seat, positionPacket(seat));
+        if (velocity != null) broadcast(seat, velocity);
     }
 
     void positionRider(Object seat, Object rider) throws ReflectiveOperationException {

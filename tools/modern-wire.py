@@ -133,6 +133,13 @@ def main():
     ids, clients, checks = load_ids(args.ids), [], []
     directory = args.ids.parent
     state_file = directory / "tandemount-wire-state.json"
+    readiness = directory / "tandemount-network-ready.json"
+    protocol = None
+    if readiness.is_file():
+        native = json.loads(readiness.read_text())
+        if native.get("ready") is not True or native.get("port") != args.port or type(native.get("protocol")) is not int:
+            raise ValueError("Native server readiness does not match the fixture connection")
+        protocol = native["protocol"]
     sequence = 0
 
     def state():
@@ -164,7 +171,7 @@ def main():
         return wait(lambda value: value.get("sequence") == sequence, action)
 
     def connect(name):
-        client = Client(args.port, args.minecraft, ids, name=name, timeout=45)
+        client = Client(args.port, args.minecraft, ids, name=name, timeout=45, protocol=protocol)
         clients.append(client)
         outcome = client.verify(timeout=20, remain=.2)
         if not outcome["joined_play"] or outcome["errors"]:
