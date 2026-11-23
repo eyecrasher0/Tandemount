@@ -82,4 +82,5 @@ The publisher keeps the installed icon and verifies the resulting source URL
 and license after a refresh. Project description links point to `main`.
 Both publishers link to the source archive and verification report for the
 JAR's SHA-256 and exact platforms. New releases use the checked archive and
-report named by the audited publication plan.
+report named by the audited publication plan. A plan for an existing release
+must match its published artifact hashes and verified platforms.

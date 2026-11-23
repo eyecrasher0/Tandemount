@@ -18,6 +18,7 @@ class ModrinthPublishTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.project = json.loads((publish_modrinth.ROOT / "release/project.json").read_text())
+        cls.unpublished = {**cls.project, "published_batches": {}}
         cls.plan = {"tag": "tandemount-1.0.0", "source": {"file": "dist/candidate-source.zip"},
                     "verification": "dist/candidate-verification.json"}
 
@@ -30,8 +31,8 @@ class ModrinthPublishTests(unittest.TestCase):
             "family": "neoforge", "platforms": ["neoforge"],
             "minecraft": ["26.3"], "version_number": "1.0.0+neoforge-mc26.3", "sha256": "b" * 64,
         }
-        plugin_payload = publish_modrinth.version_payload("AbCd1234", plugin, self.project, self.plan)
-        mod_payload = publish_modrinth.version_payload("AbCd1234", mod, self.project, self.plan)
+        plugin_payload = publish_modrinth.version_payload("AbCd1234", plugin, self.unpublished, self.plan)
+        mod_payload = publish_modrinth.version_payload("AbCd1234", mod, self.unpublished, self.plan)
         self.assertEqual(plugin_payload["loaders"], ["folia", "paper", "spigot"])
         self.assertEqual(plugin_payload["game_versions"], ["1.21.11"])
         self.assertEqual(mod_payload["loaders"], ["neoforge"])
@@ -113,7 +114,7 @@ class ModrinthPublishTests(unittest.TestCase):
                 self.assertIn(f"[Verification report]({assets}/{verification})", changelog)
                 self.assertIn("/blob/tandemount-1.0.0/docs/INSTALL.md", changelog)
 
-    def test_changed_bytes_or_additional_core_use_the_plan_assets(self):
+    def test_published_tag_requires_matching_bytes_and_verified_cores(self):
         cases = (
             {"family": "forge", "minecraft": ["1.19.4"], "platforms": ["forge"], "sha256": "d" * 64},
             {"family": "plugin", "minecraft": ["26.3"], "platforms": ["paper", "folia"],
@@ -122,7 +123,9 @@ class ModrinthPublishTests(unittest.TestCase):
         assets = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
         for entry in cases:
             with self.subTest(entry=entry):
-                changelog = publish_modrinth.release_changelog(self.project, entry, self.plan)
+                with self.assertRaisesRegex(ValueError, "lacks matching evidence"):
+                    publish_modrinth.release_changelog(self.project, entry, self.plan)
+                changelog = publish_modrinth.release_changelog(self.unpublished, entry, self.plan)
                 self.assertIn(f"[Complete GPL source]({assets}/candidate-source.zip)", changelog)
                 self.assertIn(f"[Verification report]({assets}/candidate-verification.json)", changelog)
 
@@ -152,12 +155,14 @@ class ModrinthPublishTests(unittest.TestCase):
                 verification.write_text(json.dumps({"result": "pass", "source_commit": commit, "native_reports": [report]}))
                 plan["verification_sha256"] = hashlib.sha256(verification.read_bytes()).hexdigest()
 
-            def validate():
+            def validate(project=self.unpublished):
                 with patch("publish_modrinth.subprocess.check_output", side_effect=[commit, ""]):
-                    return publish_modrinth.validate_plan(plan, matrix, manifest, self.project)
+                    return publish_modrinth.validate_plan(plan, matrix, manifest, project)
 
             store_report()
             self.assertEqual(validate(), 1)
+            with self.assertRaisesRegex(ValueError, "lacks matching evidence"):
+                validate(self.project)
             archive.write_bytes(b"changed archive")
             with self.assertRaisesRegex(ValueError, "source archive SHA-256 mismatch"):
                 validate()

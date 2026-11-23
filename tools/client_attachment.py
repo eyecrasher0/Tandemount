@@ -162,7 +162,7 @@ def generate_world(mc, jar, mp, out):
      elif semantic_name=='getWorldBorder':stmt='return border;'
      elif semantic_name=='getEntities' and result=='java.util.List' and len(args)==3 and args[0]==cls('net.minecraft.world.entity.Entity'):
       stmt='return entities.values().stream().filter(e->e!=p0&&e.'+meth('net.minecraft.world.entity.Entity','getBoundingBox')+'().'+meth('net.minecraft.world.phys.AABB','intersects','net.minecraft.world.phys.AABB')+'(p1)&&p2.test(e)).toList();'
-     elif semantic_name in {'players','getEntities'} and result=='java.util.List':stmt='return java.util.List.of();' 
+     elif semantic_name in {'players','getEntities'} and result=='java.util.List':stmt='return java.util.List.of();'
      elif semantic_name=='getEntity' and args==['int']:stmt='return entities.get(p0);'
      elif semantic_name=='getEntity' and args==['java.util.UUID']:
       entity='net.minecraft.world.entity.Entity'

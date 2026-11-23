@@ -154,6 +154,7 @@ def validate_plan(plan, matrix, manifest_path, project):
         for algorithm in ("sha256", "sha1", "sha512"):
             if digest(artifact, algorithm) != entry[algorithm]:
                 raise ValueError(f"Staged artifact {algorithm} mismatch: {artifact.name}")
+        release_evidence_assets(project, entry, plan)
     if declared != expected:
         raise ValueError(f"Publication plan target mismatch: missing={sorted(expected - declared)}, extra={sorted(declared - expected)}")
     if len(plan["entries"]) != plan.get("audit", {}).get("artifacts"):
@@ -178,17 +179,22 @@ def project_payload(project, body):
     }
 
 
-def release_changelog(project, entry, plan):
-    repository = project["source_url"].rstrip("/")
-    version = project["version"]
-    archive = Path(plan["source"]["file"]).name
-    verification = Path(plan["verification"]).name
-    for batch in project.get("published_batches", {}).get(plan["tag"], ()):
+def release_evidence_assets(project, entry, plan):
+    batches = project.get("published_batches", {}).get(plan["tag"])
+    if batches is None:
+        return Path(plan["source"]["file"]).name, Path(plan["verification"]).name
+    for batch in batches:
         target = batch["artifacts"].get(entry["sha256"])
         if (target and target["minecraft"] == entry["minecraft"][0]
                 and set(entry["platforms"]) <= set(target["platforms"])):
-            archive, verification = batch["source"], batch["verification"]
-            break
+            return batch["source"], batch["verification"]
+    raise ValueError(f"Published release {plan['tag']} lacks matching evidence for {entry['sha256']}")
+
+
+def release_changelog(project, entry, plan):
+    repository = project["source_url"].rstrip("/")
+    version = project["version"]
+    archive, verification = release_evidence_assets(project, entry, plan)
     tag = urllib.parse.quote(plan["tag"], safe="")
     assets = f"{repository}/releases/download/{tag}"
     return (f"Tandemount {version} release.\n\n"
