@@ -1,22 +1,16 @@
 # Installation and commands
 
-Use the file for your **exact Minecraft release and server platform**.
-[GitHub Releases](https://github.com/eyecrasher0/Tandemount/releases) lists the
-downloads available now. The [platform matrix](../BACKPORTS.md) covers the
-full set of build targets.
+Choose a download only if the release table lists your exact Minecraft release
+and server platform. [Verified 1.0.0 downloads](../README.md#choose-your-server-build)
 
-| Server | File pattern | Install directory |
-| --- | --- | --- |
-| Paper, Spigot, Purpur, Folia | `tandemount-bukkit-1.0.0+MINECRAFT.jar` | `plugins/` |
-| Fabric, Forge, NeoForge | `tandemount-LOADER-1.0.0+MINECRAFT.jar` | `mods/` |
+Put the Paper JAR in `plugins/` or the Fabric, Forge, or NeoForge JAR in `mods/`,
+then start the server normally. Clients need no Tandemount installation, resource
+pack, or custom entity registry. Do not install the native-test fixture JARs. A
+modded server may still require client mods because of its other installed mods.
 
-Install one Tandemount file on the server, then start the server normally. Clients
-need no Tandemount installation, resource pack, or custom entity registry. Do not
-install the native-test fixture JARs. A modded server may still require client
-mods because of its other installed mods.
-
-The server must use the Java version required by its Minecraft release, recorded
-in the matrix. Plugin and mod files are separate installation options.
+Use the Java version required by your Minecraft release. The build target matrix
+includes Java requirements and upstream availability for all 38 releases.
+[Build target matrix](../BACKPORTS.md)
 
 ## Riding
 
@@ -51,7 +45,12 @@ numeric values and `/tandemount reset` use those values.
 | View active settings | `/tandemount status` | Same | Same |
 | Enable or disable | `/tandemount enable` or `/tandemount disable` | Same | Same |
 | Reload configuration | `/tandemount reload` | Same | Same |
-| Restore defaults | `/tandemount reset` | Same | Same |
+| Reset settings | `/tandemount reset` | Same | Same |
+
+Bukkit resets the seat offsets and preserves the enabled setting, debug
+logging, and excluded worlds. Legacy Forge and modern mods reset the seat
+offsets, enable shared riding, turn debug logging off, and clear excluded
+dimensions.
 
 Plugins use `tandemount.admin`, default operator. Forge 1.12.2 registers that
 permission with Forge's permission API. Other mod targets use vanilla operator

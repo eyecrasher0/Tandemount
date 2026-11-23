@@ -77,12 +77,12 @@ def multipart(fields, files=()):
             f"Content-Type: {mime}\r\n\r\n".encode(),
             value.encode("utf-8"), b"\r\n",
         ])
-    for field, path in files:
+    for field, path, mime in files:
         path = Path(path)
         chunks.extend([
             f"--{boundary}\r\n".encode(),
             f'Content-Disposition: form-data; name="{field}"; filename="{path.name}"\r\n'.encode(),
-            b"Content-Type: application/java-archive\r\n\r\n",
+            f"Content-Type: {mime}\r\n\r\n".encode(),
             path.read_bytes(), b"\r\n",
         ])
     chunks.append(f"--{boundary}--\r\n".encode())
@@ -162,14 +162,19 @@ def project_payload(project, body):
     }
 
 
-def release_changelog(project):
+def release_changelog(project, entry):
     repository = project["source_url"].rstrip("/")
-    tag = urllib.parse.quote("tandemount-" + project["version"], safe="")
-    archive = urllib.parse.quote("Tandemount-" + project["version"] + "-source.zip", safe="")
-    return (f"Tandemount {project['version']} release.\n\n"
-            f"[Complete GPL source]({repository}/releases/download/{tag}/{archive}) · "
+    version = project["version"]
+    tag = urllib.parse.quote("tandemount-" + version, safe="")
+    legacy = (version == "1.0.0" and entry["family"] == "forge"
+              and entry["minecraft"][0] in {"1.7.10", "1.8.9", "1.12.2"})
+    suffix = "-legacy-forge" if legacy else ""
+    archive = urllib.parse.quote(f"Tandemount-{version}{suffix}-source.zip", safe="")
+    assets = f"{repository}/releases/download/{tag}"
+    return (f"Tandemount {version} release.\n\n"
+            f"[Complete GPL source]({assets}/{archive}) · "
             f"[Build and installation]({repository}/blob/{tag}/docs/INSTALL.md) · "
-            f"[Verification report]({repository}/releases/download/{tag}/verification.json)")
+            f"[Verification report]({assets}/verification{suffix}.json)")
 
 
 def version_payload(project_id, entry, project):
@@ -181,7 +186,7 @@ def version_payload(project_id, entry, project):
     return {
         "name": f"{project['name']} {project['version']} — {', '.join(loaders)} — Minecraft {mc}",
         "version_number": entry["version_number"],
-        "changelog": release_changelog(project),
+        "changelog": release_changelog(project, entry),
         "dependencies": [],
         "game_versions": [mc],
         "version_type": "release",
@@ -197,17 +202,23 @@ def version_payload(project_id, entry, project):
 
 def project_body(project):
     readme = (ROOT / "README.md").read_text(encoding="utf-8").strip()
-    prefix = project["source_url"].rstrip("/") + "/blob/" + urllib.parse.quote("tandemount-" + project["version"], safe="") + "/"
-    # Provider descriptions are not hosted at the repository root; pin relative
-    # documentation links to the release tag instead of producing broken URLs.
-    readme = re.sub(r"(?<!!)\[([^\]]+)\]\(([^)\s]+)\)",
-                    lambda match: match.group(0) if urllib.parse.urlsplit(match[2]).scheme or match[2].startswith("#")
-                    else f"[{match[1]}]({prefix}{match[2].removeprefix('./')})", readme)
-    return readme + "\n\n---\n\n" + (
-        "All release files are server-side. Install only the file matching your exact "
-        "Minecraft release and platform. See the source repository for installation, "
-        "configuration, compatibility, and license details.\n"
-    )
+    repository = project["source_url"].rstrip("/")
+
+    def source_link(link, image):
+        url = urllib.parse.urlsplit(link)
+        if url.scheme or link.startswith(("#", "/")):
+            return link
+        view = "raw" if image else "blob"
+        if not image and (ROOT / urllib.parse.unquote(url.path)).is_dir():
+            view = "tree"
+        return f"{repository}/{view}/main/{link.removeprefix('./')}"
+
+    readme = re.sub(r"(!?\[[^\]]+\]\()([^)\s]+)(\))",
+                    lambda match: match[1] + source_link(match[2], match[1].startswith("!")) + match[3],
+                    readme)
+    readme = re.sub(r"""(<img\b[^>]*?\ssrc=["'])([^"']+)(["'])""",
+                    lambda match: match[1] + source_link(match[2], True) + match[3], readme)
+    return readme + "\n"
 
 
 def load_project(token, slug, expected_username):
@@ -248,14 +259,11 @@ def prepare_existing_project(token, remote, project, body):
         payload.pop(field)
     url = V2 + "/project/" + urllib.parse.quote(remote["id"], safe="")
     request("PATCH", url, token=token, body=json.dumps(payload).encode("utf-8"))
-    if remote.get("icon_url"):
-        request("DELETE", url + "/icon", token=token)
     updated = request("GET", url, token=token)
     updated_license = updated.get("license")
     updated_license_id = updated_license.get("id") if isinstance(updated_license, dict) else updated_license
-    if (updated.get("source_url") != project["source_url"] or updated_license_id != project["license"]
-            or updated.get("icon_url")):
-        raise ValueError("Modrinth did not retain the matching source, license, and omitted icon")
+    if updated.get("source_url") != project["source_url"] or updated_license_id != project["license"]:
+        raise ValueError("Modrinth did not retain the matching source and license")
     return updated
 
 
@@ -294,7 +302,10 @@ def validate_provider_tags(plan, project):
 
 
 def create_project(token, payload):
-    body, content_type = multipart([("data", json.dumps(payload, separators=(",", ":")), "application/json")])
+    body, content_type = multipart(
+        [("data", json.dumps(payload, separators=(",", ":")), "application/json")],
+        [("icon", ROOT / "branding/icon.png", "image/png")],
+    )
     return request("POST", V2 + "/project", token=token, body=body, content_type=content_type)
 
 
@@ -324,7 +335,7 @@ def upload_version(token, project_id, entry, project):
     payload = version_payload(project_id, entry, project)
     body, content_type = multipart(
         [("data", json.dumps(payload, separators=(",", ":")), "application/json")],
-        [("artifact", entry["file"])],
+        [("artifact", entry["file"], "application/java-archive")],
     )
     return request("POST", V2 + "/version", token=token, body=body, content_type=content_type)
 
@@ -348,7 +359,7 @@ def main():
         targets = validate_plan(plan, matrix, args.manifest)
         summary = {"mode": "apply" if args.apply else "dry-run", "entries": len(plan["entries"]), "targets": targets,
                    "project_slug": project.get("modrinth_slug", project["id"]),
-                   "requested_visibility": "unlisted", "icon": "omitted-by-owner-request"}
+                   "requested_visibility": "unlisted"}
         if not args.apply:
             print(json.dumps(summary, indent=2))
             return 0

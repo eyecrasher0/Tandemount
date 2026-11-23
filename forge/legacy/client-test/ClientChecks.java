@@ -278,7 +278,7 @@ public final class ClientChecks {
                 +",\"spawn_settling_ticks\":24,\"maximum_spawn_settling_drift\":"+maximumSettlingDrift
                 +",\"carrier\":\""+(multi?"area-effect-cloud":oldest?"signed-size-slime":"marker-armor-stand")+"\",\"client_can_be_collided_with\":"+collidable+",\"client_ray_intersections\":"+hits+",\"unobstructed_picking\":true"
                 +",\"received_no_gravity\":"+(multi?String.valueOf(noGravity):"null")+",\"native_packets_consumed\":"+packets+",\"observed_correction_frames\":"+frames
-                +",\"original_local_client_horse_control\":"+nativeDriverControl+",\"native_control_mode\":\""+(multi?"local-client-travel":"server-travel; client-yaw-only")+"\",\"air_regression_removed_first_tick\":true,\"environment\":\"untouched-official-client; normal WorldClient and packet handlers; original carrier onUpdate and native picking; no graphics\"}";
+                +",\"single_driver_client_control_baseline\":"+nativeDriverControl+",\"native_control_mode\":\""+(multi?"local-client-travel":"server-travel; client-yaw-only")+"\",\"air_regression_removed_first_tick\":true,\"environment\":\"untouched-official-client; normal WorldClient and packet handlers; original carrier onUpdate and native picking; no graphics\"}";
         try(PrintWriter out=new PrintWriter(args[3])){out.println(result);}
         System.out.println("[TandemountClient] "+result);
     }

@@ -1,7 +1,9 @@
 """Offline checks for Modrinth release metadata and upload form encoding."""
 
-import json
+from email import policy
+from email.parser import BytesParser
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -35,12 +37,23 @@ class ModrinthPublishTests(unittest.TestCase):
         self.assertEqual(plugin_payload["status"], "draft")
         self.assertEqual(plugin_payload["file_parts"], ["artifact"])
 
-    def test_project_is_created_as_draft_without_an_icon(self):
+    def test_create_project_sends_the_supplied_png_with_draft_metadata(self):
         payload = publish_modrinth.project_payload(self.project, "release text")
-        self.assertEqual(payload["project_type"], "mod")
-        self.assertTrue(payload["is_draft"])
-        self.assertEqual(payload["license_id"], "GPL-3.0-only")
-        self.assertNotIn("icon", payload)
+        with patch("publish_modrinth.request", return_value={"id": "Project1"}) as send:
+            publish_modrinth.create_project("token", payload)
+        send.assert_called_once()
+        call = send.call_args
+        self.assertEqual(call.args[:2], ("POST", "https://api.modrinth.com/v2/project"))
+        header = f"Content-Type: {call.kwargs['content_type']}\r\n\r\n".encode()
+        form = BytesParser(policy=policy.default).parsebytes(header + call.kwargs["body"])
+        parts = {part.get_param("name", header="Content-Disposition"): part for part in form.iter_parts()}
+        metadata = json.loads(parts["data"].get_payload(decode=True))
+        self.assertEqual(metadata["project_type"], "mod")
+        self.assertTrue(metadata["is_draft"])
+        self.assertEqual(metadata["license_id"], "GPL-3.0-only")
+        self.assertEqual(parts["icon"].get_content_type(), "image/png")
+        self.assertEqual(parts["icon"].get_payload(decode=True),
+                         (publish_modrinth.ROOT / "branding/icon.png").read_bytes())
 
     def test_multipart_contains_json_and_exact_binary_file(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -48,7 +61,7 @@ class ModrinthPublishTests(unittest.TestCase):
             artifact.write_bytes(b"\xca\xfe\xba\xbe\x00\x00\x00\x3d")
             body, content_type = publish_modrinth.multipart(
                 [("data", '{"version_number":"1.0.0"}', "application/json")],
-                [("artifact", artifact)],
+                [("artifact", artifact, "application/java-archive")],
             )
         boundary = content_type.split("boundary=", 1)[1]
         self.assertIn(f'filename="fixture.jar"'.encode(), body)
@@ -74,18 +87,38 @@ class ModrinthPublishTests(unittest.TestCase):
                 self.assertEqual(publish_modrinth.request("GET", "https://example.test/version"), {"id": "version"})
         self.assertEqual(send.call_count, 2)
 
-    def test_release_changelog_links_the_matching_complete_source_archive(self):
-        text = publish_modrinth.release_changelog(self.project)
-        self.assertIn('/releases/download/tandemount-1.0.0/Tandemount-1.0.0-source.zip', text)
-        self.assertIn('/blob/tandemount-1.0.0/docs/INSTALL.md', text)
+    def test_version_payload_links_its_published_source_and_verification(self):
+        batches = (
+            (("1.7.10", "1.8.9", "1.12.2"), "Tandemount-1.0.0-legacy-forge-source.zip", "verification-legacy-forge.json"),
+            (("26.3",), "Tandemount-1.0.0-source.zip", "verification.json"),
+        )
+        assets = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
+        for versions, source, verification in batches:
+            for mc in versions:
+                with self.subTest(minecraft=mc):
+                    entry = {"family": "forge", "minecraft": [mc], "version_number": f"1.0.0+forge-mc{mc}"}
+                    changelog = publish_modrinth.version_payload("Project1", entry, self.project)["changelog"]
+                    self.assertIn(f"[Complete GPL source]({assets}/{source})", changelog)
+                    self.assertIn(f"[Verification report]({assets}/{verification})", changelog)
+                    self.assertIn("/blob/tandemount-1.0.0/docs/INSTALL.md", changelog)
 
-    def test_provider_description_resolves_repo_links_at_release_tag(self):
+    def test_provider_description_resolves_documents_modules_and_artwork_on_main(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            (root / 'README.md').write_text('[Install](docs/INSTALL.md) [License](https://example.test/license) [Here](#section)')
+            (root / "bukkit").mkdir()
+            (root / 'README.md').write_text(
+                '[Install](docs/INSTALL.md) [Bukkit](bukkit) [License](https://example.test/license) [Here](#section)\n'
+                '<img src="branding/icon.png" width="128" alt="Tandemount">\n'
+                '![Tandemount](./branding/icon.png)\n',
+                encoding="utf-8",
+            )
             with patch('publish_modrinth.ROOT', root):
                 text = publish_modrinth.project_body(self.project)
-        self.assertIn('[Install](https://github.com/eyecrasher0/Tandemount/blob/tandemount-1.0.0/docs/INSTALL.md)', text)
+        self.assertIn('[Install](https://github.com/eyecrasher0/Tandemount/blob/main/docs/INSTALL.md)', text)
+        self.assertIn('[Bukkit](https://github.com/eyecrasher0/Tandemount/tree/main/bukkit)', text)
+        icon = "https://github.com/eyecrasher0/Tandemount/raw/main/branding/icon.png"
+        self.assertIn(f'<img src="{icon}" width="128" alt="Tandemount">', text)
+        self.assertIn(f'![Tandemount]({icon})', text)
         self.assertIn('[License](https://example.test/license)', text)
         self.assertIn('[Here](#section)', text)
 
@@ -109,20 +142,24 @@ class ModrinthPublishTests(unittest.TestCase):
                     publish_modrinth.load_project('token', 'tandemount', 'EyeCrasher')
                 self.assertTrue(all(call.args[0] == 'GET' for call in send.call_args_list))
 
-    def test_empty_owned_draft_receives_release_metadata_and_loses_its_icon(self):
+    def test_initializing_or_refreshing_an_owned_project_keeps_its_icon(self):
         remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft",
                   "source_url": None, "license": {"id": "LicenseRef-Unknown"}, "icon_url": "https://example.test/icon.webp"}
-        updated = {**remote, "source_url": self.project['source_url'], "license": {"id": "GPL-3.0-only"}, "icon_url": None}
-        with patch('publish_modrinth.request', side_effect=[None, None, updated]) as send, \
-                patch('publish_modrinth.list_versions', return_value=[]):
-            self.assertEqual(publish_modrinth.prepare_existing_project('token', remote, self.project, 'release text'), updated)
-        calls = send.call_args_list
-        payload = json.loads(calls[0].kwargs['body'])
-        self.assertEqual(payload['license_id'], 'GPL-3.0-only')
-        self.assertEqual(payload['body'], 'release text')
-        self.assertEqual(payload['source_url'], self.project['source_url'])
-        self.assertNotIn('is_draft', payload)
-        self.assertEqual(calls[1].args[:2], ('DELETE', publish_modrinth.V2 + '/project/Project1/icon'))
+        updated = {**remote, "source_url": self.project['source_url'], "license": {"id": "GPL-3.0-only"}}
+        for existing in (remote, updated):
+            with self.subTest(source=existing["source_url"]), \
+                    patch('publish_modrinth.request', side_effect=[None, updated]) as send, \
+                    patch('publish_modrinth.list_versions', return_value=[]):
+                result = publish_modrinth.prepare_existing_project('token', existing, self.project, 'release text')
+                self.assertEqual(result['icon_url'], 'https://example.test/icon.webp')
+                calls = send.call_args_list
+                url = 'https://api.modrinth.com/v2/project/Project1'
+                self.assertEqual([call.args[:2] for call in calls], [('PATCH', url), ('GET', url)])
+                payload = json.loads(calls[0].kwargs['body'])
+                self.assertEqual(payload['license_id'], 'GPL-3.0-only')
+                self.assertEqual(payload['body'], 'release text')
+                self.assertEqual(payload['source_url'], self.project['source_url'])
+                self.assertTrue({'is_draft', 'icon', 'icon_url'}.isdisjoint(payload))
 
     def test_unconfigured_existing_project_with_files_is_not_overwritten(self):
         remote = {"id": "Project1", "title": "Tandemount", "slug": "tandemount", "status": "draft",

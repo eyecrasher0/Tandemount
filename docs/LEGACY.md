@@ -40,9 +40,10 @@ The runner binds to `127.0.0.1` (`--port`, default 25844), uses offline fixture 
 sequential native server to a 1 GiB Java heap. It does not connect to or modify
 an existing server. Native test sources are in `forge/legacy/native-test/` and
 are compiled into a separate local test mod. They are never in a distributable.
-It records artifact, launcher, test-mod, source, and log SHA256 digests, then
-restarts the native server to inspect the saved fixture world. A failed required
-check produces a nonzero exit status.
+It records SHA-256 digests for the installed mod, exact Forge launcher and
+vanilla server, test mod, test inputs, and logs. It then restarts the native
+server to inspect the saved fixture world. A failed required check produces a
+nonzero exit status.
 
 The vanilla protocol fixture sends no FML hostname marker, registration payload,
 or client mod channel. It logs in through `JoinGame`, sends real `UseEntity`
@@ -93,16 +94,14 @@ standard node API: admin commands use vanilla command permission level 2 with
 the command name `tandemount`. Ordinary riding and help require no operator
 status. Console can use all text commands.
 
-Forge 1.7.10 predates the later loader's vanilla login completion path. Forge
-1.8.9's asynchronous `NetworkDispatcher.handlerAdded` can race its immediate
-vanilla completion and initiate the handshake twice. The server hook uses
-normal native player connection initialization when FML's
-`NetworkRegistry.isVanillaAccepted(CLIENT)` confirms that all loaded network
-mods accept an unmodified client. Another mod requiring a client installation
-retains its normal FML handshake requirements. Tandemount does not override that
-decision. On 1.8.9 the bridge additionally requires an absent/false FML marker;
-marked Forge clients retain the normal FML handshake. A separate native test on
-each old loader covers the client-required-mod rejection policy.
+On Forge 1.7.10, the vanilla handshake timeout completes the connection
+through the native dispatcher when FML's `isVanillaAccepted(CLIENT)` allows
+vanilla clients. This leaves the modded handshake time to process a Forge
+client response. On Forge 1.8.9 the asynchronous dispatcher can race immediate
+vanilla completion. The bridge initializes the native play connection only
+when FML accepts vanilla clients and the FML marker is absent or false. Both
+old loaders retain their client-required mod rejections. The native test also
+checks rejection of an incompatible mod list on 1.7.10.
 
 ## Native lifecycle and evidence limits
 
@@ -114,9 +113,9 @@ method is also respected. Forge 1.8.9 and 1.12.2 have a cancellable
 dismount uses the native riding path. Cancellation on supported APIs leaves
 the ride intact. Destroying a vanished/dead ride removes dangling references;
 this is lifecycle cleanup, not a queued retry of a cancelled user operation.
-The 1.8.9 seat hook emits one dismount permission event before the native outer
-`mountEntity(null)` clears references; this preserves cancellation that the
-upstream outer method otherwise ignores. Explicit rider teleports and world
+The 1.8.9 hook emits one dismount permission event for a managed passenger or
+driver before the outer `mountEntity(null)` clears references. A veto leaves
+both riders in place. Explicit rider teleports and world
 changes end the shared ride. Expired seats detach their native relationships
 without searching for terrain or reloading an unloading chunk.
 
@@ -154,9 +153,9 @@ send a hidden horse to an observer.
 
 The legacy runtime uses the owner's explicit pre-1.19.4 exception: the second
 player rides a **separate following seat**, with an independent vehicle root.
-It is not a native attachment to the horse. Native passenger graphs and human
-visual review remain separate from server, wire, and original-client method
-execution. Publication still requires the owner's personal riding check.
+The released builds have artifact-bound server, wire, and original-client
+checks for this seat. Human visual confirmation is unverified.
+[Legacy Forge 1.0.0 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json)
 
 The helper is an existing vanilla entity, selected for actual client picking
 and lifetime behavior:

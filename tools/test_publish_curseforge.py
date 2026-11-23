@@ -30,6 +30,16 @@ class CurseForgePublishTests(unittest.TestCase):
         self.assertEqual(metadata["gameVersionNames"], ["1.21.11"])
         self.assertIn("Folia, Paper, Purpur, Spigot", metadata["displayName"])
 
+    def test_legacy_forge_upload_uses_separate_release_evidence(self):
+        metadata = publish_curseforge.metadata_for(
+            {"family": "forge", "minecraft": ["1.8.9"], "platforms": ["forge"]},
+            {"version": "1.0.0", "source_url": "https://github.com/eyecrasher0/Tandemount"},
+            {"1.8.9", "Forge", "Server"},
+        )
+        release = "https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0"
+        self.assertIn(f"[Complete GPL source]({release}/Tandemount-1.0.0-legacy-forge-source.zip)", metadata["changelog"])
+        self.assertIn(f"[Verification report]({release}/verification-legacy-forge.json)", metadata["changelog"])
+
     def test_game_version_and_loader_names_are_verified_from_official_records(self):
         plan = {"entries": [
             {"minecraft": ["26.3"], "family": "neoforge"},

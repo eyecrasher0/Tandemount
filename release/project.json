@@ -16,5 +16,5 @@
   "modrinth_disclosure_note": "AI tools generated most of the implementation code and English project text. EyeCrasher defined the requirements and reviewed the project.",
   "modrinth_slug": "tandemount",
   "modrinth_categories": ["game-mechanics", "transportation"],
-  "release_status": "development"
+  "release_status": "published-subset"
 }

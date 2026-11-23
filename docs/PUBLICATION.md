@@ -1,11 +1,15 @@
 # Publication status
 
-Development and verification are in progress. No playable release has been
-published. The GitHub repository currently contains only its initial base.
+GitHub hosts Tandemount 1.0.0 for the eight exact Minecraft and platform pairs
+in the download table. The modern/Bukkit and legacy Forge batches have separate
+corresponding source archives, verification reports, and SHA-256 checksums.
+Additional backports still require qualification. [Verified downloads](../README.md#choose-your-server-build) ·
+[Build targets](../BACKPORTS.md)
 
-The requested destinations are GitHub, Modrinth, and CurseForge. Release files
-will be bound to exact source and artifact hashes and verified after upload.
-No icon or placeholder artwork is included, following the owner's instruction.
+The Modrinth description and eight versions are saved as drafts. CurseForge
+has received the release files and listing visibility depends on moderation.
+The repository and storefronts use the owner's supplied artwork.
+[Project icon](../branding/icon.png)
 
 Modrinth's current [AI policy](https://support.modrinth.com/en/articles/16551575-disclosure-and-usage-of-ai)
 does not permit a project produced primarily by generative AI to appear publicly
@@ -14,14 +18,14 @@ cases. Tandemount will request unlisted visibility and disclose its generated
 code and text. Moderation approval must be verified; an upload alone does not
 establish approval or public availability.
 
-GitHub is intended to host the complete source and public release artifacts.
+## CurseForge
+
 CurseForge mods and Bukkit plugins require separate project categories. The
 owner supplied two existing Minecraft projects: **Tandemount**, Mods ID
 **1802613**, and **Tandemount (Plugin)**, Bukkit Plugins ID **1802617**. Both
 list EyeCrasher as author and GNU GPLv3 as license. Upload into these projects;
-do not create duplicates. No files have been uploaded by this publisher yet.
-Leave the icon blank until the owner supplies one. CurseForge's [project-submission guide](https://support.curseforge.com/support/solutions/articles/9000197241-creating-and-submitting-a-project)
-states that a logo is required for texture packs or Sims projects, not mods.
+do not create duplicates. The publisher uploads files to the existing projects
+and leaves their artwork in place.
 The publisher accepts the two numeric IDs only after the release audit passes. It
 uses CurseForge's documented multipart upload route and author token, keeps a
 local hash ledger to avoid duplicate retries, and stops on an ambiguous upload
@@ -51,8 +55,8 @@ resolved by choosing an arbitrary numeric ID.
 The Modrinth publisher consumes the hash-bound `.agents/release/plan.json` and
 uploads every exact game/platform version as a draft first. It records the
 `ai_content` disclosure for generated code and text, requests unlisted status,
-and verifies the SHA-512 reported for every uploaded JAR. It does not upload an
-icon. The official API describes [project creation](https://docs.modrinth.com/api/operations/createproject/),
+and verifies the SHA-512 reported for every uploaded JAR. A new project uses
+`branding/icon.png`. The official API describes [project creation](https://docs.modrinth.com/api/operations/createproject/),
 [version creation](https://docs.modrinth.com/api/operations/createversion/),
 [version updates](https://docs.modrinth.com/api/operations/modifyversion/),
 and [project updates](https://docs.modrinth.com/api/operations/modifyproject/).
@@ -75,5 +79,7 @@ matching the authenticated user's immutable ID to an accepted owner. The
 project response does not contain an author field. An empty matching draft
 with an unset source and license can receive the audited release metadata;
 a conflicting source, another license, or existing files block that initialization.
-The publisher removes an existing icon to honor the owner's icon-free release
-instruction and verifies the resulting source URL, license, and absent icon.
+The publisher keeps the installed icon and verifies the resulting source URL
+and license after a refresh. Project description links point to `main`.
+Version changelogs link to the corresponding source and verification assets in
+the tagged release.

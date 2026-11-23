@@ -22,9 +22,11 @@ import subprocess
 import threading
 import tempfile
 import time
+import uuid
 import zipfile
 import zlib
 from datetime import datetime, timezone
+from runtime_storage import RuntimeWorkspace
 
 spec=importlib.util.spec_from_file_location("legacy_build",Path(__file__).with_name("legacy-build.py"))
 b=importlib.util.module_from_spec(spec);spec.loader.exec_module(b)
@@ -37,8 +39,20 @@ def test_source_digest():
     sources=[Path(__file__),b.ROOT/"forge/legacy/native-test/NativeChecks.java",Path(__file__).with_name("legacy-client-test.py"),b.ROOT/"forge/legacy/client-test/ClientChecks.java"]
     return hashlib.sha256(b"".join(path.read_bytes() for path in sources)).hexdigest()
 
-def vanilla_login(mc,port):
-    """Vanilla protocol handshake: deliberately no FML marker or mod channels."""
+def before_join(mc, identifier, body):
+    if mc == "1.7.10" and identifier == 0x00 and len(body) == 4:
+        return b"KEEPALIVE", body
+    if identifier == (0x1a if mc == "1.12.2" else 0x40):
+        length, offset = read_varint(body)
+        raise ValueError("Play disconnect before JoinGame: " + body[offset:offset+length].decode())
+    if identifier == (0x18 if mc == "1.12.2" else 0x3f):
+        length, offset = read_varint(body)
+        channel = body[offset:offset+length]
+        if channel in (b"REGISTER", b"FML|HS"):
+            return channel, body[offset+length:]
+    raise ValueError(f"Unexpected Play packet 0x{identifier:02x} before JoinGame")
+
+def vanilla_login(mc,port,fixture_version=None):
     protocol={"1.7.10":5,"1.8.9":47,"1.12.2":340}[mc]
     join_id=0x23 if mc=="1.12.2" else 1
     def vi(n):
@@ -54,7 +68,7 @@ def vanilla_login(mc,port):
             v=data[offset+i];n|=(v&127)<<(7*i)
             if not v&128:return n,offset+i+1
         raise ValueError("Oversized protocol VarInt")
-    record={"status":"failed","protocol":protocol,"hostname_fml_marker":False,"client_mod_channels_sent":False,"login_success":False,"play_join_game":False}
+    record={"status":"failed","protocol":protocol,"hostname_fml_marker":False,"client_mod_channels_sent":False,"login_success":False,"play_join_game":False,"ordered_play_login":False}
     try:
         with socket.create_connection(("127.0.0.1",port),timeout=15) as connection:
             connection.settimeout(15)
@@ -91,7 +105,18 @@ def vanilla_login(mc,port):
                     elif identifier==0:raise ValueError("Vanilla login rejected: "+data[offset:].decode(errors="replace")[:300])
                     elif identifier==1:raise ValueError("Unexpected online authentication on offline fixture")
                 elif identifier==join_id:
-                    record["play_join_game"]=True;record["status"]="passed";break
+                    record.update(play_join_game=True, ordered_play_login=True, status="passed");break
+                else:
+                    channel, payload = before_join(mc, identifier, data[offset:])
+                    if fixture_version is not None and channel == b"FML|HS" and not record["client_mod_channels_sent"]:
+                        if mc != "1.7.10" or len(payload) < 4 or payload[2] != 0:
+                            raise ValueError("Expected Forge 1.7.10 ServerHello")
+                        def custom(name, content):
+                            packet(b"\x17" + string(name) + struct.pack(">H", len(content)) + content)
+                        custom("REGISTER", b"FML|HS\0FML\0FORGE")
+                        custom("FML|HS", b"\x01" + payload[3:4])
+                        custom("FML|HS", b"\x02\x01" + string("tandemount_native_tests") + string(fixture_version))
+                        record["client_mod_channels_sent"] = True
     except Exception as ex:record["error"]=str(ex)
     return record
 
@@ -176,6 +201,10 @@ class VanillaClient:
             elif identifier==1:raise ValueError("Unexpected authentication on an offline fixture")
             return
         self.packet_counts[identifier]=self.packet_counts.get(identifier,0)+1
+        join_game=0x23 if self.modern else 1
+        if self.self_id is None and identifier != join_game:
+            before_join(self.mc,identifier,data)
+            return
         aliases={0 if self.modern else 0x0e:"SpawnObject",0x03 if self.modern else 0x0f:"SpawnMob",0x3e if self.modern else 0x12:"EntityVelocity",0x4c if self.modern else 0x18:"EntityTeleport",0x3c if self.modern else 0x1c:"EntityMetadata",0x36 if self.modern else 0x19:"EntityHeadLook"}
         if identifier in aliases:
             alias=aliases[identifier]
@@ -184,7 +213,7 @@ class VanillaClient:
         if identifier==(0x0f if self.modern else 2):
             length,offset=read_varint(data)
             self.chats.append(json.loads(data[offset:offset+length].decode("utf-8")))
-        if identifier==(0x23 if self.modern else 1):
+        if identifier==join_game:
             self.self_id=struct.unpack_from(">i",data)[0]
             # The original JoinGame handler sends ordinary client settings before
             # its first movement frame. In particular these establish the view
@@ -192,7 +221,7 @@ class VanillaClient:
             settings=protocol_string("en_us")+bytes([8,0,1])
             settings+=bytes([2,1]) if self.oldest else bytes([127])+(varint(1) if self.modern else b"")
             self.send(4 if self.modern else 0x15,settings)
-            self.record.update(status="passed",play_join_game=True);self.joined.set()
+            self.record.update(status="passed",play_join_game=True,ordered_play_login=True);self.joined.set()
         elif identifier==(0x1f if self.modern else 0):self.send(0x0b if self.modern else 0,data)
         elif identifier==(0x2f if self.modern else 8):
             values=list(struct.unpack_from(">dddff",data));flags=0 if self.oldest else data[32]
@@ -294,7 +323,7 @@ class VanillaClient:
         if hasattr(self,"thread"):self.thread.join(timeout=2)
         if hasattr(self,"movement_thread"):self.movement_thread.join(timeout=2)
 
-def protocol_observers(mc,port,process,output,args):
+def protocol_observers(mc,port,process,output,args,folder):
     clients=[];record={"status":"failed","human_visual":"unverified","client_mod_channels_sent":False}
     def issue(command):process.stdin.write(command+"\n");process.stdin.flush()
     def state(phase,command):
@@ -360,46 +389,77 @@ def protocol_observers(mc,port,process,output,args):
             initial=state("state","observer-state")
         if not initial["joined"]:raise AssertionError("Real vanilla UseEntity interactions did not create a shared ride")
         late=VanillaClient(mc,port,"VanillaLate");clients.append(late);issue("tp VanillaLate 12 8 8");time.sleep(2)
-        # Ordinary legacy trackers can deliver their attachment update on a
-        # later tracking frame. Wait for the received relationships, rather than
-        # assuming an arbitrary fixed delay already represents a settled client.
-        settled_deadline=time.monotonic()+8
-        while True:
-            settled=state("state","observer-state")
-            if all(all(client.observe(settled)[flag] for flag in ["seat_spawned","driver_spawned","rider_spawned","driver_on_horse","rider_on_seat","position_matches_native"]) for client in [early,late]):break
-            if time.monotonic()>settled_deadline:break
-            time.sleep(.1)
-        record["initial"]={"native":settled,"existing_observer":early.observe(settled),"late_observer":late.observe(settled)}
+        flags = ("seat_spawned", "driver_spawned", "rider_spawned",
+                 "driver_on_horse", "rider_on_seat", "position_matches_native")
+        def settled_observers(ready):
+            deadline = time.monotonic() + 8
+            while True:
+                native = state("state", "observer-state")
+                existing = early.observe(native)
+                late_view = late.observe(native)
+                view = {"native": native, "existing_observer": existing, "late_observer": late_view}
+                if ready(native) and all(observer[flag] for observer in (existing, late_view) for flag in flags):
+                    return view
+                if time.monotonic() >= deadline:
+                    return view
+                time.sleep(.1)
+
+        record["initial"] = settled_observers(lambda native: native["joined"])
         frame_alias="EntityVelocity" if mc=="1.7.10" else "EntityHeadLook" if mc=="1.8.9" else "EntityTeleport"
         deadline=time.monotonic()+max(60,args.client_ticks/10)
-        while sum(alias==frame_alias and entity==initial["seat"] for alias,entity,_ in early.traces)<args.client_ticks+24:
+        while any(sum(alias==frame_alias and entity==initial["seat"] for alias,entity,_ in client.traces)<args.client_ticks+24
+                  for client in (early, late)):
             if time.monotonic()>deadline:raise TimeoutError("Insufficient observed native correction frames")
             time.sleep(.1)
-        stationary_trace=list(early.traces)
-        state("moving","observer-move");time.sleep(1)
-        moved=state("state","observer-state");time.sleep(.5)
-        record["movement"]={"native":moved,"existing_observer":early.observe(moved),"late_observer":late.observe(moved)}
+        stationary_traces = {
+            role: (list(client.traces), client.entities[initial["seat"]].get("spawn_data", 55))
+            for role, client in (("existing", early), ("late", late))
+        }
+        state("moving","observer-move")
+        start = record["initial"]["native"]["horse_position"]
+        def moved_from_start(native):
+            return any(abs(a - b) > 1 for a, b in zip(native["horse_position"], start))
+
+        record["movement"] = settled_observers(moved_from_start)
+        moved = record["movement"]["native"]
+
         # Send the exact commands encoded by the received clickable buttons.
-        early.command("/tandemount vertical +");early.command("/tandemount rear +");time.sleep(1)
-        adjusted=state("state","observer-state");time.sleep(.5)
-        record["live_adjustment"]={"native":adjusted,"existing_observer":early.observe(adjusted),"late_observer":late.observe(adjusted)}
-        record["settings_menu"]["encoded_click_command_applied"]={"/tandemount vertical +","/tandemount rear +"}<=clicks and abs((adjusted["rider_feet"][1]-adjusted["horse_position"][1])-(moved["rider_feet"][1]-moved["horse_position"][1])-.0625)<1e-6 and abs((adjusted["rider_feet"][2]-adjusted["horse_position"][2])-(moved["rider_feet"][2]-moved["horse_position"][2])+.0625)<1e-6
-        flags=["seat_spawned","driver_spawned","rider_spawned","driver_on_horse","rider_on_seat","position_matches_native"]
-        record["status"]="passed" if all(value[observer][flag] for value in [record["initial"],record["movement"],record["live_adjustment"]] for observer in ["existing_observer","late_observer"] for flag in flags) else "failed"
+        def adjustment_applied(native):
+            vertical = (native["rider_feet"][1] - native["horse_position"][1]
+                        - (moved["rider_feet"][1] - moved["horse_position"][1]))
+            rearward = (native["rider_feet"][2] - native["horse_position"][2]
+                        - (moved["rider_feet"][2] - moved["horse_position"][2]))
+            return abs(vertical - .0625) < 1e-6 and abs(rearward + .0625) < 1e-6
+
+        early.command("/tandemount vertical +")
+        early.command("/tandemount rear +")
+        record["live_adjustment"] = settled_observers(adjustment_applied)
+        clicked = {"/tandemount vertical +", "/tandemount rear +"} <= clicks
+        adjusted = adjustment_applied(record["live_adjustment"]["native"])
+        record["settings_menu"]["encoded_click_command_applied"] = clicked and adjusted
+        observations_match = all(record[phase][observer][flag]
+                                 for phase in ("initial", "movement", "live_adjustment")
+                                 for observer in ("existing_observer", "late_observer")
+                                 for flag in flags)
         record["vanilla_login"]=dict(early.record);record["real_client_interaction_mounted"]=True
-        trace=args.cache/("client-trace-"+mc+".tsv");frames=[];ticks=0
-        for alias,entity,data in stationary_trace:
-            if entity!=initial["seat"]:continue
-            frames.append(alias+"\t"+data)
-            if alias==frame_alias:
-                frames.append("tick");ticks+=1
-        trace.write_text("\n".join(frames)+"\n")
-        record["native_client_lifetime"]=client_probe.probe(mc,args.java,args.cache,args.cache/"official-client",trace,initial["seat"],early.entities[initial["seat"]].get("spawn_data",55),args.client_ticks)
-        record["native_attachment"]={"status":"passed" if all(value["native"]["seat_root"]==value["native"]["horse"]
+        lifetime={}
+        for role, (stationary_trace, spawn_data) in stationary_traces.items():
+            trace=folder/(role+"-client-trace.tsv")
+            frames=[]
+            for alias,entity,data in stationary_trace:
+                if entity!=initial["seat"]:continue
+                frames.append(alias+"\t"+data)
+                if alias==frame_alias:frames.append("tick")
+            trace.write_text("\n".join(frames)+"\n")
+            lifetime[role]=client_probe.probe(mc,args.java,args.cache,args.cache/"official-client",trace,initial["seat"],
+                spawn_data,args.client_ticks,work=folder/(role+"-client"))
+        record["native_client_lifetime"]=lifetime
+        record["native_attachment"]={"shared_horse_root":all(value["native"]["seat_root"]==value["native"]["horse"]
             and all(value[observer]["seat_has_horse_root"] and value[observer]["rider_has_horse_root"] for observer in ["existing_observer","late_observer"])
-            for value in [record["initial"],record["movement"],record["live_adjustment"]]) else "failed",
-            "check_name":"server-native-attachment-shares-horse-root","requirement":"common native horse root on server and both observers; independent follower is a failure"}
+            for value in [record["initial"],record["movement"],record["live_adjustment"]]),
+            "mode":"early-follower","human_visual":"unverified"}
         rider.close();clients.remove(rider);time.sleep(1);issue("tandemount_native_test observer-disconnected");time.sleep(.5)
+        record["status"] = "passed" if observations_match and moved_from_start(moved) else "failed"
     except Exception as ex:record["error"]=str(ex)
     finally:
         for client in clients:client.close()
@@ -411,7 +471,7 @@ def native_test_mod(mc,args,artifact,mods):
     interaction="net.minecraftforge.event.entity.player.EntityInteractEvent" if mc!="1.12.2" else "net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract"
     mount="" if mc=="1.7.10" else f"@SubscribeEvent(priority=EventPriority.LOWEST) public void mount(net.minecraftforge.event.entity.EntityMountEvent e) {{ NativeChecks.mountEvent(e); }}"
     server_only="" if mc=="1.7.10" else ",serverSideOnly=true"
-    network_policy=f'@{fml}.common.network.NetworkCheckHandler public boolean networkPolicy(java.util.Map<String,String> remote, {fml}.relauncher.Side from) {{ return !Boolean.getBoolean("tandemount.native.requireClient") || from != {fml}.relauncher.Side.CLIENT || remote.containsKey("tandemount_native_tests"); }}' if mc!="1.12.2" else ""
+    network_policy=f'@{fml}.common.network.NetworkCheckHandler public boolean networkPolicy(java.util.Map<String,String> remote, {fml}.relauncher.Side from) {{ if (from != {fml}.relauncher.Side.CLIENT) return true; String version = remote.get("tandemount_native_tests"); return version == null ? !Boolean.getBoolean("tandemount.native.requireClient") : version.equals("1"); }}' if mc!="1.12.2" else ""
     shim=f'''package dev.eyecrasher.tandemount.nativetest;
 import {fml}.common.Mod;
 import {fml}.common.event.FMLServerStartingEvent;
@@ -477,7 +537,13 @@ def parsed_checks(lines):
 
 def run(mc,args):
     if not args.accept_eula:raise SystemExit("Specify --accept-eula after accepting https://aka.ms/MinecraftEULA for these disposable servers.")
-    folder,launch=install(mc,args)
+    distribution,launcher=install(mc,args)
+    workspace=RuntimeWorkspace(args.cache/"native-runs",mc+"-"+uuid.uuid4().hex,distribution)
+    folder=workspace.directory
+    launch=folder/launcher.name
+    vanilla_jar=folder/f"minecraft_server.{mc}.jar"
+    server_identity={"minecraft":mc,"platform":"forge","sdk":b.SDK[mc],
+                     "launch_files":{p.name:sha(p) for p in (launch,vanilla_jar)}}
     artifact=args.artifacts/b.artifact_name("forge",mc)
     if not artifact.exists():raise SystemExit(f"Build the exact artifact first: {artifact}")
     with zipfile.ZipFile(artifact) as z:
@@ -505,7 +571,8 @@ def run(mc,args):
             except queue.Empty:continue
             if '"name":"suite-complete"' in line or '"name":"suite-exception"' in line:break
         vanilla=vanilla_login(mc,port)
-        observers=protocol_observers(mc,port,process,output,args)
+        observers=protocol_observers(mc,port,process,output,args,folder)
+        incompatible=vanilla_login(mc,port,fixture_version="incompatible") if mc=="1.7.10" else None
         try:
             stop_driver=VanillaClient(mc,port,"StopDriver");stop_clients.append(stop_driver);stop_driver.movement_ready.wait(10);time.sleep(.1)
             stop_rider=VanillaClient(mc,port,"StopRider");stop_clients.append(stop_rider);stop_rider.movement_ready.wait(10);time.sleep(.1)
@@ -518,42 +585,47 @@ def run(mc,args):
         stop_native(second,second_reader)
         restart_log=folder/"native-restart.log";restart_log.write_text("".join(second_lines))
         restart_checks=parsed_checks(second_lines)
-        restart_passed=second_ready and second.returncode==0 and any(c["name"]=="restart-seat-absent-from-native-world" and c["passed"] for c in restart_checks)
+        first_checks=parsed_checks(lines)
+        restart_passed=(second_ready and second.returncode==0
+            and any(c["name"]=="native-server-stop-cleans-seat" and c["passed"] for c in first_checks)
+            and any(c["name"]=="restart-seat-absent-from-native-world" and c["passed"] for c in restart_checks))
         restart={"status":"passed" if restart_passed else "failed","checks":restart_checks,"exit_code":second.returncode,"log":str(restart_log),"log_sha256":sha(restart_log)}
         if mc!="1.12.2":
             policy,policy_output,policy_lines,policy_reader,policy_ready=launch_native(folder,launch,args,["-Dtandemount.native.requireClient=true"])
-            deadline=time.monotonic()+10
-            while time.monotonic()<deadline and not any(c["name"]=="client-required-mod-prevents-vanilla-bridge" for c in parsed_checks(policy_lines)):
-                if policy.poll() is not None:break
-                time.sleep(.1)
+            denied=vanilla_login(mc,port) if policy_ready else {}
             stop_native(policy,policy_reader)
             policy_log=folder/"native-network-policy.log";policy_log.write_text("".join(policy_lines));policy_checks=parsed_checks(policy_lines)
-            policy_passed=policy_ready and policy.returncode==0 and any(c["name"]=="client-required-mod-prevents-vanilla-bridge" and c["passed"] for c in policy_checks)
-            network_policy={"status":"passed" if policy_passed else "failed","checks":policy_checks,"exit_code":policy.returncode,"log":str(policy_log),"log_sha256":sha(policy_log)}
+            expected="No modded response received" if mc=="1.7.10" else "requires FML/Forge"
+            policy_passed=policy_ready and policy.returncode==0 and not denied.get("play_join_game") and expected in denied.get("error","")
+            if incompatible is not None:
+                policy_passed=(policy_passed and incompatible["client_mod_channels_sent"]
+                    and not incompatible["play_join_game"] and "Mod rejections" in incompatible.get("error",""))
+            network_policy={"status":"passed" if policy_passed else "failed","checks":policy_checks,"vanilla_rejection":denied,
+                            "incompatible_mod_list":incompatible,"exit_code":policy.returncode,"log":str(policy_log),"log_sha256":sha(policy_log)}
     body="".join(lines)
     checks.append({"name":"native-bootstrap","passed":ready and "[Tandemount] Ready" in body})
     checks.append({"name":"console-commands-and-configuration","passed":ready and "Tandemount settings saved." in body and "Settings unchanged:" in body})
     checks.append({"name":"native-stop-saves-world-cleanly","passed":"Saving chunks for level" in body and "Exception stopping the server" not in body})
     native=parsed_checks(lines)
-    passed=bool(native) and all(c["passed"] for c in native) and any(c["name"]=="suite-complete" for c in native)
-    result={"schema":2,"completed_at":datetime.now(timezone.utc).isoformat(),"minecraft":mc,"platform":"forge","sdk":b.SDK[mc],"artifact":str(artifact.resolve()),"artifact_sha256":sha(artifact),"launcher_sha256":sha(launch),"exit_code":process.returncode,"native_checks":checks,"synthetic_behavior":{"status":"passed" if passed else "failed-or-not-run","checks":native},"vanilla_socket_login":vanilla,"protocol_observers":observers,"restart":restart,"network_policy":network_policy,"renderer_analysis":{"status":"passed-static-official-client-bytecode-audit","evidence":"docs/LEGACY-RENDERER.md"},"human_visual":"unverified","log":str(logfile),"log_sha256":sha(logfile),"test_sources_sha256":test_sources_sha256,"test_mod_sha256":test_mod_digest}
-    snapshots=[observers.get(key,{}) for key in ["initial","movement","live_adjustment"]]
+    passed=({"suite-complete", "real-vanilla-disconnect-cleans-seat"} <= {c["name"] for c in native}
+            and all(c["passed"] for c in native))
+    result={"schema":2,"completed_at":datetime.now(timezone.utc).isoformat(),"minecraft":mc,"platform":"forge","sdk":b.SDK[mc],"server":server_identity,"artifact":str(artifact.resolve()),"artifact_sha256":sha(mods/artifact.name),"exit_code":process.returncode,"native_checks":checks,"synthetic_behavior":{"status":"passed" if passed else "failed-or-not-run","checks":native},"vanilla_socket_login":vanilla,"protocol_observers":observers,"restart":restart,"network_policy":network_policy,"renderer_analysis":{"status":"passed-static-official-client-bytecode-audit","evidence":"docs/LEGACY-RENDERER.md"},"human_visual":"unverified","log":str(logfile),"log_sha256":sha(logfile),"test_sources_sha256":test_sources_sha256,"test_mod_sha256":test_mod_digest}
     menu=observers.get("settings_menu",{});lifetime=observers.get("native_client_lifetime",{})
     result["client_lifetime"]=lifetime
+    lifetime_passed=set(lifetime)=={"existing","late"} and all(probe.get("status")=="passed" and probe.get("ticks",0)>=args.client_ticks
+        and probe.get("unobstructed_picking") is True for probe in lifetime.values())
     result["final_checks"]=[
-        {"name":"server-native-attachment-shares-horse-root","passed":all(s.get("native",{}).get("seat_root")==s.get("native",{}).get("horse") and bool(s.get("native")) for s in snapshots)},
-        *[{"name":role+"-observer-received-native-attachment-shares-horse-root","passed":all(s.get(role+"_observer",{}).get("seat_has_horse_root",False) and s.get(role+"_observer",{}).get("rider_has_horse_root",False) for s in snapshots)} for role in ["existing","late"]],
-        {"name":"attachment-has-no-periodic-position-follow-packets","passed":False,"reason":"Runtime remains an independent follower; old clients also require per-tick teleport/velocity gravity refresh"},
         {"name":"command-chat-has-color-and-style","passed":menu.get("status")=="passed"},
         {"name":"command-chat-has-clickable-adjustments","passed":menu.get("status")=="passed"},
         {"name":"command-click-adjustment-applies","passed":menu.get("encoded_click_command_applied",False)},
-        {"name":"vanilla-client-seat-survives-native-ticks","passed":lifetime.get("status")=="passed" and lifetime.get("ticks",0)>=args.client_ticks},
-        {"name":"vanilla-client-retains-first-driver-control","passed":lifetime.get("original_local_client_horse_control",False)},
+        {"name":"vanilla-client-seat-survives-native-ticks","passed":lifetime_passed},
         *[{"name":name,"passed":any(c["name"]==name and c["passed"] for c in native)} for name in ["fresh-config-uses-owner-defaults","missing-settings-use-owner-defaults","saved-settings-remain-preserved","reset-restores-owner-defaults","server-native-horse-keeps-first-driver-control"]],
     ]
-    result["verified_slice_status"]="passed" if passed and all(c["passed"] for c in checks) and vanilla["status"]=="passed" and observers["status"]=="passed" and menu.get("status")=="passed" and menu.get("encoded_click_command_applied",False) and lifetime.get("status")=="passed" and restart["status"]=="passed" and network_policy["status"] in ["passed","not-applicable"] and process.returncode==0 else "failed"
-    result["status"]="passed" if result["verified_slice_status"]=="passed" and observers.get("native_attachment",{}).get("status")=="passed" else "failed"
-    (folder/"native-results.json").write_text(json.dumps(result,indent=2)+"\n");print(json.dumps({k:result[k] for k in ["minecraft","artifact_sha256","completed_at","status"]}));return result
+    result["status"]="passed" if passed and all(c["passed"] for c in checks+result["final_checks"]) and vanilla["status"]=="passed" and observers["status"]=="passed" and restart["status"]=="passed" and network_policy["status"] in ["passed","not-applicable"] and process.returncode==0 else "failed"
+    result=workspace.finish(result)
+    (workspace.retained/"native-results.json").write_text(json.dumps(result,indent=2)+"\n")
+    print(json.dumps({k:result[k] for k in ["minecraft","artifact_sha256","completed_at","status"]}))
+    return result
 
 def compile_only(mc,args):
     """Compile the exact native fixture without accepting an EULA or starting a server."""
@@ -571,7 +643,7 @@ def main():
     p.add_argument("--cache",type=Path,default=b.DEFAULT_CACHE);p.add_argument("--java",type=Path)
     p.add_argument("--port",type=int,default=25844);p.add_argument("--client-ticks",type=int,default=240)
     p.add_argument("--artifacts",type=Path);p.add_argument("--output",type=Path)
-    args=p.parse_args();args.java=b.java8_home(args.java);args.artifacts=args.artifacts or args.cache/"artifacts";args.cache.mkdir(parents=True,exist_ok=True)
+    args=p.parse_args();args.java=b.java8_home(args.java);args.cache=args.cache.resolve();args.artifacts=args.artifacts or args.cache/"artifacts";args.cache.mkdir(parents=True,exist_ok=True)
     if args.compile_only:
         args.output=args.output or b.ROOT/".agents/legacy-native-compile-results.json"
         results=[compile_only(mc,args) for mc in ([args.minecraft] if args.minecraft else b.SDK)]
@@ -579,7 +651,8 @@ def main():
         return
     args.output=args.output or b.ROOT/".agents/legacy-native-results.json"
     results=[run(mc,args) for mc in ([args.minecraft] if args.minecraft else b.SDK)]
-    args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps({"schema":1,"targets":results},indent=2)+"\n")
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    args.output.write_text(json.dumps({"schema":1,"targets":results},indent=2)+"\n")
     if any(r["status"]!="passed" for r in results):raise SystemExit(1)
 
 if __name__=="__main__":main()

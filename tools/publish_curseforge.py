@@ -84,7 +84,7 @@ def metadata_for(entry, project, version_names):
         raise ValueError("Unverified CurseForge game version names")
     implementation = ", ".join(platform_names[name] for name in entry["platforms"])
     return {
-        "changelog": publish_modrinth.release_changelog(project),
+        "changelog": publish_modrinth.release_changelog(project, entry),
         "changelogType": "markdown",
         "displayName": f"Tandemount {project['version']} | {implementation} | Minecraft {mc}",
         # The documented names field avoids confusing equal version names
@@ -132,7 +132,7 @@ def main():
         project = json.loads((ROOT / "release/project.json").read_text(encoding="utf-8"))
         targets = publish_modrinth.validate_plan(plan, matrix, args.manifest)
         summary = {"mode": "apply" if args.apply else "dry-run", "entries": len(plan["entries"]),
-                   "targets": targets, "icon": "omitted-by-owner-request",
+                   "targets": targets,
                    "projects": {"mods": args.mods_project_id, "plugins": args.plugins_project_id}}
         if not args.apply:
             print(json.dumps(summary, indent=2))

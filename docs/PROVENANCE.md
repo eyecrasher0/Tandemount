@@ -22,7 +22,9 @@ is read at pinned official Git revisions to identify the actual game version.
 This metadata is used for build selection and is not horse-sharing code.
 The Forge-specific sources, mappings, renderer findings, and compile provenance
 for 1.7.10, 1.8.9, and 1.12.2 are recorded in `LEGACY-PROVENANCE.md` and
-`LEGACY-RENDERER.md`.
+`LEGACY-RENDERER.md`. The legacy runtime and fixture updates use Tandemount's
+own published 1.0.0 legacy source, whose SHA-256 is bound to the released JARs
+in its verification report. [Legacy release provenance](LEGACY-PROVENANCE.md)
 
 ## Plugin seat renderer audit
 

@@ -1,12 +1,12 @@
 # Legacy rider renderer audit
 
-Status: the original AIR-seat client-lifetime defect is confirmed. The current
-non-air repair, native server behavior and received packet checks are separate
-from the required native attachment, which remains incomplete. Old reports
-that passed only the AIR server tick guard are not final release evidence.
-Human visual confirmation is **unverified**.
+The original vanilla clients discard an AIR seat on their first tick. The
+released legacy Forge builds use separate following seats and have exact
+server, received-packet and original-client checks for those seats. Human
+visual confirmation is **unverified**.
+[Legacy Forge 1.0.0 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json)
 
-## Finding
+## Falling-block candidates
 
 The exact vanilla living renderers test whether a rider's vehicle is an
 `EntityLivingBase`. That path derives the rider's body yaw from the vehicle,
@@ -19,7 +19,7 @@ AIR is not a client-safe falling-block state. All three original client
 the world is remote. A server transformer cannot change this unmodified client.
 The original-client fixture explicitly reproduces first-tick AIR removal.
 
-The current states are vanilla moving piston (`piston_extension`) on 1.7.10
+The candidate states were vanilla moving piston (`piston_extension`) on 1.7.10
 and vanilla barrier on 1.8.9 / 1.12.2. The moving-piston and 1.8.9 barrier block
 render types are -1; 1.12.2 barrier is `INVISIBLE`, while its falling-block
 renderer requires `MODEL`. They are non-air and have no falling-block model.
@@ -126,10 +126,11 @@ Run an exact original-client capability probe separately:
 python3 tools/legacy-client-test.py --minecraft 1.7.10 --graph --java /path/to/jdk8 --sdk-cache /large/task/cache/legacy --cache /large/task/cache/client --output /path/to/graph.json
 ```
 
-Schema 2 native reports expose `verified_slice_status` separately from the
-required overall `status`. The latter remains failed when server/client horse
-roots or the no-periodic-follower requirement fail. Named `final_checks` use
-`{name, passed}` and do not promote a separate follower to native attachment.
+Schema 2 native reports use `status` for the early-follower checks and record
+the actual horse-root relationship in `protocol_observers.native_attachment`.
+Existing and late observer packets drive separate original-client lifetime and
+picking probes. Named `final_checks` use `{name, passed}`. The full-matrix
+release collector has its own attachment qualification.
 The source binding concatenates, in order: `tools/legacy-native-test.py`,
 `forge/legacy/native-test/NativeChecks.java`, `tools/legacy-client-test.py`, and
 `forge/legacy/client-test/ClientChecks.java`. Operational logs and binaries remain

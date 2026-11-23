@@ -84,10 +84,11 @@ def mapping(mc,sdk):
             if key.startswith(native+"."):result[alias+key[len(native):]]=value
     return result
 
-def probe(mc,java,sdk,cache,trace,seat_id,state_id,ticks=1200,graph=False,carriers=False):
-    folder=cache/mc;folder.mkdir(parents=True,exist_ok=True)
-    metadata_path=fetch(folder/"version.json",METADATA[mc]);metadata=json.loads(metadata_path.read_text())
-    client=fetch(folder/"client.jar",metadata["downloads"]["client"]["url"],metadata["downloads"]["client"]["sha1"])
+def probe(mc,java,sdk,cache,trace,seat_id,state_id,ticks=1200,graph=False,carriers=False,work=None):
+    downloads=cache/mc
+    folder=work or downloads;folder.mkdir(parents=True,exist_ok=True)
+    metadata_path=fetch(downloads/"version.json",METADATA[mc]);metadata=json.loads(metadata_path.read_text())
+    client=fetch(downloads/"client.jar",metadata["downloads"]["client"]["url"],metadata["downloads"]["client"]["sha1"])
     dependencies=[];natives=folder/"natives";natives.mkdir(exist_ok=True)
     for library in metadata["libraries"]:
         downloads=library.get("downloads",{});artifact=downloads.get("artifact")

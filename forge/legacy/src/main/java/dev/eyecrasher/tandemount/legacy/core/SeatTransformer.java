@@ -11,6 +11,7 @@ import java.util.*;
 /** Narrow server hooks. No native class is replaced and no entity type is registered. */
 public final class SeatTransformer implements IClassTransformer, Opcodes {
     private static final String HOOK = "dev/eyecrasher/tandemount/legacy/LegacyRuntime";
+    private static final String OLD_DISPATCHER = "cpw.mods.fml.common.network.handshake.NetworkDispatcher";
     private static final Set<String> SEAT_CLASSES = new HashSet<String>(Arrays.asList(
             "net.minecraft.entity.Entity", "net.minecraft.entity.EntityLivingBase", "net.minecraft.entity.EntityLiving",
             "net.minecraft.entity.EntityCreature", "net.minecraft.entity.monster.EntityMob",
@@ -34,9 +35,10 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
         boolean horse=transformedName.equals("net.minecraft.entity.passive.EntityHorse");
         boolean world=transformedName.equals("net.minecraft.world.World") || transformedName.equals("net.minecraft.world.WorldServer");
         boolean player=transformedName.equals("net.minecraft.entity.player.EntityPlayerMP");
-        boolean login=(transformedName.equals("cpw.mods.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.7.10"))
-                || (transformedName.equals("net.minecraftforge.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.8.9"));
-        if (!horse && !world && !player && !login && !SEAT_CLASSES.contains(transformedName)) return bytes;
+        boolean login=transformedName.equals("net.minecraftforge.fml.common.network.internal.FMLNetworkHandler") && Names.minecraft().equals("1.8.9");
+        boolean vanillaTimeout=transformedName.equals(OLD_DISPATCHER) && Names.minecraft().equals("1.7.10");
+        boolean vanillaWaiter=transformedName.equals(OLD_DISPATCHER+"$VanillaTimeoutWaiter") && Names.minecraft().equals("1.7.10");
+        if (!horse && !world && !player && !login && !vanillaTimeout && !vanillaWaiter && !SEAT_CLASSES.contains(transformedName)) return bytes;
         ClassNode c=new ClassNode(); new ClassReader(bytes).accept(c,0); boolean changed=false;
         for (MethodNode m : c.methods) {
             String n=Names.canonical(m.name);
@@ -53,6 +55,20 @@ public final class SeatTransformer implements IClassTransformer, Opcodes {
                 p.add(new MethodInsnNode(INVOKESTATIC,HOOK,"legacyVanillaLogin","(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)Z",false));
                 LabelNode normal=new LabelNode();p.add(new JumpInsnNode(IFEQ,normal));p.add(new InsnNode(RETURN));p.add(normal);p.add(new FrameNode(F_SAME,0,null,0,null));
                 m.instructions.insert(p);changed=true;
+            }
+            if (vanillaTimeout && n.equals("kickVanilla") && m.desc.equals("()V")) {
+                guard(m,"oldestVanillaTimeout",false,false); changed=true;
+            }
+            if (vanillaWaiter && n.equals("handlerAdded")) {
+                for (AbstractInsnNode instruction : m.instructions.toArray()) if (instruction instanceof MethodInsnNode) {
+                    MethodInsnNode call=(MethodInsnNode)instruction;
+                    if (!call.name.equals("schedule") || !call.desc.startsWith("(Ljava/util/concurrent/Callable;JLjava/util/concurrent/TimeUnit;)")) continue;
+                    InsnList delay=new InsnList();
+                    delay.add(new InsnNode(POP)); delay.add(new InsnNode(POP2));
+                    delay.add(new LdcInsnNode(5L));
+                    delay.add(new FieldInsnNode(GETSTATIC,"java/util/concurrent/TimeUnit","SECONDS","Ljava/util/concurrent/TimeUnit;"));
+                    m.instructions.insertBefore(call,delay); changed=true;
+                }
             }
             if (Names.minecraft().equals("1.8.9") && transformedName.equals("net.minecraft.entity.EntityLivingBase")
                     && (n.equals("mountEntity") || n.equals("dismountEntity"))) {

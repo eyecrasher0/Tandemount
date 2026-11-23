@@ -5,16 +5,12 @@ EyeCrasher, under GPL-3.0-only. Its initial project inputs were `AGENTS.md`,
 `docs/BEHAVIOR.md`, and `platforms.json`. No predecessor horse-sharing source,
 archive, patch, binary, test, project memory, or chat history was consulted.
 
-The implementation does not register a custom entity type. Its nonliving
-vanilla `EntityFallingBlock` seat now uses moving piston (`piston_extension`)
-on 1.7.10 and barrier on 1.8.9 / 1.12.2. The earlier AIR candidate is discarded
-by the original unmodified client's first tick; a server-side tick guard never
-made that client-safe. Native dimensions remain intact and only server collision
-bounds are empty. 1.12.2 uses synchronized NoGravity; the older clients require
-observed per-tick native teleport/velocity gravity refresh. These repairs do not
-complete the requested common horse-root graph. The current independent follower
-fails the final attachment requirements. See `LEGACY-RENDERER.md` for exact
-original-client tick and graph evidence and its scope limits.
+The released 1.0.0 implementation uses unmodified client entity types for the
+separately following seats. Its runtime changes and regression fixtures come
+from Tandemount source commit `bbb095c92ed2e40a6d863de70b64ef2a0e3e94f8`. The
+release report binds that archive to the exact Forge builds and native and
+client checks. [Corresponding legacy Forge source](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/Tandemount-1.0.0-legacy-forge-source.zip) ·
+[Legacy Forge 1.0.0 verification](https://github.com/eyecrasher0/Tandemount/releases/download/tandemount-1.0.0/verification-legacy-forge.json)
 
 The narrow class hooks, runtime and verification fixtures are original code.
 An identity set limits save, damage, interaction, collision and server tick
@@ -31,9 +27,9 @@ The following upstream material was consulted or used as build/runtime input:
 | [Forge Maven](https://maven.minecraftforge.net/) | Forge `1.12.2-14.23.5.2864` universal, userdev3, MDK and installer artifacts; universal supplies the actual compile API. The MDK and userdev configuration were inspected to assess development tooling. |
 | [Forge source, 1.7.10](https://github.com/MinecraftForge/MinecraftForge/tree/1.7.10) | Official `EntityInteractEvent` and the vanilla `Entity.java.patch`, to check cancellation and riding hooks. |
 | [Forge source, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/tree/1.8.9) | Official `EntityInteractEvent`, `EntityMountEvent`, and vanilla `Entity.java.patch`. |
-| [Forge EntityLivingBase patch, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/blob/1.8.9/patches/minecraft/net/minecraft/entity/EntityLivingBase.java.patch) | Checked exact cancellation APIs. The outer `mountEntity(null)` uses `isMounting=true`, calls the cancellable inner `dismountEntity`, then clears relationships regardless of that inner cancellation. An original hook limited to managed seats performs one dismount permission event before the outer clear. |
+| [Forge EntityLivingBase patch, 1.8.9](https://github.com/MinecraftForge/MinecraftForge/blob/1.8.9/patches/minecraft/net/minecraft/entity/EntityLivingBase.java.patch) | Checked exact cancellation APIs. The outer `mountEntity(null)` uses `isMounting=true`, calls the cancellable inner `dismountEntity`, then clears relationships regardless of that inner cancellation. An original hook performs one dismount permission event for a managed ride's driver or passenger before the outer clear. |
 | [Forge source, 1.12.x](https://github.com/MinecraftForge/MinecraftForge/tree/1.12.x) | Official `EntityMountEvent` and vanilla `Entity.java.patch`. |
-| [Official FML source, 1.7.10](https://github.com/MinecraftForge/FML/tree/1.7.10) | Exact Forge 1614 userdev FML sources: `FMLNetworkHandler`, `NetworkDispatcher`, `NetworkRegistry`, `NetworkModHolder`, `FMLHandshakeServerState`, and `ChannelRegistrationHandler`. Checked the loader's vanilla policy and handshake lifecycle. The original bridge calls native three-argument player connection initialization only when FML confirms every network mod accepts vanilla clients. |
+| [Official FML source, 1.7.10](https://github.com/MinecraftForge/FML/tree/1.7.10) | Exact Forge 1614 userdev FML sources: `FMLNetworkHandler`, `NetworkDispatcher`, `NetworkRegistry`, `NetworkModHolder`, `FMLHandshakeServerState`, and `ChannelRegistrationHandler`. Checked the loader's vanilla policy and handshake lifecycle. The bridge completes the vanilla timeout through `NetworkDispatcher.completeServerSideConnection(VANILLA)` only after `NetworkRegistry.isVanillaAccepted(CLIENT)` approves it. |
 | [Official FML player connection patch, 1.7.10](https://github.com/MinecraftForge/FML/blob/1.7.10/patches/minecraft/net/minecraft/server/management/ServerConfigurationManager.java.patch) | Checked `initializeConnectionToPlayer`'s Forge-added third `NetHandlerPlayServer` argument and native login events. |
 | [MCP distributions on Forge Maven](https://maven.minecraftforge.net/de/oceanlabs/mcp/) | `mcp_stable:12-1.7.10`, `22-1.8.9`, and `39-1.12`, plus exact 1.7.10/1.8.9 SRG bundles and `mcp_config:1.12.2-20200226.224830`. Only the used MCP/SRG symbol subset is included in production jars. Native tests use a separate test symbol table. |
 | [Mojang libraries](https://libraries.minecraft.net/) | `net.minecraft:launchwrapper:1.12`; Forge's own dependency. |
@@ -98,4 +94,5 @@ The native report's source digest includes both test runners and both Java
 fixtures, in the documented order. Original-client probes additionally record
 client class, metadata, libraries, packet sequence and probe-source digests.
 A native test, received packet, original client method execution and human
-visual review remain distinct evidence; incomplete attachment is never a pass.
+visual review remain distinct evidence. The legacy follower report records its
+independent vehicle root separately from the observed riding checks.

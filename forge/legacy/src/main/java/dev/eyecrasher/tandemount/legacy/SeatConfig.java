@@ -3,6 +3,7 @@
 package dev.eyecrasher.tandemount.legacy;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 
@@ -23,9 +24,9 @@ final class SeatConfig {
         // mounted offset. Keep an explicitly saved value in those units. A new
         // or missing value uses rider feet above horse feet instead.
         String origin = input.getProperty("vertical-origin", input.containsKey("vertical") ? "legacy-mounted-offset" : "horse-feet");
-        if (!input.containsKey("vertical")) origin = "horse-feet";
         if (!origin.equals("horse-feet") && !origin.equals("legacy-mounted-offset"))
             throw new IllegalArgumentException("vertical-origin must be horse-feet or legacy-mounted-offset.");
+        if (!input.containsKey("vertical")) origin = "horse-feet";
         horseFeet = origin.equals("horse-feet");
         vertical = offset(input.getProperty("vertical", "0.8125"), -1.0, 2.0);
         rear = offset(input.getProperty("rear", "0.5"), 0.25, 2.0);
@@ -77,7 +78,13 @@ final class SeatConfig {
                 return super.put(key, value);
             }
         };
-        if (Files.exists(path)) try (InputStream in = Files.newInputStream(path)) { p.load(in); }
+        if (Files.exists(path)) for (String line : Files.readAllLines(path, StandardCharsets.ISO_8859_1)) {
+            String stripped = line.trim();
+            if (stripped.isEmpty() || stripped.startsWith("#") || stripped.startsWith("!")) continue;
+            if (!stripped.matches("(?:[^\\\\=:\\s]|\\\\.)+\\s*[:=].*") || stripped.endsWith("\\"))
+                throw new IllegalArgumentException("Expected one key=value setting per line.");
+            p.load(new StringReader(line));
+        }
         return new SeatConfig(p);
     }
     void save(Path path) throws IOException {

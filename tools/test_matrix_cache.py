@@ -109,9 +109,11 @@ class RunnerFingerprintTest(unittest.TestCase):
                 before = runner_sources('plugins'), sources('plugins')
                 self.write('tools/' + name, 'first executable helper input')
                 added = runner_sources('plugins'), sources('plugins')
-                self.assertNotEqual(before, added)
+                for previous, current in zip(before, added):
+                    self.assertNotEqual(previous, current)
                 self.write('tools/' + name, 'changed executable helper input')
-                self.assertNotEqual(added, (runner_sources('plugins'), sources('plugins')))
+                for previous, current in zip(added, (runner_sources('plugins'), sources('plugins'))):
+                    self.assertNotEqual(previous, current)
 
     def test_added_or_changed_modern_wire_and_client_probes_invalidate_modern_proof(self):
         for name in ('tools/modern-wire.py', 'tools/modern-client-components.py',
@@ -121,22 +123,27 @@ class RunnerFingerprintTest(unittest.TestCase):
                 other_before = runner_sources('plugins'), sources('plugins')
                 self.write(name, 'first executable probe input')
                 added = runner_sources('modern'), sources('modern')
-                self.assertNotEqual(before, added)
+                for previous, current in zip(before, added):
+                    self.assertNotEqual(previous, current)
                 self.write(name, 'changed executable probe input')
-                self.assertNotEqual(added, (runner_sources('modern'), sources('modern')))
+                for previous, current in zip(added, (runner_sources('modern'), sources('modern'))):
+                    self.assertNotEqual(previous, current)
                 self.assertEqual(other_before, (runner_sources('plugins'), sources('plugins')))
 
     def test_shared_official_client_runner_changes_invalidate_both_families(self):
         for name in ('tools/client_attachment.py', 'tools/attachment_evidence.py',
                      'tests/client/AttachmentClientProbe.java'):
             with self.subTest(input=name):
-                before = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                before = tuple(fingerprint(mode) for mode in ('modern', 'plugins')
+                               for fingerprint in (runner_sources, sources))
                 self.write(name, 'first executable shared client input')
-                added = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                added = tuple(fingerprint(mode) for mode in ('modern', 'plugins')
+                              for fingerprint in (runner_sources, sources))
                 for old, new in zip(before, added):
                     self.assertNotEqual(old, new)
                 self.write(name, 'changed executable shared client input')
-                changed = tuple((runner_sources(mode), sources(mode)) for mode in ('modern', 'plugins'))
+                changed = tuple(fingerprint(mode) for mode in ('modern', 'plugins')
+                                for fingerprint in (runner_sources, sources))
                 for old, new in zip(added, changed):
                     self.assertNotEqual(old, new)
 

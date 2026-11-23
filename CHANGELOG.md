@@ -1,6 +1,10 @@
 # Changelog
 
-## 1.0.0 — unreleased
+## 1.0.0
+
+- Published verified builds for Forge 1.7.10, 1.8.9, and 1.12.2, NeoForge
+  1.20.6, and Fabric, Forge, NeoForge, and Paper 26.3.
+  [Release assets and evidence](https://github.com/eyecrasher0/Tandemount/releases/tag/tandemount-1.0.0)
 
 - Independent server-side implementation by EyeCrasher under GPL-3.0-only.
 - Two players share an ordinary adult, tamed, saddled horse; the first rider
@@ -12,4 +16,5 @@
 - Paper 26.3: the second rider reaches the Nether portal exit at the correct
   height. World changes end the second seat and leave that rider unmounted;
   the driver and horse keep their ordinary native transfer.
-- No icon is included in this release candidate.
+
+Additional backports are tracked in the [build target matrix](BACKPORTS.md).
