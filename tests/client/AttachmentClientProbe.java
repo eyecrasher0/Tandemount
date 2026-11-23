@@ -98,6 +98,14 @@ public final class AttachmentClientProbe {
     call(ENTITY,"ejectPassengers","",e);call(ENTITY,"stopRiding","",e);
     ((Map)entries.get(world)).remove(id);
    }
+  }else if(kind.equals("ClientboundTeleportEntityPacket")){
+   Object e=entities.get(packetId(p,owner));
+   if(e!=null){
+    double[] at={((Number)any(owner,p,"getX")).doubleValue(),
+                 ((Number)any(owner,p,"getY")).doubleValue(),
+                 ((Number)any(owner,p,"getZ")).doubleValue()};
+    position(e,at);
+   }
   }else if(kind.equals("ClientboundSetEntityDataPacket")){
    int id=packetId(p,owner);Object e=entities.get(id);if(e!=null&&!players.contains(id))call("net.minecraft.network.syncher.SynchedEntityData","assignValues","java.util.List",call(ENTITY,"getEntityData","",e),any(owner,p,"packedItems","getUnpackedData"));
   }else if(kind.equals("ClientboundUpdateAttributesPacket")){

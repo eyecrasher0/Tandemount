@@ -347,9 +347,12 @@ def captured_packets(trace, protocol, end_ns):
             yield when,ids[identifier],bytes.fromhex(payload) if isinstance(payload,str) else payload
 
 
-def write_received_state(packets, output):
+def write_received_state(packets, output, include_teleports=False):
     """Write the state the original entity components can replay."""
-    rows=[kind+"\t"+payload.hex() for _,kind,payload in packets if kind in PACKET_CLASSES.values()]
+    accepted = set(PACKET_CLASSES.values())
+    if include_teleports:
+        accepted.add("ClientboundTeleportEntityPacket")
+    rows=[kind+"\t"+payload.hex() for _,kind,payload in packets if kind in accepted]
     if not rows:
         raise ValueError("No native attachment state packets in the selected observer trace")
     output.write_text("\n".join(rows)+"\n")
@@ -439,7 +442,8 @@ def run(version, capture, output, trace=None, protocol=None, end_ns=None, artifa
         normalized=folder/"received-state.tsv"
         packets=list(captured_packets(trace,protocol,end_ns))
         quiet_ns=stationary_capture_ns(packets,state,end_ns)
-        inputs["captured_state_packets"]=write_received_state(packets,normalized)
+        follower = any(helper["vehicle"] < 0 for helper in state["helpers"])
+        inputs["captured_state_packets"]=write_received_state(packets,normalized,include_teleports=follower)
         inputs.update(observer_trace_sha256=digest(trace),protocol_export_sha256=digest(protocol),
                       normalized_state_sha256=digest(normalized),end_ns=end_ns,stationary_capture_ns=quiet_ns)
         command.extend([str(normalized),str(quiet_ns if quiet_ns is not None else -1)])
