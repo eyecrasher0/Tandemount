@@ -432,8 +432,8 @@ def active_save_checks(fixture_config):
              'detail': {'native_probe_records': matching, 'scope': 'Live mounted seat refuses the native serialization entry point; final world save is checked after shutdown.'}}]
 
 
-def ping(port):
-    with socket.create_connection(('127.0.0.1', port), 5) as sock:
+def ping(port, timeout=5):
+    with socket.create_connection(('127.0.0.1', port), timeout) as sock:
         data = vi(0) + vi(0) + string('localhost') + struct.pack('>H', port) + vi(1)
         sock.sendall(vi(len(data)) + data + b'\x01\x00')
         packet_id, body = recv_frame(sock)
@@ -532,7 +532,10 @@ def main():
                     raise RuntimeError('Fixture preparation failed: ' + str(phase()))
                 time.sleep(0.1)
             ids = properties(fixture_config / 'protocol.properties')
-            protocol = ping(args.port)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('Native test budget expired before the protocol status query')
+            protocol = ping(args.port, min(30, remaining))
             result['protocol'] = protocol
             for name in ('TmDriver', 'TmRider', 'TmThird'):
                 client = Client(name, args.port, protocol, ids, args.minecraft)
